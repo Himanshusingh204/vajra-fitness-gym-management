@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"console.log\\(typeof localStorage, Object.getOwnPropertyNames\\(Object.getPrototypeOf\\(localStorage\\)\\)\\)\")",
+      "Bash(node -e \"console.log\\(typeof localStorage.clear, typeof localStorage.getItem, typeof localStorage.setItem\\)\")",
+      "Bash(npm run *)",
+      "Bash(cat /tmp_devserver.log)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(taskkill //F //PID 20456)",
+      "Bash(npm test *)",
+      "Bash(curl -s -m 5 http://localhost:3000/api/v1/health)",
+      "Bash(taskkill //F //PID 14456)"
+    ]
+  }
+}

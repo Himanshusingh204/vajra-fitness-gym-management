@@ -1,0 +1,770 @@
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  LayoutDashboard, Building2, Users, Settings, BarChart3, CheckCircle, Clock,
+  Plus, Pencil, Trash2, Search, Mail, FileText, Star, XCircle, Diamond, CreditCard,
+} from 'lucide-react';
+import { useAuthStore } from '../store/useAuthStore';
+import api from '../services/api';
+
+type Gym = { id: string; name: string; city: string; state: string; isApproved: boolean; createdAt: string; owner: { email: string; username: string } };
+type User = { id: string; username: string; email: string; phone: string | null; role: string; isActive: boolean; createdAt: string; memberDetails: { status: string; gym: { name: string } } | null; ownedGyms: { name: string; isApproved: boolean }[] };
+type Faq = { id: string; question: string; answer: string; isActive: boolean; order: number };
+type Testimonial = { id: string; name: string; role: string; content: string; imageUrl: string | null; rating: number; isActive: boolean; createdAt: string };
+type Ticket = { id: string; subject: string; message: string; status: string; priority: string; createdAt: string; user: { username: string; email: string; role: string } };
+type AuditLog = { id: string; action: string; entity: string; entityId: string | null; details: string | null; ipAddress: string | null; createdAt: string; user: { username: string; email: string } | null };
+type SaaSPlan = { id: string; name: string; code: string; description: string | null; price: number; billingCycle: string; maxGyms: number; maxMembers: number | null; maxTrainers: number | null; maxStaff: number | null; advancedReports: boolean; features: string; isActive: boolean };
+type Subscription = { id: string; status: string; startDate: string; endDate: string; amount: number; createdAt: string; gym: { id: string; name: string; city: string }; plan: { id: string; name: string; code: string; price: number; billingCycle: string } };
+
+const ROLES = ['ALL', 'SUPER_ADMIN', 'GYM_ADMIN', 'MEMBER', 'TRAINER', 'STAFF'];
+const STATUS_STYLES: Record<string, string> = {
+  OPEN: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  IN_PROGRESS: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  RESOLVED: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+  CLOSED: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400',
+};
+const PRIORITY_STYLES: Record<string, string> = {
+  LOW: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400',
+  MEDIUM: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+  HIGH: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  URGENT: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+};
+
+const StatCard = ({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) => (
+  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 border border-gray-100 dark:border-white/10 shadow-sm">
+    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{label}</p>
+    <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
+    {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+  </div>
+);
+
+const Panel = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
+  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
+    <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
+      <h2 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white">{title}</h2>
+      {action}
+    </div>
+    {children}
+  </div>
+);
+
+const EmptyState = ({ text }: { text: string }) => (
+  <div className="p-10 text-center text-gray-400">{text}</div>
+);
+
+const SuperAdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState('analytics');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [userSearch, setUserSearch] = useState('');
+  const user = useAuthStore((s) => s.user);
+  const qc = useQueryClient();
+
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsLike>({
+    queryKey: ['analytics'],
+    queryFn: () => api.get('/admin/analytics').then((r) => r.data),
+  });
+
+  const { data: gyms = [], isLoading: gymsLoading } = useQuery<Gym[]>({
+    queryKey: ['admin-gyms'],
+    queryFn: () => api.get('/admin/gyms').then((r) => r.data),
+  });
+
+  const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
+    queryKey: ['admin-users'],
+    queryFn: () => api.get('/admin/users').then((r) => r.data),
+  });
+
+  const { data: faqs = [], isLoading: faqsLoading } = useQuery<Faq[]>({
+    queryKey: ['admin-faqs'],
+    queryFn: () => api.get('/admin/cms/faqs').then((r) => r.data),
+  });
+
+  const { data: testimonials = [], isLoading: testisLoading } = useQuery<Testimonial[]>({
+    queryKey: ['admin-testimonials'],
+    queryFn: () => api.get('/admin/cms/testimonials').then((r) => r.data),
+  });
+
+  const { data: tickets = [], isLoading: ticketsLoading } = useQuery<Ticket[]>({
+    queryKey: ['admin-tickets'],
+    queryFn: () => api.get('/admin/support/tickets').then((r) => r.data),
+  });
+
+  const { data: logs = [], isLoading: logsLoading } = useQuery<AuditLog[]>({
+    queryKey: ['admin-audit'],
+    queryFn: () => api.get('/admin/audit-logs').then((r) => r.data),
+  });
+
+  const approve = useMutation({
+    mutationFn: (id: string) => api.put(`/admin/gyms/${id}/approve`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-gyms', 'analytics', 'admin-audit'] }); },
+  });
+  const suspend = useMutation({
+    mutationFn: (id: string) => api.put(`/admin/gyms/${id}/suspend`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-gyms', 'analytics', 'admin-audit'] }); },
+  });
+
+  const setUserActive = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.put(`/admin/users/${id}/status`, { isActive }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users', 'admin-audit'] }); },
+  });
+
+  const [faqForm, setFaqForm] = useState({ question: '', answer: '' });
+  const [editingFaq, setEditingFaq] = useState<Faq | null>(null);
+  const createFaq = useMutation({
+    mutationFn: (data: typeof faqForm) => api.post('/admin/cms/faqs', data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faqs'] }); setFaqForm({ question: '', answer: '' }); },
+  });
+  const updateFaq = useMutation({
+    mutationFn: ({ id, ...data }: Faq) => api.put(`/admin/cms/faqs/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faqs'] }); setEditingFaq(null); },
+  });
+  const deleteFaq = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/cms/faqs/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-faqs'] }),
+  });
+
+  const [testiForm, setTestiForm] = useState({ name: '', role: '', content: '', rating: 5 });
+  const [editingTesti, setEditingTesti] = useState<Testimonial | null>(null);
+  const createTesti = useMutation({
+    mutationFn: (data: typeof testiForm) => api.post('/admin/cms/testimonials', data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-testimonials'] }); setTestiForm({ name: '', role: '', content: '', rating: 5 }); },
+  });
+  const updateTesti = useMutation({
+    mutationFn: ({ id, ...data }: Testimonial) => api.put(`/admin/cms/testimonials/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-testimonials'] }); setEditingTesti(null); },
+  });
+  const deleteTesti = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/cms/testimonials/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-testimonials'] }),
+  });
+
+  const updateTicket = useMutation({
+    mutationFn: ({ id, status, priority }: { id: string; status?: string; priority?: string }) => api.put(`/admin/support/tickets/${id}`, { status, priority }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-tickets'] }),
+  });
+
+  const { data: saasPlans = [], isLoading: saasPlansLoading } = useQuery<SaaSPlan[]>({
+    queryKey: ['saas-plans'],
+    queryFn: () => api.get('/saas/plans', { params: { all: 'true' } }).then((r) => r.data),
+  });
+  const { data: subscriptions = [], isLoading: subsLoading } = useQuery<Subscription[]>({
+    queryKey: ['saas-subscriptions'],
+    queryFn: () => api.get('/saas/subscriptions').then((r) => r.data),
+  });
+  const [planForm, setPlanForm] = useState({ name: '', code: '', description: '', price: 0, billingCycle: 'MONTHLY', maxGyms: 1, maxMembers: '', maxTrainers: '', maxStaff: '', features: '' });
+  const createPlan = useMutation({
+    mutationFn: (data: typeof planForm) => api.post('/saas/plans', {
+      ...data,
+      description: data.description || null,
+      price: Number(data.price),
+      maxGyms: Number(data.maxGyms) || 1,
+      maxMembers: data.maxMembers ? Number(data.maxMembers) : null,
+      maxTrainers: data.maxTrainers ? Number(data.maxTrainers) : null,
+      maxStaff: data.maxStaff ? Number(data.maxStaff) : null,
+      features: data.features ? data.features.split(',').map((f) => f.trim()).filter(Boolean) : [],
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-plans', 'admin-audit'] }); setPlanForm({ name: '', code: '', description: '', price: 0, billingCycle: 'MONTHLY', maxGyms: 1, maxMembers: '', maxTrainers: '', maxStaff: '', features: '' }); },
+  });
+  const togglePlan = useMutation({
+    mutationFn: (plan: SaaSPlan) => api.put(`/saas/plans/${plan.id}`, { isActive: !plan.isActive }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['saas-plans', 'admin-audit'] }),
+  });
+  const [subForm, setSubForm] = useState({ gymId: '', planId: '', startDate: '' });
+  const createSubscription = useMutation({
+    mutationFn: (data: typeof subForm) => api.post('/saas/subscriptions', data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-subscriptions', 'admin-audit'] }); setSubForm({ gymId: '', planId: '', startDate: '' }); },
+  });
+  const updateSubStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/saas/subscriptions/${id}`, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['saas-subscriptions', 'admin-audit'] }),
+  });
+
+  const filteredUsers = users.filter((u) => {
+    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+    const q = userSearch.trim().toLowerCase();
+    const matchesSearch = !q || u.email.toLowerCase().includes(q) || u.username.toLowerCase().includes(q);
+    return matchesRole && matchesSearch;
+  });
+
+  const roleBadge = (role: string) => {
+    const styles: Record<string, string> = {
+      SUPER_ADMIN: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
+      GYM_ADMIN: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+      MEMBER: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+      TRAINER: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+      STAFF: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400',
+    };
+    return <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${styles[role] || styles.MEMBER}`}>{role.replace('_', ' ')}</span>;
+  };
+
+  const tabs = [
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'gyms', label: 'Gyms', icon: Building2 },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'saas', label: 'SaaS & Subscriptions', icon: Diamond },
+    { id: 'cms', label: 'Content (CMS)', icon: LayoutDashboard },
+    { id: 'support', label: 'Support', icon: Clock },
+    { id: 'audit', label: 'Audit Logs', icon: Settings },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white">Platform Control</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Signed in as <strong>{user?.email}</strong></p>
+        </div>
+
+        <div className="flex gap-2 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl w-fit flex-wrap">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === id
+                  ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ============ ANALYTICS ============ */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-8">
+            {analyticsLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[...Array(8)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard label="Total Gyms" value={analytics?.totalGyms ?? 0} sub={`${analytics?.activeGyms ?? 0} active`} color="text-[var(--color-primary)]" />
+                <StatCard label="Pending Approval" value={analytics?.pendingGyms ?? 0} color="text-amber-500" />
+                <StatCard label="Total Members" value={analytics?.totalMembers ?? 0} sub={`${analytics?.pendingMembers ?? 0} pending`} color="text-[var(--color-secondary)]" />
+                <StatCard label="Platform Revenue" value={`₹${(analytics?.platformRevenue ?? 0).toLocaleString('en-IN')}`} sub="from paid fees" color="text-green-600" />
+                <StatCard label="Staff Members" value={analytics?.totalStaff ?? 0} color="text-purple-500" />
+                <StatCard label="Pending Member Requests" value={analytics?.pendingMembers ?? 0} color="text-amber-500" />
+                <StatCard label="Active Gyms" value={analytics?.activeGyms ?? 0} color="text-green-600" />
+                <StatCard label="Registered Users" value={users.length} color="text-[var(--color-primary)]" />
+              </div>
+            )}
+
+            <Panel title="Recently Registered Gyms">
+              {gymsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : gyms.length === 0 ? (
+                <EmptyState text="No gyms registered yet." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-white/5">
+                      <tr>
+                        {['Gym Name', 'Location', 'Owner', 'Registered', 'Status'].map((h) => (
+                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                      {gyms.slice(0, 5).map((gym) => (
+                        <tr key={gym.id}>
+                          <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{gym.name}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.city}, {gym.state}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.owner?.email}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(gym.createdAt).toLocaleDateString('en-IN')}</td>
+                          <td className="px-6 py-4">
+                            {gym.isApproved ? (
+                              <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold px-2.5 py-1 rounded-full"><CheckCircle className="w-3 h-3" /> Active</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full"><Clock className="w-3 h-3" /> Pending</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        )}
+
+        {/* ============ GYMS ============ */}
+        {activeTab === 'gyms' && (
+          <Panel title={`Registered Gym Partners (${gyms.length})`}>
+            {gymsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : gyms.length === 0 ? (
+              <EmptyState text="No gyms registered yet." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-white/5">
+                    <tr>
+                      {['Gym Name', 'Location', 'Owner', 'Registered', 'Status', 'Action'].map((h) => (
+                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {gyms.map((gym) => (
+                      <tr key={gym.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{gym.name}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.city}, {gym.state}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.owner?.email}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(gym.createdAt).toLocaleDateString('en-IN')}</td>
+                        <td className="px-6 py-4">
+                          {gym.isApproved ? (
+                            <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold px-2.5 py-1 rounded-full"><CheckCircle className="w-3 h-3" /> Active</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full"><Clock className="w-3 h-3" /> Pending</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {!gym.isApproved ? (
+                            <button onClick={() => approve.mutate(gym.id)} disabled={approve.isPending} className="text-green-600 hover:text-green-700 font-semibold text-sm hover:underline disabled:opacity-50">Approve</button>
+                          ) : (
+                            <button onClick={() => suspend.mutate(gym.id)} disabled={suspend.isPending} className="text-red-600 hover:text-red-700 font-semibold text-sm hover:underline disabled:opacity-50">Suspend</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {/* ============ USERS ============ */}
+        {activeTab === 'users' && (
+          <Panel
+            title={`Platform Users (${filteredUsers.length})`}
+            action={
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search users…" className="input-field pl-9! py-2! text-sm" />
+                </div>
+                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                  {ROLES.map((r) => <option key={r} value={r}>{r === 'ALL' ? 'All roles' : r.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+            }
+          >
+            {usersLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : filteredUsers.length === 0 ? (
+              <EmptyState text="No users match your filters." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-white/5">
+                    <tr>
+                      {['User', 'Role', 'Gym / Membership', 'Phone', 'Joined', 'Account'].map((h) => (
+                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {filteredUsers.map((u) => (
+                      <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{u.username}</p>
+                          <p className="text-xs text-gray-500 flex items-center gap-1"><Mail className="w-3 h-3" /> {u.email}</p>
+                        </td>
+                        <td className="px-6 py-4">{roleBadge(u.role)}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">
+                          {u.memberDetails ? (
+                            <span>{u.memberDetails.gym?.name} <span className={`ml-1 text-xs font-bold ${u.memberDetails.status === 'ACTIVE' ? 'text-green-600' : 'text-amber-500'}`}>({u.memberDetails.status})</span></span>
+                          ) : u.ownedGyms?.length ? (
+                            u.ownedGyms.map((g) => g.name).join(', ')
+                          ) : '—'}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{u.phone || '—'}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
+                        <td className="px-6 py-4">
+                          {u.role === 'SUPER_ADMIN' ? (
+                            <span className="text-xs font-semibold text-gray-400">—</span>
+                          ) : u.isActive ? (
+                            <button
+                              onClick={() => { if (window.confirm(`Suspend ${u.username}? They will be logged out and blocked from signing in.`)) setUserActive.mutate({ id: u.id, isActive: false }); }}
+                              disabled={setUserActive.isPending}
+                              className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
+                            >
+                              <XCircle className="w-3.5 h-3.5" /> Suspend
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setUserActive.mutate({ id: u.id, isActive: true })}
+                              disabled={setUserActive.isPending}
+                              className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-semibold text-xs hover:underline disabled:opacity-50"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Activate
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {/* ============ CMS ============ */}
+        {activeTab === 'cms' && (
+          <div className="space-y-8">
+            <Panel title="FAQs" action={<span className="text-xs font-semibold text-gray-400">{faqs.length} items · shown on Help page</span>}>
+              <div className="p-6 border-b border-gray-100 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.03]">
+                <form
+                  className="grid md:grid-cols-[1fr_1.4fr_auto] gap-3 items-start"
+                  onSubmit={(e) => { e.preventDefault(); createFaq.mutate(faqForm); }}
+                >
+                  <input className="input-field" placeholder="Question" value={faqForm.question} onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })} required />
+                  <input className="input-field" placeholder="Answer" value={faqForm.answer} onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })} required />
+                  <button type="submit" className="btn-primary justify-center" disabled={createFaq.isPending}><Plus className="w-4 h-4" /> Add</button>
+                </form>
+              </div>
+              {faqsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : faqs.length === 0 ? (
+                <EmptyState text="No FAQs yet. Add your first one above." />
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-white/5">
+                  {faqs.map((faq) => (
+                    <div key={faq.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                      {editingFaq?.id === faq.id ? (
+                        <div className="flex-1 grid md:grid-cols-[1fr_1.4fr_auto] gap-3 items-start">
+                          <input className="input-field text-sm" defaultValue={faq.question} onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })} />
+                          <input className="input-field text-sm" defaultValue={faq.answer} onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })} />
+                          <div className="flex gap-2">
+                            <button onClick={() => updateFaq.mutate(editingFaq)} className="btn-primary text-sm px-4 py-2">Save</button>
+                            <button onClick={() => setEditingFaq(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{faq.question}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{faq.answer}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => updateFaq.mutate({ ...faq, isActive: !faq.isActive })}
+                              className={`text-xs font-bold px-2.5 py-1 rounded-full ${faq.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}
+                            >
+                              {faq.isActive ? 'Active' : 'Hidden'}
+                            </button>
+                            <button onClick={() => setEditingFaq(faq)} className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><Pencil className="w-4 h-4" /></button>
+                            <button onClick={() => deleteFaq.mutate(faq.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Testimonials" action={<span className="text-xs font-semibold text-gray-400">{testimonials.length} items</span>}>
+              <div className="p-6 border-b border-gray-100 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.03]">
+                <form
+                  className="grid md:grid-cols-2 gap-3"
+                  onSubmit={(e) => { e.preventDefault(); createTesti.mutate(testiForm); }}
+                >
+                  <input className="input-field" placeholder="Name" value={testiForm.name} onChange={(e) => setTestiForm({ ...testiForm, name: e.target.value })} required />
+                  <input className="input-field" placeholder="Role (e.g. Gym Owner, Pro Trainer)" value={testiForm.role} onChange={(e) => setTestiForm({ ...testiForm, role: e.target.value })} required />
+                  <textarea className="input-field md:col-span-2" rows={2} placeholder="Testimonial content" value={testiForm.content} onChange={(e) => setTestiForm({ ...testiForm, content: e.target.value })} required />
+                  <div className="flex items-center gap-4 md:col-span-2">
+                    <label className="text-sm font-semibold text-gray-600 dark:text-gray-300">Rating:</label>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((r) => (
+                        <button key={r} type="button" onClick={() => setTestiForm({ ...testiForm, rating: r })} aria-label={`${r} stars`}>
+                          <Star className={`w-5 h-5 ${r <= testiForm.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-gray-600'}`} />
+                        </button>
+                      ))}
+                    </div>
+                    <button type="submit" className="btn-primary justify-center ml-auto" disabled={createTesti.isPending}><Plus className="w-4 h-4" /> Add</button>
+                  </div>
+                </form>
+              </div>
+              {testisLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : testimonials.length === 0 ? (
+                <EmptyState text="No testimonials yet." />
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+                  {testimonials.map((t) => (
+                    <div key={t.id} className="rounded-xl border border-gray-100 dark:border-white/10 p-4 bg-gray-50/50 dark:bg-white/[0.03]">
+                      {editingTesti?.id === t.id ? (
+                        <div className="space-y-2">
+                          <input className="input-field text-sm" defaultValue={t.name} onChange={(e) => setEditingTesti({ ...editingTesti, name: e.target.value })} />
+                          <input className="input-field text-sm" defaultValue={t.role} onChange={(e) => setEditingTesti({ ...editingTesti, role: e.target.value })} />
+                          <textarea className="input-field text-sm" rows={2} defaultValue={t.content} onChange={(e) => setEditingTesti({ ...editingTesti, content: e.target.value })} />
+                          <div className="flex gap-2">
+                            <button onClick={() => updateTesti.mutate(editingTesti)} className="btn-primary text-sm px-4 py-2">Save</button>
+                            <button onClick={() => setEditingTesti(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex gap-1 mb-2">
+                            {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
+                          </div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 italic">"{t.content}"</p>
+                          <div className="mt-3 flex items-center justify-between">
+                            <p className="text-sm font-bold text-[var(--color-deepgray)] dark:text-white">{t.name} <span className="font-medium text-xs text-gray-500">· {t.role}</span></p>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => updateTesti.mutate({ ...t, isActive: !t.isActive })} className={`text-xs font-bold px-2 py-1 rounded-full ${t.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}>{t.isActive ? 'Active' : 'Hidden'}</button>
+                              <button onClick={() => setEditingTesti(t)} className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--color-primary)]"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => deleteTesti.mutate(t.id)} className="p-1.5 rounded-lg text-gray-500 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
+          </div>
+        )}
+
+        {/* ============ SUPPORT ============ */}
+        {activeTab === 'support' && (
+          <Panel title={`Support Tickets (${tickets.length})`}>
+            {ticketsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : tickets.length === 0 ? (
+              <EmptyState text="No support tickets yet." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-white/5">
+                    <tr>
+                      {['From', 'Subject', 'Priority', 'Status', 'Created', 'Actions'].map((h) => (
+                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {tickets.map((t) => (
+                      <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{t.user?.username}</p>
+                          <p className="text-xs text-gray-500">{t.user?.email}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-gray-800 dark:text-gray-200">{t.subject}</p>
+                          <p className="text-xs text-gray-500 line-clamp-1 max-w-[260px]">{t.message}</p>
+                        </td>
+                        <td className="px-6 py-4"><span className={`text-xs font-bold px-2.5 py-1 rounded-full ${PRIORITY_STYLES[t.priority]}`}>{t.priority}</span></td>
+                        <td className="px-6 py-4"><span className={`text-xs font-bold px-2.5 py-1 rounded-full ${STATUS_STYLES[t.status]}`}>{t.status}</span></td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(t.createdAt).toLocaleDateString('en-IN')}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-1.5 flex-wrap">
+                            {['IN_PROGRESS', 'RESOLVED', 'CLOSED'].map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => updateTicket.mutate({ id: t.id, status: s })}
+                                disabled={t.status === s}
+                                className={`text-xs font-semibold px-2 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
+                                  t.status === s
+                                    ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                                    : 'border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]'
+                                }`}
+                              >
+                                {s.replace('_', ' ')}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {/* ============ SAAS ============ */}
+        {activeTab === 'saas' && (
+          <div className="space-y-8">
+            <Panel title="SaaS Plans (Vajra subscriptions)" action={
+              <span className="text-xs font-semibold text-gray-400">{saasPlans.length} plans</span>
+            }>
+              {saasPlansLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : saasPlans.length === 0 ? (
+                <EmptyState text="No SaaS plans yet. Create one below." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-white/5">
+                      <tr>
+                        {['Plan', 'Cycle', 'Price', 'Limits', 'Status', 'Action'].map((h) => (
+                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                      {saasPlans.map((p) => (
+                        <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Diamond className="w-4 h-4 text-[var(--color-primary)]" />
+                              <span className="font-semibold text-[var(--color-deepgray)] dark:text-white">{p.name}</span>
+                              <span className="text-xs font-mono text-gray-400">({p.code})</span>
+                            </div>
+                            {p.description && <p className="text-xs text-gray-400 mt-0.5 max-w-[260px] truncate">{p.description}</p>}
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{p.billingCycle}</td>
+                          <td className="px-6 py-4 font-semibold">₹{p.price.toLocaleString('en-IN')}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-xs">
+                            {p.maxGyms} gym{p.maxGyms > 1 ? 's' : ''}
+                            {p.maxMembers ? `, ${p.maxMembers} members` : ''}
+                            {p.maxTrainers ? `, ${p.maxTrainers} trainers` : ''}
+                            {p.maxStaff ? `, ${p.maxStaff} staff` : ''}
+                            {p.advancedReports ? ', reports' : ''}
+                          </td>
+                          <td className="px-6 py-4">
+                            {p.isActive ? (
+                              <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold px-2.5 py-1 rounded-full"><CheckCircle className="w-3 h-3" /> Active</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400 text-xs font-bold px-2.5 py-1 rounded-full"><XCircle className="w-3 h-3" /> Inactive</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <button onClick={() => togglePlan.mutate(p)} disabled={togglePlan.isPending} className="text-[var(--color-primary)] hover:underline font-semibold text-sm disabled:opacity-50">
+                              {p.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Create SaaS Plan">
+              <div className="p-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <input value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} placeholder="Plan name" className="input-field py-2! text-sm" />
+                  <input value={planForm.code} onChange={(e) => setPlanForm({ ...planForm, code: e.target.value.toUpperCase() })} placeholder="Code (e.g. GROW)" className="input-field py-2! text-sm" />
+                  <input type="number" value={planForm.price} onChange={(e) => setPlanForm({ ...planForm, price: Number(e.target.value) })} placeholder="Price (₹)" className="input-field py-2! text-sm" />
+                  <select value={planForm.billingCycle} onChange={(e) => setPlanForm({ ...planForm, billingCycle: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="YEARLY">Yearly</option>
+                  </select>
+                  <input type="number" min={1} value={planForm.maxGyms} onChange={(e) => setPlanForm({ ...planForm, maxGyms: Number(e.target.value) })} placeholder="Max gyms" className="input-field py-2! text-sm" />
+                  <input value={planForm.maxMembers} onChange={(e) => setPlanForm({ ...planForm, maxMembers: e.target.value })} placeholder="Max members (blank = unlimited)" className="input-field py-2! text-sm" />
+                  <input value={planForm.maxTrainers} onChange={(e) => setPlanForm({ ...planForm, maxTrainers: e.target.value })} placeholder="Max trainers (blank = unlimited)" className="input-field py-2! text-sm" />
+                  <input value={planForm.maxStaff} onChange={(e) => setPlanForm({ ...planForm, maxStaff: e.target.value })} placeholder="Max staff (blank = unlimited)" className="input-field py-2! text-sm" />
+                  <input value={planForm.features} onChange={(e) => setPlanForm({ ...planForm, features: e.target.value })} placeholder="Features (comma separated)" className="input-field py-2! text-sm md:col-span-2" />
+                  <input value={planForm.description} onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })} placeholder="Description" className="input-field py-2! text-sm md:col-span-2" />
+                </div>
+                {createPlan.isError && <p className="text-red-500 text-sm mt-3">Failed to create plan. Check the backend is running and fields are valid.</p>}
+                <button onClick={() => createPlan.mutate(planForm)} disabled={createPlan.isPending || !planForm.name || !planForm.code} className="mt-4 inline-flex items-center gap-2 bg-[var(--color-primary)] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50">
+                  <Plus className="w-4 h-4" /> {createPlan.isPending ? 'Creating…' : 'Create Plan'}
+                </button>
+              </div>
+            </Panel>
+
+            <Panel title={`Gym Subscriptions (${subscriptions.length})`}>
+              {subsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : subscriptions.length === 0 ? (
+                <EmptyState text="No subscriptions yet. Assign a plan to a gym below." />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 dark:bg-white/5">
+                      <tr>
+                        {['Gym', 'Plan', 'Amount', 'Period', 'Status', 'Update'].map((h) => (
+                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                      {subscriptions.map((s) => (
+                        <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{s.gym.name}<div className="text-xs text-gray-400 font-normal">{s.gym.city}</div></td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{s.plan.name} <span className="text-xs text-gray-400">({s.plan.billingCycle})</span></td>
+                          <td className="px-6 py-4 font-semibold">₹{s.amount.toLocaleString('en-IN')}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-xs">{new Date(s.startDate).toLocaleDateString('en-IN')} → {new Date(s.endDate).toLocaleDateString('en-IN')}</td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${s.status === 'ACTIVE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : s.status === 'SUSPENDED' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
+                              <CreditCard className="w-3 h-3" /> {s.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <select value={s.status} onChange={(e) => updateSubStatus.mutate({ id: s.id, status: e.target.value })} disabled={updateSubStatus.isPending} className="input-field py-1.5! text-xs bg-white! dark:bg-[#1a1a1a]!">
+                              {['ACTIVE', 'PENDING', 'SUSPENDED', 'EXPIRED', 'CANCELLED'].map((st) => <option key={st} value={st}>{st}</option>)}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Assign Plan to Gym">
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <select value={subForm.gymId} onChange={(e) => setSubForm({ ...subForm, gymId: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                    <option value="">Select gym…</option>
+                    {gyms.map((g) => <option key={g.id} value={g.id}>{g.name} ({g.city})</option>)}
+                  </select>
+                  <select value={subForm.planId} onChange={(e) => setSubForm({ ...subForm, planId: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                    <option value="">Select plan…</option>
+                    {saasPlans.filter((p) => p.isActive).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.price}/{p.billingCycle.toLowerCase()}</option>)}
+                  </select>
+                  <input type="date" value={subForm.startDate} onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })} className="input-field py-2! text-sm" />
+                </div>
+                {createSubscription.isError && <p className="text-red-500 text-sm mt-3">Failed to create subscription. Select a gym and an active plan.</p>}
+                <button onClick={() => createSubscription.mutate(subForm)} disabled={createSubscription.isPending || !subForm.gymId || !subForm.planId} className="mt-4 inline-flex items-center gap-2 bg-[var(--color-primary)] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50">
+                  <Plus className="w-4 h-4" /> {createSubscription.isPending ? 'Assigning…' : 'Start Subscription'}
+                </button>
+              </div>
+            </Panel>
+          </div>
+        )}
+
+        {/* ============ AUDIT ============ */}
+        {activeTab === 'audit' && (
+          <Panel title="Security & Activity Logs">
+            {logsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : logs.length === 0 ? (
+              <EmptyState text="No audit events recorded yet." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-white/5">
+                    <tr>
+                      {['Action', 'Entity', 'Details', 'Performed By', 'When'].map((h) => (
+                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {logs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+                            <FileText className="w-3 h-3" /> {log.action}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{log.entity}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400 max-w-[300px] truncate">{log.details || log.entityId || '—'}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{log.user ? `${log.user.username} (${log.user.email})` : 'System'}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(log.createdAt).toLocaleString('en-IN')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        )}
+      </div>
+    </div>
+  );
+};
+
+type AnalyticsLike = {
+  totalGyms: number; activeGyms: number; pendingGyms: number; totalMembers: number;
+  pendingMembers: number; totalStaff: number; platformRevenue: number;
+};
+
+export default SuperAdminDashboard;

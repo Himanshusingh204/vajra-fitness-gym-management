@@ -1,0 +1,126 @@
+import { Request, Response } from 'express';
+import { AuthRequest } from '../middlewares/auth.middleware';
+import argon2 from 'argon2';
+import { prisma } from '../utils/prisma';
+import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
+import { FRONTEND_URL } from '../utils/env';
+import { notifyGymOwner } from '../services/notification.service';
+import { sendActivationEmail } from '../utils/email';
+
+// Get all staff and trainers for a gym
+export const getStaff = async (req: AuthRequest, res: Response) => {
+  try {
+    const gymId = req.params.gymId as string;
+    
+    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    if (!gym || gym.ownerId !== req.user?.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const trainers = await prisma.trainerDetails.findMany({
+      where: { gymId },
+      include: { user: { select: { id: true, username: true, email: true, phone: true } } }
+    });
+
+    const staff = await prisma.staffDetails.findMany({
+      where: { gymId },
+      include: { user: { select: { id: true, username: true, email: true, phone: true } } }
+    });
+
+    res.json({ trainers, staff });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch staff' });
+  }
+};
+
+// Add Staff or Trainer
+export const addStaff = async (req: AuthRequest, res: Response) => {
+  try {
+    const gymId = req.params.gymId as string;
+    const { username, email, phone, roleType, roleSpecifics } = req.body; 
+    // roleType: "TRAINER" or "STAFF"
+    // roleSpecifics: specialization for Trainer, or role name for Staff
+
+    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    if (!gym || gym.ownerId !== req.user?.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) return res.status(400).json({ error: 'Email already exists' });
+
+    // No universal default password: the user activates their own password
+    // through a one-time secure link.
+    const placeholderPassword = await argon2.hash(generateSecureToken(24));
+
+    const user = await prisma.user.create({
+      data: {
+        username,
+        email,
+        phone,
+        password: placeholderPassword,
+        role: roleType,
+        ...(roleType === 'TRAINER' ? {
+          trainerDetails: {
+            create: { gymId, specialization: roleSpecifics }
+          }
+        } : {
+          staffDetails: {
+            create: { gymId, role: roleSpecifics }
+          }
+        })
+      },
+      include: { trainerDetails: true, staffDetails: true }
+    });
+
+    const activationToken = generateSecureToken();
+    await prisma.activationToken.create({
+      data: {
+        token: activationToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + TOKEN_TTL.activation),
+      },
+    });
+
+    const activationLink = `${FRONTEND_URL}/activate?token=${activationToken}`;
+    await sendActivationEmail(email, username, activationLink);
+
+    await notifyGymOwner({
+      gymId,
+      type: 'INFO',
+      title: roleType === 'TRAINER' ? 'Trainer added' : 'Staff added',
+      message: `${username} was added as ${roleSpecifics}.`,
+    });
+
+    res.status(201).json({ ...user, activationLink });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add staff' });
+  }
+};
+
+// Delete a staff member or trainer (Gym Admin only)
+export const deleteStaff = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+
+    const staff = await prisma.staffDetails.findUnique({
+      where: { id },
+      include: { gym: { select: { ownerId: true } } },
+    });
+    const trainer = staff ? null : await prisma.trainerDetails.findUnique({
+      where: { id },
+      include: { gym: { select: { ownerId: true } } },
+    });
+
+    const detail = staff || trainer;
+    if (!detail) return res.status(404).json({ error: 'Staff member not found' });
+    if (detail.gym.ownerId !== req.user?.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    await prisma.user.delete({ where: { id: detail.userId } });
+    res.json({ message: 'Staff member removed' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove staff' });
+  }
+};
