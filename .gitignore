@@ -23,3 +23,15 @@ backend/*.d.ts.map
 backend/scripts/*.js
 backend/scripts/*.js.map
 backend/scripts/*.d.ts
+
+# AI and Planning files
+.claude/
+.windsurf/
+.agents/
+AI Planning.md
+MOBILE_APP_MASTER_PROMPT.md
+Things needed to add.md
+ROADMAP.md
+TODO.md
+Resume.md
+RUNBOOK.md
