@@ -8,8 +8,28 @@ on:
 
 jobs:
   quality:
-    name: Type Check & Build Validation
+    name: Type Check, Lint, Build & Tests
     runs-on: ubuntu-latest
+
+    services:
+      # Backend tests run against a dedicated test database. Credentials match
+      # backend/tests/global-setup.ts defaults; the schema is pushed at test time.
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vajra_admin
+          POSTGRES_PASSWORD: vajra_secure_pass
+          POSTGRES_DB: vajra_fitness_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vajra_admin -d vajra_fitness_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public
 
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +39,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
       - name: Install backend dependencies
         working-directory: backend
@@ -32,37 +55,89 @@ jobs:
         working-directory: backend
         run: npx prisma validate
 
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
 
       - name: Build frontend
         working-directory: frontend
         run: npm run build
 
-  deploy-staging:
-    name: Deploy to Staging
+  # Builds the backend image once and publishes it to GHCR so both deploy jobs
+  # consume the same artifact. Production deployments run `prisma migrate deploy`
+  # at container start (see backend/Dockerfile) before booting the API.
+  publish-image:
+    name: Publish backend image to GHCR
     runs-on: ubuntu-latest
     needs: quality
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
 
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy to staging
-        run: echo "Add your staging deployment commands here (e.g. Railway, Render, or SSH)"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: publish-image
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Trigger Render staging deploy
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL_STAGING }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL_STAGING is not set — image published to GHCR but staging was not triggered."
+          else
+            curl -f -sS -X POST "$DEPLOY_HOOK_URL"
+          fi
 
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: quality
+    needs: publish-image
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Docker image
-        working-directory: backend
-        run: docker build -t vajra-backend:${{ github.sha }} .
-
-      - name: Deploy to production
-        run: echo "Push Docker image to registry and trigger ECS/App Platform deployment"
+      - name: Trigger Render production deploy
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL_PRODUCTION }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL_PRODUCTION is not set — image published to GHCR but production was not triggered."
+          else
+            curl -f -sS -X POST "$DEPLOY_HOOK_URL"
+          fi

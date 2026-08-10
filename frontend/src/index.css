@@ -30,6 +30,11 @@
   --color-steel: #71797e; /* Steel */
   --color-deepgray: #1a1c1e; /* Deep Gray */
 
+  /* Always-dark section backgrounds (CTA bands, footer). Deliberately NOT
+     overridden by themes so dark sections never flip to light in dark mode. */
+  --color-section-dark: #141618;
+  --color-section-dark-alt: #2a2e33;
+
   /* Semantic tokens for consistent text / borders across themes */
   --color-muted: #6b7280;
   --color-border: rgba(26, 28, 30, 0.14);
@@ -379,6 +384,29 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* Route/tab content entrance — used by PageTransition and content panels.
+   Staggered via animation-delay with the .stagger utility on parents. */
+.animate-page {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-fade-in {
+  animation: fade-in 0.6s ease both;
+}
+.animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger > * {
+  animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger > *:nth-child(3) { animation-delay: 0.1s; }
+.stagger > *:nth-child(4) { animation-delay: 0.14s; }
+.stagger > *:nth-child(5) { animation-delay: 0.18s; }
+.stagger > *:nth-child(6) { animation-delay: 0.22s; }
+.stagger > *:nth-child(7) { animation-delay: 0.26s; }
+.stagger > *:nth-child(8) { animation-delay: 0.3s; }
 
 /* ============================================================
    Accessibility: respect reduced motion

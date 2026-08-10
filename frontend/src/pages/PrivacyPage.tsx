@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mb-10">
@@ -8,7 +9,13 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </section>
 );
 
-const PrivacyPage = () => (
+const PrivacyPage = () => {
+  usePageMeta(
+    'Privacy Policy',
+    'How Vajra Fitness collects, uses, and protects your personal data. Read our privacy policy to understand your rights.',
+    '/privacy',
+  );
+  return (
   <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20">
       <h1 className="text-4xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-3">Privacy Policy</h1>
@@ -45,6 +52,7 @@ const PrivacyPage = () => (
       </Section>
     </div>
   </div>
-);
+  );
+};
 
 export default PrivacyPage;

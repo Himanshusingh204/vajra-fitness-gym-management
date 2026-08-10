@@ -6,36 +6,13 @@ import { prisma } from '../utils/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { JWT_SECRET, FRONTEND_URL } from '../utils/env';
 import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
+import { isLocked, registerFailure, clearFailures } from '../utils/bruteForce';
 import { createNotification } from '../services/notification.service';
 import { generateRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllUserTokens } from '../services/refreshToken.service';
 import { sendPasswordResetEmail, sendActivationEmail } from '../utils/email';
 
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCK_WINDOW_MS = 15 * 60 * 1000;
-
-// In-memory brute-force lockout tracker (keyed by normalized email).
-// In production with multiple instances, move this to Redis.
-const failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
-
-function isLocked(key: string): number {
-  const entry = failedAttempts.get(key);
-  if (!entry) return 0;
-  if (Date.now() >= entry.lockedUntil) {
-    failedAttempts.delete(key);
-    return 0;
-  }
-  return entry.lockedUntil - Date.now();
-}
-
-function registerFailure(key: string) {
-  const entry = failedAttempts.get(key) ?? { count: 0, lockedUntil: 0 };
-  entry.count += 1;
-  if (entry.count >= MAX_FAILED_ATTEMPTS) {
-    entry.lockedUntil = Date.now() + LOCK_WINDOW_MS;
-  }
-  failedAttempts.set(key, entry);
-}
-
+// Brute-force lockout (Redis-backed when available, in-memory fallback).
+// see utils/bruteForce.ts for the shared cross-instance implementation.
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
   if (hash.startsWith('$2')) {
     return bcrypt.compare(password, hash);
@@ -45,6 +22,7 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 
 const issueAccessToken = (user: { id: string; role: string; tokenVersion: number }) =>
   jwt.sign({ userId: user.id, role: user.role, tokenVersion: user.tokenVersion }, JWT_SECRET, {
+    algorithm: 'HS256',
     expiresIn: '15m',
   });
 
@@ -55,6 +33,38 @@ const setRefreshCookie = (res: Response, refreshToken: string) => {
     sameSite: 'strict',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+};
+
+// Allowed browser origins for cookie-bearing requests (defense-in-depth for CSRF
+// on top of SameSite=Strict). Requests without an Origin/Referer header
+// (curl, mobile apps using the Authorization header) are unaffected.
+const allowedCookieOrigins = Array.from(
+  new Set([
+    FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean) : []),
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:4173',
+  ]),
+);
+
+const hasAllowedOrigin = (req: Request): boolean => {
+  const origin = req.headers.origin || req.headers.referer;
+  if (!origin) return true; // no browser context (curl/mobile) → skip
+  const allowedHosts = allowedCookieOrigins
+    .map((u) => {
+      try {
+        return new URL(u).host;
+      } catch {
+        return null;
+      }
+    })
+    .filter((h): h is string => h !== null);
+  try {
+    return allowedHosts.includes(new URL(origin).host);
+  } catch {
+    return false;
+  }
 };
 
 export const registerVendor = async (req: Request, res: Response) => {
@@ -102,13 +112,14 @@ export const registerVendor = async (req: Request, res: Response) => {
 
 export const registerMember = async (req: Request, res: Response) => {
   try {
-    const { username, email, password, phone, gymId, planId } = req.body;
+    const { username, email, password, phone, gymId, planId, preferredPaymentMethod } = req.body;
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(409).json({ error: 'An account with this email already exists' });
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    if (!gym.isApproved) return res.status(403).json({ error: 'Membership registration is closed at this gym' });
 
     if (planId) {
       const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
@@ -130,6 +141,7 @@ export const registerMember = async (req: Request, res: Response) => {
             gymId: gym.id,
             planId: planId || undefined,
             status: 'PENDING', // Self-registration requires gym-admin approval
+            preferredPaymentMethod: preferredPaymentMethod || null,
           },
         },
       },
@@ -161,7 +173,7 @@ export const login = async (req: Request, res: Response) => {
     const { email, password } = req.body as { email: string; password: string };
     const lockKey = email.toLowerCase();
 
-    const remainingLock = isLocked(lockKey);
+    const remainingLock = await isLocked(lockKey);
     if (remainingLock > 0) {
       return res.status(429).json({ error: 'Too many failed attempts. Try again in a few minutes.' });
     }
@@ -170,11 +182,11 @@ export const login = async (req: Request, res: Response) => {
     const isMatch = user ? await verifyPassword(password, user.password).catch(() => false) : false;
 
     if (!user || !isMatch) {
-      registerFailure(lockKey);
+      await registerFailure(lockKey);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
-    failedAttempts.delete(lockKey);
+    await clearFailures(lockKey);
 
     if (user.isActive === false) {
       return res.status(403).json({ error: 'Account suspended. Contact support.' });
@@ -214,6 +226,10 @@ export const logout = async (req: Request, res: Response) => {
 
 export const refresh = async (req: Request, res: Response) => {
   try {
+    if (!hasAllowedOrigin(req)) {
+      return res.status(403).json({ error: 'Cross-origin refresh denied' });
+    }
+
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
 
@@ -378,7 +394,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const resetLink = `${FRONTEND_URL}/reset-password?token=${token}`;
     await sendPasswordResetEmail(user.email, resetLink);
 
-    res.json({ message: generic, ...(process.env.NODE_ENV === 'production' ? {} : { resetLink }) });
+    res.json({ message: generic, ...(process.env.NODE_ENV === 'development' ? { resetLink } : {}) });
   } catch (error) {
     res.status(500).json({ error: 'Failed to process password reset request' });
   }

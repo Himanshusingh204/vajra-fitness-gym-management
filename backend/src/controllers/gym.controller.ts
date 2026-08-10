@@ -38,18 +38,52 @@ export const updateGym = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const { name, address, city, state, location, gstNumber, logoUrl, imageUrl, facilities } = req.body;
+    const { name, address, city, state, location, gstNumber, logoUrl, imageUrl, facilities, brandColor, tagline, subdomain, customDomain } = req.body;
     const gym = await prisma.gym.findFirst({ where: { ownerId: userId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
 
     const updated = await prisma.gym.update({
       where: { id: gym.id },
-      data: { name, address, city, state, location, gstNumber, logoUrl, imageUrl, facilities },
+      data: {
+        name,
+        address,
+        city,
+        state,
+        location,
+        gstNumber,
+        logoUrl,
+        imageUrl,
+        facilities,
+        brandColor,
+        tagline,
+        ...(subdomain !== undefined ? { subdomain: subdomain || null } : {}),
+        ...(customDomain !== undefined ? { customDomain: customDomain || null } : {}),
+      },
     });
 
     res.json(updated);
-  } catch {
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      const field = err?.meta?.target?.includes('customDomain') ? 'custom domain' : 'subdomain';
+      return res.status(409).json({ error: `That ${field} is already taken by another gym` });
+    }
     res.status(500).json({ error: 'Failed to update gym' });
+  }
+};
+
+// Subdomain availability check (Gym Admin / Super Admin)
+export const checkSubdomain = async (req: AuthRequest, res: Response) => {
+  try {
+    const subdomain = String(req.query.subdomain || '').trim().toLowerCase();
+    if (!subdomain) return res.status(400).json({ error: 'subdomain query parameter is required' });
+
+    const gym = await prisma.gym.findFirst({ where: { subdomain } });
+    const currentUserId = req.user?.userId;
+    // Own subdomain is "available" so the owner can re-save their own settings.
+    const available = !gym || gym.ownerId === currentUserId;
+    res.json({ available, subdomain });
+  } catch {
+    res.status(500).json({ error: 'Failed to check subdomain' });
   }
 };
 

@@ -1,0 +1,45 @@
+# Render Blueprint — free-tier backend deployment.
+# Deploy from the Render dashboard: New > Blueprint (point it at this repo),
+# or use the "Deploy to Render" button in the README/DEPLOYMENT guide.
+#
+# Environment variables you must fill in on Render (Dashboard > Your service > Environment):
+#   DATABASE_URL  -> the connection string from Neon (use the DIRECT, non-pooled one)
+#   JWT_SECRET    -> at least 32 chars. Generate with:
+#                    node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+#   FRONTEND_URL  -> your Netlify site URL, e.g. https://your-app.netlify.app
+#   SMTP_HOST / SMTP_USER / SMTP_PASS / SMTP_FROM -> optional but recommended so
+#                    activation / password-reset emails are actually delivered.
+services:
+  - type: web
+    name: vajra-fitness-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run db:migrate && npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: TRUST_PROXY
+        value: '1'
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false

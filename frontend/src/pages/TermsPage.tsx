@@ -1,5 +1,6 @@
 import React from 'react';
 import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const SECTIONS = [
   {
@@ -29,6 +30,11 @@ const SECTIONS = [
 ];
 
 const TermsPage = () => {
+  usePageMeta(
+    'Terms & Conditions',
+    'The terms and conditions governing your use of the Vajra Fitness platform, accounts, and services.',
+    '/terms',
+  );
   return (
     <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
       <div className="relative pt-32 pb-20 overflow-hidden">

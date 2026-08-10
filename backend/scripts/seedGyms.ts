@@ -57,6 +57,10 @@ const GYMS = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== '1') {
+    console.log('Refusing to seed credentials in production. Set ALLOW_PRODUCTION_SEED=1 to override.');
+    return;
+  }
   for (const { owner, gym, plans } of GYMS) {
     const existing = await prisma.user.findUnique({ where: { email: owner.email } });
     if (existing) {

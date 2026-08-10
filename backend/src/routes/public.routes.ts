@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getPublicFaqs, getPublicTestimonials } from '../controllers/content.controller';
+import { getPublicFaqs, getPublicTestimonials, getGymBranding } from '../controllers/content.controller';
 
 const router = Router();
 
@@ -9,5 +9,6 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 
 router.get('/faqs', asyncHandler(getPublicFaqs));
 router.get('/testimonials', asyncHandler(getPublicTestimonials));
+router.get('/gym-branding', asyncHandler(getGymBranding));
 
 export default router;

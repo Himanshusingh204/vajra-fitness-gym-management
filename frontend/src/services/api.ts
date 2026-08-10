@@ -17,15 +17,7 @@ api.interceptors.request.use((config) => {
 });
 
 // ---- 401 → silent refresh-token retry (keeps sessions alive) ----
-let isRefreshing = false;
-let failedQueue: Array<(token: string | null) => void> = [];
-
-const processQueue = (token: string | null) => {
-  failedQueue.forEach((resolver) => resolver(token));
-  failedQueue = [];
-};
-
-const refreshAccessToken = async (): Promise<string | null> => {
+const performRefresh = async (): Promise<string | null> => {
   try {
     const res = await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
     const token = res.data?.token;
@@ -36,6 +28,20 @@ const refreshAccessToken = async (): Promise<string | null> => {
   }
 };
 
+// Single-flight refresh: concurrent callers share one in-flight request. The
+// httpOnly refresh cookie is rotated on every call, so presenting it twice (a
+// race between bootstrap and a 401 retry) triggers server-side reuse detection
+// and revokes the whole token family. Sharing the promise prevents that.
+let refreshPromise: Promise<string | null> | null = null;
+export const refreshAccessToken = (): Promise<string | null> => {
+  if (!refreshPromise) {
+    refreshPromise = performRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -43,35 +49,22 @@ api.interceptors.response.use(
     const isAuthCall = original?.url?.includes('/auth/');
 
     if (err.response?.status === 401 && original && !original._retry && !isAuthCall) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push((token) => {
-            if (token) {
-              original._retry = true;
-              resolve(api(original));
-            } else {
-              reject(err);
-            }
-          });
-        });
-      }
-
       original._retry = true;
-      isRefreshing = true;
       const token = await refreshAccessToken();
-      isRefreshing = false;
+      if (token) return api(original);
 
-      if (token) {
-        processQueue(token);
-        return api(original);
-      }
-
-      processQueue(null);
       useAuthStore.getState().logout();
       window.location.href = '/login';
     } else {
-      const message = err.response?.data?.error || 'Something went wrong. Please try again.';
-      useNotificationStore.getState().addNotification('error', message);
+      const isSilentAuthCheck = original?.url?.includes('/auth/refresh') || original?.url?.includes('/auth/me');
+      // Do not pop up error notifications for expected 401s during background session checks
+      if (!(err.response?.status === 401 && isSilentAuthCheck)) {
+        // No HTTP response means a network-level failure (backend down, CORS, offline).
+        const message = err.response
+          ? (err.response.data?.error || 'Something went wrong. Please try again.')
+          : 'Unable to reach the server. Check that the backend is running and try again.';
+        useNotificationStore.getState().addNotification('error', message);
+      }
     }
     return Promise.reject(err);
   }

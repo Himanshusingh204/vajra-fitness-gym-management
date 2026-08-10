@@ -92,7 +92,7 @@ const TrainerDashboard = () => {
         </div>
 
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 stagger">
             <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
               <Calendar className="w-8 h-8 text-[var(--color-primary)] mb-4" />
               <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Today's Sessions</p>

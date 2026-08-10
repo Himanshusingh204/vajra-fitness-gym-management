@@ -158,7 +158,7 @@ export const getMemberFees = async (req: AuthRequest, res: Response) => {
     }
 
     const fees = await prisma.fee.findMany({
-      where: { memberId },
+      where: { memberId, gymId: member.gymId },
       orderBy: { dueDate: 'desc' },
     });
     res.json(fees);
@@ -193,7 +193,7 @@ export const getFeeReceiptPDF = async (req: AuthRequest, res: Response) => {
     sendPdf(res, `receipt-${fee.id.slice(0, 8)}.pdf`, (doc) =>
       buildFeeReceipt(doc, {
         feeId: fee.id,
-        amount: fee.amount,
+        amount: fee.amount.toNumber(),
         paymentDate: fee.paymentDate,
         dueDate: fee.dueDate,
         status: fee.status,

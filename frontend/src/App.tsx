@@ -5,27 +5,32 @@ import { useAuthStore } from './store/useAuthStore';
 import { NotificationManager } from './components/NotificationManager';
 
 import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import ActivateAccountPage from './pages/ActivateAccountPage';
-import VendorRegisterPage from './pages/VendorRegisterPage';
-import MemberRegisterPage from './pages/MemberRegisterPage';
-import GymsPage from './pages/GymsPage';
-import MembershipPage from './pages/MembershipPage';
-import AboutPage from './pages/AboutPage';
-import FAQPage from './pages/FAQPage';
-import TermsPage from './pages/TermsPage';
-import ContactPage from './pages/ContactPage';
-import HelpCenterPage from './pages/HelpCenterPage';
-import PrivacyPage from './pages/PrivacyPage';
-import RefundPage from './pages/RefundPage';
-import NotFoundPage from './pages/NotFoundPage';
 
 import ScrollToTop from './components/ScrollToTop';
 import { FloatingActions } from './components/FloatingActions';
+import { PageLoader } from './components/PageLoader';
 
-// Code splitting for authenticated heavy dashboards
+// Route-based code splitting: every non-entry page loads on demand, shrinking
+// the initial bundle and first-paint cost.
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const ActivateAccountPage = lazy(() => import('./pages/ActivateAccountPage'));
+const VendorRegisterPage = lazy(() => import('./pages/VendorRegisterPage'));
+const MemberRegisterPage = lazy(() => import('./pages/MemberRegisterPage'));
+const GymsPage = lazy(() => import('./pages/GymsPage'));
+const MembershipPage = lazy(() => import('./pages/MembershipPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+const FAQPage = lazy(() => import('./pages/FAQPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const HelpCenterPage = lazy(() => import('./pages/HelpCenterPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const RefundPage = lazy(() => import('./pages/RefundPage'));
+const CookiesPage = lazy(() => import('./pages/CookiesPage'));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
 const GymAdminDashboard = lazy(() => import('./pages/GymAdminDashboard'));
 const MemberDashboard = lazy(() => import('./pages/MemberDashboard'));
@@ -42,6 +47,8 @@ const ProtectedRoute = ({
   roles: Role[];
 }) => {
   const user = useAuthStore((s) => s.user);
+  const bootstrapped = useAuthStore((s) => s.bootstrapped);
+  if (!bootstrapped) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
   if (!roles.includes(user.role as Role)) return <Navigate to="/" replace />;
   return <>{children}</>;
@@ -61,19 +68,21 @@ function App() {
       <ScrollToTop />
       <NotificationManager />
       <FloatingActions />
-      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[var(--color-base)] dark:bg-[#0a0a0a]"><div className="animate-pulse text-[var(--color-primary)] font-bold text-lg">Loading...</div></div>}>
+      <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<MainLayout />}>
             <Route index element={<HomePage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="gyms" element={<GymsPage />} />
             <Route path="membership" element={<MembershipPage />} />
+            <Route path="subscription" element={<SubscriptionPage />} />
             <Route path="contact" element={<ContactPage />} />
             <Route path="help" element={<HelpCenterPage />} />
             <Route path="faq" element={<FAQPage />} />
             <Route path="terms" element={<TermsPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="refund" element={<RefundPage />} />
+            <Route path="cookies" element={<CookiesPage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="forgot-password" element={<ForgotPasswordPage />} />
             <Route path="reset-password" element={<ResetPasswordPage />} />

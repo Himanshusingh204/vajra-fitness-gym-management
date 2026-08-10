@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mb-10">
@@ -8,7 +9,13 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </section>
 );
 
-const RefundPage = () => (
+const RefundPage = () => {
+  usePageMeta(
+    'Refund & Cancellation Policy',
+    'Vajra Fitness refund and cancellation policy for membership plans and payments.',
+    '/refund',
+  );
+  return (
   <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20">
       <h1 className="text-4xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-3">Refund & Cancellation Policy</h1>
@@ -38,6 +45,7 @@ const RefundPage = () => (
       </Section>
     </div>
   </div>
-);
+  );
+};
 
 export default RefundPage;

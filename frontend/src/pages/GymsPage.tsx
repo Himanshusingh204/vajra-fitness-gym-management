@@ -3,8 +3,14 @@ import { Link } from 'react-router';
 import { MapPin, ArrowRight } from 'lucide-react';
 import { GymDirectory } from '../components/GymDirectory';
 import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const GymsPage = () => {
+  usePageMeta(
+    'Find a Gym Near You',
+    'Browse verified partner gyms across India, compare membership plans, facilities and locations, and join your nearest training home.',
+    '/gyms',
+  );
   return (
     <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
       <section className="relative pt-36 pb-16 md:pt-44 md:pb-20 overflow-hidden">
@@ -12,9 +18,9 @@ const GymsPage = () => {
           <img
             src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop"
             alt="Gym interior"
-            className="w-full h-full object-cover opacity-15 dark:opacity-30"
+            className="w-full h-full object-cover opacity-30"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/90 via-[var(--color-base)]/80 to-[var(--color-base)] dark:from-[#0d0d0d]/95 dark:via-[#0d0d0d]/90 dark:to-[#0d0d0d]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/75 via-[var(--color-base)]/55 to-[var(--color-base)] dark:from-[#0d0d0d]/85 dark:via-[#0d0d0d]/70 dark:to-[#0d0d0d]" />
           <div className="absolute -top-32 -left-32 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob" />
         </div>
 

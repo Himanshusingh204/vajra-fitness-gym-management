@@ -59,5 +59,17 @@ services:
       retries: 3
       start_period: 15s
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    depends_on:
+      - backend
+
 volumes:
   pgdata:

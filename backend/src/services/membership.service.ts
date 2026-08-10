@@ -106,7 +106,7 @@ export const createMembership = async (input: CreateMembershipInput) => {
   const durationDays = plan?.duration ?? 30;
   const endDate = new Date(startDate.getTime() + durationDays * DAY_MS);
 
-  const originalAmount = plan?.price ?? 0;
+  const originalAmount = plan?.price ? plan.price.toNumber() : 0;
   const discount = Math.min(input.discount ?? 0, originalAmount);
   const finalAmount = Math.max(0, originalAmount - discount);
   const paymentStatus = input.paymentStatus ?? (finalAmount > 0 ? 'PENDING' : 'PAID');
@@ -187,7 +187,7 @@ export const renewMembership = async (input: RenewMembershipInput) => {
   const durationDays = plan?.duration ?? (Math.round((prev.endDate.getTime() - prev.startDate.getTime()) / DAY_MS) || 30);
   const endDate = new Date(startMs + durationDays * DAY_MS);
 
-  const originalAmount = plan?.price ?? prev.finalAmount;
+  const originalAmount = plan?.price ? plan.price.toNumber() : prev.finalAmount.toNumber();
   const discount = Math.min(input.discount ?? 0, originalAmount);
   const finalAmount = Math.max(0, originalAmount - discount);
   const paymentStatus = finalAmount > 0 ? 'PENDING' : 'PAID';

@@ -4,6 +4,10 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== '1') {
+    console.log('Refusing to seed credentials in production. Set ALLOW_PRODUCTION_SEED=1 to override.');
+    return;
+  }
   const email = 'admin@vajrafitness.com';
   
   const existing = await prisma.user.findUnique({ where: { email } });

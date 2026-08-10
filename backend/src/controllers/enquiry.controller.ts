@@ -28,6 +28,12 @@ export const createEnquiry = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { name, phone, email, notes } = req.body;
 
+    // Only accept enquiries for gyms that actually exist and are approved.
+    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    if (!gym || !gym.isApproved) {
+      return res.status(404).json({ error: 'Gym not found' });
+    }
+
     const enquiry = await prisma.enquiry.create({
       data: {
         gymId,

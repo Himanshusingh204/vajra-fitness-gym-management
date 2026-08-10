@@ -39,6 +39,7 @@ export const getMemberships = async (req: AuthRequest, res: Response) => {
         plan: { select: { id: true, name: true, duration: true, price: true } },
       },
       orderBy: { endDate: 'desc' },
+      take: 1000,
     });
 
     res.json(memberships.map(withDerivedStatus));
@@ -61,6 +62,7 @@ export const getMyMemberships = async (req: AuthRequest, res: Response) => {
       where: { memberId: member.id },
       include: { plan: { select: { id: true, name: true, duration: true, price: true } } },
       orderBy: { endDate: 'desc' },
+      take: 1000,
     });
 
     res.json(memberships.map(withDerivedStatus));

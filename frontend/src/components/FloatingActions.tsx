@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUp, HelpCircle } from 'lucide-react';
+import { ArrowUp, Mail } from 'lucide-react';
 
 const WHATSAPP_NUMBER = '919876543210';
 const WHATSAPP_MESSAGE =
-  encodeURIComponent('Hi Iron Pulse! I would like to know more about your memberships.');
+  encodeURIComponent('Hi Vajra Fitness! I would like to know more about your memberships.');
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -32,15 +32,16 @@ export function FloatingActions() {
     <div className="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-50">
       {/* Support Button */}
       <a
-        href="mailto:support@vajrafitness.com"
+        href="mailto:support@vajrafitness.in"
         className="group flex items-center gap-2"
-        title="Contact Support"
+        title="Email Support"
+        aria-label="Email Vajra Fitness support"
       >
         <span className="text-xs font-semibold bg-[var(--color-base)] border border-gray-200 dark:border-white/10 text-[var(--color-charcoal)] px-3 py-1.5 rounded-lg shadow-lg opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 pointer-events-none">
           Email us
         </span>
-        <span className="w-12 h-12 rounded-full bg-[var(--color-secondary)] text-white shadow-lg flex items-center justify-center hover:-translate-y-1 hover:shadow-[var(--color-secondary)]/40 transition-all duration-300">
-          <HelpCircle className="w-6 h-6" />
+        <span className="w-12 h-12 rounded-full bg-[var(--color-primary)] text-white shadow-lg flex items-center justify-center hover:-translate-y-1 hover:shadow-[var(--color-primary)]/40 transition-all duration-300">
+          <Mail className="w-6 h-6" />
         </span>
       </a>
 

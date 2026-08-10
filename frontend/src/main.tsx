@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App.tsx';
+import { useAuthStore } from './store/useAuthStore';
+import { reportWebVitals } from './utils/reportWebVitals';
 
 // Restore persisted theme before first paint
 const stored = localStorage.getItem('vf-theme');
@@ -26,6 +28,16 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
     },
   },
+});
+
+// Restore an existing httpOnly refresh-token session on startup (no token is
+// persisted in localStorage, so a refresh cookie is the only thing that can
+// restore a session). Fire-and-forget: bootstrapped flips true after the call.
+useAuthStore.getState().bootstrap();
+
+// Collect Core Web Vitals after the page settles (opt-in via env var).
+window.addEventListener('load', () => {
+  window.setTimeout(() => reportWebVitals(), 0);
 });
 
 createRoot(document.getElementById('root')!).render(

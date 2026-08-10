@@ -131,6 +131,7 @@ export const GymDirectory = ({ showSearch = true }: { showSearch?: boolean }) =>
     queryKey: ['public-gyms'],
     queryFn: getPublicGyms,
     staleTime: 60_000,
+    refetchInterval: 30000,
   });
 
   const [query, setQuery] = useState('');

@@ -14,6 +14,7 @@ const VendorRegisterPage = () => {
     address: '',
     state: '',
     city: '',
+    pincode: '',
     gstNumber: ''
   });
   
@@ -30,6 +31,20 @@ const VendorRegisterPage = () => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    const normalizedPhone = formData.phone.replace(/[\s-]/g, '');
+    const phoneValid = /^(\+?91[\s-]?)?([6-9]\d{9})$/.test(normalizedPhone);
+    if (!phoneValid) {
+      setError('Please enter a valid 10-digit Indian mobile number (starting with 6-9).');
+      setIsLoading(false);
+      return;
+    }
+    if (formData.pincode && !/^[1-9][0-9]{5}$/.test(formData.pincode)) {
+      setError('Pincode must be exactly 6 digits.');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -48,7 +63,7 @@ const VendorRegisterPage = () => {
   return (
     <div className="flex items-center justify-center min-h-[70vh] bg-[var(--color-base)] py-12 px-4">
       <div className="card w-full max-w-2xl shadow-2xl">
-        <h2 className="text-3xl font-bold text-center mb-2 text-[var(--color-charcoal)]">Partner with Vajra Fitness</h2>
+        <h1 className="text-3xl font-bold text-center mb-2 text-[var(--color-charcoal)]">Partner with Vajra Fitness</h1>
         <p className="text-center text-[var(--color-muted)] mb-8">Register your gym and upgrade to premium management software.</p>
         
         {error && <div className="bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl mb-4 text-sm border border-red-200 dark:border-red-500/20">{error}</div>}
@@ -56,7 +71,7 @@ const VendorRegisterPage = () => {
 
         <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleRegister}>
           <div className="md:col-span-2">
-            <h3 className="text-lg font-semibold border-b pb-2 mb-2 text-[var(--color-primary)]">Owner Details</h3>
+            <h2 className="text-lg font-semibold border-b pb-2 mb-2 text-[var(--color-primary)]">Owner Details</h2>
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">Owner Name</label>
@@ -76,7 +91,7 @@ const VendorRegisterPage = () => {
           </div>
 
           <div className="md:col-span-2 mt-2">
-            <h3 className="text-lg font-semibold border-b pb-2 mb-2 text-[var(--color-primary)]">Gym Details</h3>
+            <h2 className="text-lg font-semibold border-b pb-2 mb-2 text-[var(--color-primary)]">Gym Details</h2>
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">Gym Name</label>
@@ -93,6 +108,10 @@ const VendorRegisterPage = () => {
           <div>
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">City</label>
             <input name="city" type="text" className="input-field" placeholder="e.g. Jodhpur" onChange={handleChange} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">Pincode</label>
+            <input name="pincode" type="text" inputMode="numeric" maxLength={6} pattern="[0-9]{6}" className="input-field" placeholder="6-digit pincode" onChange={handleChange} />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">GST Number (Optional)</label>
