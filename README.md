@@ -1,113 +1,132 @@
 <div align="center">
-  <img src="frontend/public/logo.png" alt="VajraFitness Logo" width="220" />
+  <img src="frontend/public/logo.png" alt="VajraFitness Logo" width="150" />
   
-  <h1>🏋️‍♂️ VajraFitness</h1>
+  <h1>VajraFitness Management System</h1>
 
   <p>
-    <strong>A Premium, Production-Ready SaaS Application for Gym Management</strong>
+    <strong>Next-Generation SaaS platform for modern fitness centers, automating memberships, billing, and staff management in one unified experience.</strong>
   </p>
 
   <p>
-    <a href="#-features"><img alt="Features" src="https://img.shields.io/badge/Features-Extensive-success?style=for-the-badge&logo=appveyor" /></a>
-    <a href="#%EF%B8%8F-tech-stack"><img alt="Stack" src="https://img.shields.io/badge/Stack-React%20%7C%20Node%20%7C%20PostgreSQL-blue?style=for-the-badge" /></a>
-    <a href="https://opensource.org/licenses/MIT"><img alt="License" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" /></a>
+    <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge&color=0052FF" />
+    <img alt="React" src="https://img.shields.io/badge/React-19-blue.svg?style=for-the-badge&logo=react&color=61DAFB&logoColor=black" />
+    <img alt="Node.js" src="https://img.shields.io/badge/Node.js-Express-green.svg?style=for-the-badge&logo=nodedotjs&color=339933" />
+    <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Prisma-blue.svg?style=for-the-badge&logo=postgresql&color=4169E1" />
   </p>
 </div>
 
 <br />
 
-> **VajraFitness** is a complete, end-to-end management solution tailored specifically for gym owners. It empowers owners to manage multiple gym branches, staff, trainers, and memberships seamlessly with a sleek, high-performance interface.
+## 🌟 About The Project
+
+Managing a gym shouldn't mean drowning in spreadsheets. **VajraFitness** is a premium, multi-tenant SaaS application built to scale with your business. Whether you're running a single boutique studio or a nationwide franchise, VajraFitness provides the infrastructure to manage members, trainers, hardware, and finances all in one place.
 
 ---
 
-## 📑 Table of Contents
-1. [✨ Key Features](#-key-features)
-2. [🛠️ Tech Stack](#%EF%B8%8F-tech-stack)
-3. [🚀 Quick Start (Local Setup)](#-quick-start-local-setup)
-4. [🔐 Demo Credentials](#-demo-credentials)
-5. [📚 Deep Dive Documentation](#-deep-dive-documentation)
+## ⚡ Core Features
+
+<details>
+  <summary><b>🏢 Multi-Branch & SaaS Management</b></summary>
+  <ul>
+    <li><b>Global SaaS Plans:</b> Define tier-based limits (members, trainers, staff) across the entire platform.</li>
+    <li><b>Branch Isolation:</b> Strict data separation ensures Gym A can never see Gym B's data.</li>
+    <li><b>Role-Based Access (RBAC):</b> Bulletproof JWT middleware routes for Super Admins, Gym Owners, Trainers, and Staff.</li>
+  </ul>
+</details>
+
+<details>
+  <summary><b>💵 Billing, Fees & Analytics</b></summary>
+  <ul>
+    <li><b>Smart Memberships:</b> Custom pricing tiers with automated expiration tracking.</li>
+    <li><b>Integrated Payments:</b> Track dues, generate dynamic PDF receipts, and process online transactions securely.</li>
+    <li><b>Revenue Reports:</b> Beautiful dashboard charts mapping real-time branch revenue and sign-ups.</li>
+  </ul>
+</details>
+
+<details>
+  <summary><b>🧑‍💻 Member & Trainer Portals</b></summary>
+  <ul>
+    <li><b>Self-Service Dashboards:</b> Members can track their own attendance, payments, and membership lifecycles.</li>
+    <li><b>Digital Workouts:</b> Trainers assign rich workout slips directly to member accounts.</li>
+    <li><b>PT Bookings:</b> Seamless scheduling between members and personal trainers.</li>
+  </ul>
+</details>
 
 ---
 
-## ✨ Key Features
+## 🛠️ Technology Stack
 
-VajraFitness is built to handle the complexities of modern fitness centers, all from a single dashboard.
+VajraFitness is built on a robust, modern tech stack designed for speed, security, and scalability.
 
-| 🏢 Gym Operations | 🧑‍💻 Member Dashboard |
-| --- | --- |
-| **Multi-Tenant SaaS:** Isolate data across branches.<br/>**Membership Plans:** Customize dynamic pricing tiers.<br/>**Billing & Fees:** Track payments & generate PDFs.<br/>**Automated Workflows:** Expiry & fee reminders.<br/>**Attendance:** Frictionless daily check-ins. | **Workout Slips:** Digital workout plans from trainers.<br/>**PT Bookings:** Book personal trainer sessions.<br/>**Profile & Progress:** Track membership lifecycles.<br/>**Secure Auth:** Safe, modern login & JWT sessions. |
+### Client-Side
+* **React 19** & **TypeScript** - For a type-safe, lightning-fast UI.
+* **Tailwind CSS v4** - Premium, highly-customizable design system.
+* **Zustand** & **TanStack Query** - Efficient client-side state and data fetching.
 
----
-
-## 🛠️ Tech Stack
-
-Built with the modern web in mind to ensure blazing fast speeds and ultimate reliability.
-
-| Layer | Technologies Used |
-| :--- | :--- |
-| **Frontend** | React 19 (TypeScript), Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router v8 |
-| **Backend** | Node.js, Express 5 (TypeScript), Prisma ORM, PDFKit, Argon2 |
-| **Database** | PostgreSQL |
-| **Architecture**| REST API, JWT Authentication, HTTP-only refresh tokens |
+### Server-Side
+* **Node.js** & **Express 5** - Scalable API architecture.
+* **Prisma ORM** - Type-safe database queries and schema management.
+* **PostgreSQL** - Relational data integrity.
+* **Argon2 & JWT** - Industry-standard secure authentication.
 
 ---
 
-## 🚀 Quick Start (Local Setup)
+## 🚀 Getting Started
 
-Get the project running locally in under 3 minutes. Make sure you have **Node.js (v18+)** and **Docker** installed.
+Want to run the platform locally? You can have it up and running in minutes.
 
-### 1️⃣ Database & Backend Setup
-```bash
-# 1. Spin up the PostgreSQL database via Docker
-docker compose up -d db
+> **Requirement:** Ensure you have Node.js (v18+) and Docker installed.
 
-# 2. Navigate to backend and install dependencies
-cd backend
-npm install
+<details>
+<summary><b>Click here to view setup instructions</b></summary>
 
-# 3. Push the schema and seed the database with demo data
-npx prisma db push
-npm run seed       
+<br />
 
-# 4. Start the API server (Runs on Port 5000)
-npm run dev        
-```
+1. **Spin up the Database**
+   ```bash
+   docker compose up -d db
+   ```
 
-### 2️⃣ Frontend Setup
-Open a new terminal window:
-```bash
-# 1. Navigate to frontend and install dependencies
-cd frontend
-npm install
+2. **Start the Backend API**
+   ```bash
+   cd backend
+   npm install
+   npx prisma db push
+   npm run seed       # Injects realistic demo data!
+   npm run dev        # API running on http://localhost:5000
+   ```
 
-# 2. Start the frontend app
-npm run dev        
-```
-🎉 *The app will now be live at `http://localhost:5173`.*
+3. **Start the Frontend UI**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev        # UI running on http://localhost:5173
+   ```
+</details>
 
 ---
 
-## 🔐 Demo Credentials
+## 🔐 Sandbox Credentials
 
-When you run `npm run seed`, the database is populated with realistic demo data so you can test the UI immediately!
+If you ran `npm run seed` during setup, your database is already populated with demo users and realistic data. Try logging in!
 
-| Role | Email Address | Password |
+| Account Type | Email | Password |
 | :--- | :--- | :--- |
-| 👑 **Super Admin** | `admin@vajrafitness.com` | `admin123` |
-| 🏢 **Gym Admin** | `owner@ironvalley.com` | `gym123` |
-| 🏋️ **Demo User** | `first.lastN@demo.in` | `Demo@1234` |
+| **Super Admin** *(Platform Owner)* | `admin@vajrafitness.com` | `admin123` |
+| **Gym Admin** *(Branch Owner)* | `owner@ironvalley.com` | `gym123` |
+| **Member** *(Gym Goer)* | `first.lastN@demo.in` | `Demo@1234` |
 
 ---
 
-## 📚 Deep Dive Documentation
+## 📚 Technical Documentation
 
-For all the nitty-gritty details, including full architectural decisions, API routing, and production deployment checklists, please see our detailed legacy documentation:
+If you are looking for advanced deployment guides, security models, or architectural blueprints, please refer to our legacy documentation file:
 
-- 📖 **[Detailed Overview & Technical Documentation](docs/detailed_overview.md)**
+👉 **[View Technical Documentation (docs/detailed_overview.md)](docs/detailed_overview.md)**
 
 ---
 
 <div align="center">
-  <p>Made with ❤️ for modern fitness centers.</p>
-  <p>This project is licensed under the <strong>MIT License</strong>.</p>
+  <p><strong>Propel your fitness business into the future.</strong></p>
+  <p>&copy; VajraFitness | Licensed under the MIT License.</p>
 </div>
