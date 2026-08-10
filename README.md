@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="frontend/public/logo.png" alt="VajraFitness Logo" width="180" />
+  <img src="frontend/public/logo.png" alt="VajraFitness Logo" width="220" />
   
-  # VajraFitness
+  <h1>🏋️‍♂️ VajraFitness</h1>
 
   <p>
     <strong>A Premium, Production-Ready SaaS Application for Gym Management</strong>
@@ -9,118 +9,101 @@
 
   <p>
     <a href="#-features"><img alt="Features" src="https://img.shields.io/badge/Features-Extensive-success?style=for-the-badge&logo=appveyor" /></a>
-    <a href="#-tech-stack"><img alt="Stack" src="https://img.shields.io/badge/Stack-React%20%7C%20Node%20%7C%20PostgreSQL-blue?style=for-the-badge" /></a>
+    <a href="#%EF%B8%8F-tech-stack"><img alt="Stack" src="https://img.shields.io/badge/Stack-React%20%7C%20Node%20%7C%20PostgreSQL-blue?style=for-the-badge" /></a>
     <a href="https://opensource.org/licenses/MIT"><img alt="License" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" /></a>
   </p>
 </div>
 
 <br />
 
-> VajraFitness is a complete end-to-end management solution tailored specifically for gym owners. It empowers owners to manage multiple gym branches, staff, trainers, and memberships seamlessly with a sleek, high-performance interface.
+> **VajraFitness** is a complete, end-to-end management solution tailored specifically for gym owners. It empowers owners to manage multiple gym branches, staff, trainers, and memberships seamlessly with a sleek, high-performance interface.
 
 ---
 
-## ✨ Why VajraFitness?
-
-- **Fully Multi-Tenant SaaS**: Manage global SaaS subscription plans and isolate data across different gyms and branches.
-- **Enterprise-Grade Security**: Strict Role-Based Access Control (RBAC) separating Super Admins, Gym Owners, Trainers, and Staff.
-- **Automated Workflows**: Automated membership expiry tracking, fee reminders, and attendance logs.
-- **Modern User Experience**: Built with React 19 and Tailwind CSS v4 to deliver a lightning-fast, premium feel.
-
----
-
-## 🎯 Key Features
-
-### 🏢 Gym Operations
-- **Membership Plans**: Create, customize, and assign dynamic pricing tiers.
-- **Billing & Fees**: Track due payments, generate PDF receipts, and integrate with online payment gateways.
-- **Attendance Tracking**: Frictionless daily check-ins for both members and staff.
-
-### 🧑‍💻 Member Self-Service Dashboard
-- **Workout Slips**: Members can access digital workout plans assigned by trainers.
-- **PT Bookings**: Easily book and manage personal trainer sessions directly from the UI.
-- **Profile & Progress**: Members can track their own membership lifecycles and payment history securely.
+## 📑 Table of Contents
+1. [✨ Key Features](#-key-features)
+2. [🛠️ Tech Stack](#%EF%B8%8F-tech-stack)
+3. [🚀 Quick Start (Local Setup)](#-quick-start-local-setup)
+4. [🔐 Demo Credentials](#-demo-credentials)
+5. [📚 Deep Dive Documentation](#-deep-dive-documentation)
 
 ---
 
-## 💻 Tech Stack
+## ✨ Key Features
 
-<details>
-  <summary>Click to expand full technology stack details</summary>
+VajraFitness is built to handle the complexities of modern fitness centers, all from a single dashboard.
 
-### Frontend
-- **Framework**: React 19 (TypeScript) & Vite
-- **Styling**: Tailwind CSS v4
-- **State Management**: Zustand
-- **Data Fetching**: TanStack Query
-- **Routing**: React Router v8
-
-### Backend
-- **Runtime**: Node.js & Express 5 (TypeScript)
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: JWT + HTTP-only refresh tokens (argon2 hashing)
-- **Document Generation**: pdfkit (for fee receipts & workout slips)
-</details>
+| 🏢 Gym Operations | 🧑‍💻 Member Dashboard |
+| --- | --- |
+| **Multi-Tenant SaaS:** Isolate data across branches.<br/>**Membership Plans:** Customize dynamic pricing tiers.<br/>**Billing & Fees:** Track payments & generate PDFs.<br/>**Automated Workflows:** Expiry & fee reminders.<br/>**Attendance:** Frictionless daily check-ins. | **Workout Slips:** Digital workout plans from trainers.<br/>**PT Bookings:** Book personal trainer sessions.<br/>**Profile & Progress:** Track membership lifecycles.<br/>**Secure Auth:** Safe, modern login & JWT sessions. |
 
 ---
 
-## 🚀 Quick Start (Local Development)
+## 🛠️ Tech Stack
 
-### Prerequisites
-Make sure you have **Node.js (v18+)** and **Docker** (for running the database) installed on your machine.
+Built with the modern web in mind to ensure blazing fast speeds and ultimate reliability.
 
-### 1. Database & Backend Setup
+| Layer | Technologies Used |
+| :--- | :--- |
+| **Frontend** | React 19 (TypeScript), Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router v8 |
+| **Backend** | Node.js, Express 5 (TypeScript), Prisma ORM, PDFKit, Argon2 |
+| **Database** | PostgreSQL |
+| **Architecture**| REST API, JWT Authentication, HTTP-only refresh tokens |
+
+---
+
+## 🚀 Quick Start (Local Setup)
+
+Get the project running locally in under 3 minutes. Make sure you have **Node.js (v18+)** and **Docker** installed.
+
+### 1️⃣ Database & Backend Setup
 ```bash
-# Spin up the PostgreSQL database via Docker
+# 1. Spin up the PostgreSQL database via Docker
 docker compose up -d db
 
-# Navigate to backend and install dependencies
+# 2. Navigate to backend and install dependencies
 cd backend
 npm install
 
-# Push the schema and seed the database with demo data
+# 3. Push the schema and seed the database with demo data
 npx prisma db push
 npm run seed       
 
-# Start the API server
+# 4. Start the API server (Runs on Port 5000)
 npm run dev        
 ```
 
-### 2. Frontend Setup
+### 2️⃣ Frontend Setup
 Open a new terminal window:
 ```bash
-# Navigate to frontend and install dependencies
+# 1. Navigate to frontend and install dependencies
 cd frontend
 npm install
 
-# Start the frontend app
+# 2. Start the frontend app
 npm run dev        
 ```
-*The app will be live at `http://localhost:5173`.*
+🎉 *The app will now be live at `http://localhost:5173`.*
 
 ---
 
 ## 🔐 Demo Credentials
 
-When you run `npm run seed`, the database is populated with realistic demo data to help you explore the UI immediately!
+When you run `npm run seed`, the database is populated with realistic demo data so you can test the UI immediately!
 
-| Role | Email | Password |
-|------|-------|----------|
-| **Super Admin** | `admin@vajrafitness.com` | `admin123` |
-| **Gym Admin** | `owner@ironvalley.com` | `gym123` |
-| **Demo User** | `first.lastN@demo.in` | `Demo@1234` |
+| Role | Email Address | Password |
+| :--- | :--- | :--- |
+| 👑 **Super Admin** | `admin@vajrafitness.com` | `admin123` |
+| 🏢 **Gym Admin** | `owner@ironvalley.com` | `gym123` |
+| 🏋️ **Demo User** | `first.lastN@demo.in` | `Demo@1234` |
 
 ---
 
 ## 📚 Deep Dive Documentation
 
-Looking for the nitty-gritty details? We've extracted our highly detailed, in-depth architectural and deployment guides into the `docs/` folder:
+For all the nitty-gritty details, including full architectural decisions, API routing, and production deployment checklists, please see our detailed legacy documentation:
 
-- 🏗️ **[Architecture & Design](docs/architecture.md)**
-- 🔒 **[Authentication & Security](docs/security.md)**
-- 💳 **[Payments & Billing](docs/payments.md)**
-- 🚀 **[Deployment Guide](docs/deployment.md)**
-- 📖 **[Detailed Overview (Legacy README)](docs/detailed_overview.md)**
+- 📖 **[Detailed Overview & Technical Documentation](docs/detailed_overview.md)**
 
 ---
 
