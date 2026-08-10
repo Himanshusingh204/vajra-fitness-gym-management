@@ -40,5 +40,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "exclude": ["node_modules", "dist", "scripts", "check-users.ts"]
+  "exclude": ["node_modules", "dist", "scripts", "check-users.ts", "tests", "vitest.config.ts"]
 }

@@ -2,26 +2,56 @@ import React, { useState } from 'react';
 import { MapPin, Phone, Mail, Clock, Send, CheckCircle, MessageCircle } from 'lucide-react';
 import api from '../services/api';
 import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const ContactPage = () => {
+  usePageMeta(
+    'Contact Us',
+    'Get in touch with the Vajra Fitness team. Questions, partnerships, or support — reach us via phone, email, or the contact form.',
+    '/contact',
+  );
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const wordCount = form.message.trim() ? form.message.trim().split(/\s+/).length : 0;
+  const MAX_WORDS = 1000;
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    // Live-block typing beyond the word cap so the counter can never go red.
+    if (name === 'message') {
+      const words = value.trim() ? value.trim().split(/\s+/).length : 0;
+      if (words > MAX_WORDS) return;
+    }
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (form.phone) {
+      const phone = form.phone.replace(/[\s-]/g, '');
+      if (!/^(\+?91[\s-]?)?([6-9]\d{9})$/.test(phone)) {
+        setError('Please enter a valid 10-digit Indian mobile number (starting with 6-9).');
+        setLoading(false);
+        return;
+      }
+    }
+    if (wordCount > MAX_WORDS) {
+      setError(`Message must not exceed ${MAX_WORDS} words.`);
+      setLoading(false);
+      return;
+    }
+
     try {
       await api.post('/enquiries/contact', form);
       setSent(true);
-    } catch {
-      setError('Failed to send. Please try again or email us directly.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send. Please try again or email us directly.');
     } finally {
       setLoading(false);
     }
@@ -159,6 +189,9 @@ const ContactPage = () => {
                         value={form.message}
                         onChange={handleChange}
                       />
+                      <p className={`text-right text-xs mt-1 font-medium ${wordCount >= MAX_WORDS ? 'text-red-500' : 'text-[var(--color-muted)]'}`}>
+                        {wordCount}/{MAX_WORDS} words
+                      </p>
                     </div>
 
                     <button type="submit" disabled={loading} className="btn-primary w-full py-3 flex items-center justify-center gap-2">

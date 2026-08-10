@@ -6,6 +6,7 @@ import {
   ChevronDown, ArrowRight, Mail, Sparkles, ShieldCheck, Rocket, HeartHandshake, TrendingUp,
 } from 'lucide-react';
 import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const TEAM = [
   { name: 'Rahul Sharma', role: 'Founder & CEO', initials: 'RS' },
@@ -86,6 +87,11 @@ const FaqItem = ({ q, a, open, onToggle }: { q: string; a: string; open: boolean
 );
 
 const AboutPage = () => {
+  usePageMeta(
+    'About Vajra Fitness',
+    'Learn about Vajra Fitness — the enterprise gym management platform built for Indian fitness businesses. Our story, mission, and the team behind the platform.',
+    '/about',
+  );
   const { hash } = useLocation();
   const [openFaq, setOpenFaq] = useState(0);
 
@@ -267,7 +273,7 @@ const AboutPage = () => {
                   </div>
                 ))}
               </div>
-              <a href="mailto:careers@vajrafitness.com" className="btn-primary mt-8">
+              <a href="mailto:careers@vajrafitness.in" className="btn-primary mt-8">
                 View Open Positions <Mail className="w-5 h-5" />
               </a>
             </Reveal>
@@ -346,7 +352,7 @@ const AboutPage = () => {
 
       {/* ===== CTA ===== */}
       <section className="relative py-20 md:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-deepgray)] to-[var(--color-charcoal)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-section-dark)] to-[var(--color-section-dark-alt)]" />
         <div className="absolute -top-20 right-0 w-[600px] h-[600px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-20 animate-blob" />
         <div className="relative z-10 max-w-3xl mx-auto px-4 text-center">
           <Reveal>

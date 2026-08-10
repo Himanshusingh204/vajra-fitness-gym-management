@@ -1,0 +1,34 @@
+# Vajra Fitness
+
+> Enterprise gym management SaaS platform for Indian fitness businesses. Manage memberships, payments, attendance, workout slips, PT bookings, trainers, staff, and multiple gym branches with role-based access control.
+
+## Key facts
+
+- Vajra Fitness is a multi-gym management platform (not a single-gym tool).
+- It serves five roles: Super Admin (platform-wide), Gym Admin (gym owner/manager), Trainer, Staff, and Member.
+- Members register to a specific gym branch and are approved by the gym admin.
+- No default member/staff passwords are used; accounts are activated via one-time secure links.
+- Payments support cash, UPI, card, bank transfer, and other manual methods, with PDF receipts.
+
+## Pages
+
+- Home: https://vajrafitness.in/
+- Find a Gym: https://vajrafitness.in/gyms
+- Membership: https://vajrafitness.in/membership
+- About: https://vajrafitness.in/about
+- Contact: https://vajrafitness.in/contact
+- FAQ: https://vajrafitness.in/faq
+- Help Center: https://vajrafitness.in/help
+- Terms & Conditions: https://vajrafitness.in/terms
+- Privacy Policy: https://vajrafitness.in/privacy
+- Refund Policy: https://vajrafitness.in/refund
+
+## Legal
+
+- Proprietary / Commercial use only.
+- India-focused service (headquartered in Jodhpur, Rajasthan).
+
+## Open source / docs
+
+- Deployment guide: https://github.com/<owner>/<repo>/blob/main/DEPLOYMENT.md
+- API documentation is included in the repository README.

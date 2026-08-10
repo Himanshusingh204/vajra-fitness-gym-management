@@ -25,7 +25,7 @@ const isGymStaff = async (userId: string | undefined, gymId: string) => {
 export const getAttendance = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
-    const { date, search, status } = req.query;
+    const { date, search, status, branchId } = req.query;
     const page = Math.max(1, parseInt((req.query.page as string) || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || '50', 10) || 50));
 
@@ -36,6 +36,11 @@ export const getAttendance = async (req: AuthRequest, res: Response) => {
     const isStaff = await isGymStaff(req.user?.userId, gymId);
     if (!isOwner && !isStaff && req.user?.role !== 'SUPER_ADMIN') {
       return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    if (branchId) {
+      const branch = await prisma.branch.findFirst({ where: { id: String(branchId), gymId } });
+      if (!branch) return res.status(400).json({ error: 'Branch does not belong to this gym' });
     }
 
     let dateFilter: any = {};
@@ -59,7 +64,8 @@ export const getAttendance = async (req: AuthRequest, res: Response) => {
     let statusFilter: any = {};
     if (status) statusFilter = { status };
 
-    const where = { gymId, ...dateFilter, ...searchFilter, ...statusFilter };
+    const where: any = { gymId, ...dateFilter, ...searchFilter, ...statusFilter };
+    if (branchId) where.branchId = branchId;
 
     const [records, total] = await Promise.all([
       prisma.attendance.findMany({
@@ -117,11 +123,14 @@ export const markAttendance = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    let branchId: string | null = null;
+
     if (memberId) {
       const member = await prisma.memberDetails.findUnique({ where: { id: memberId } });
       if (!member || member.gymId !== gymId) {
         return res.status(400).json({ error: 'Member does not belong to this gym' });
       }
+      branchId = member.branchId;
 
       // Duplicate check-in prevention: one record per member per day per gym.
       const todayStart = startOfDay(new Date());
@@ -138,6 +147,7 @@ export const markAttendance = async (req: AuthRequest, res: Response) => {
       if (!staff || staff.gymId !== gymId) {
         return res.status(400).json({ error: 'Staff member does not belong to this gym' });
       }
+      branchId = staff.branchId;
 
       const todayStart = startOfDay(new Date());
       const existing = await prisma.attendance.findFirst({
@@ -157,6 +167,7 @@ export const markAttendance = async (req: AuthRequest, res: Response) => {
         gymId,
         memberId: memberId || null,
         staffId: staffId || null,
+        branchId,
         checkIn: new Date(),
         status: 'PRESENT',
       },

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Reveal } from '../components/Reveal';
 import { Counter } from '../components/Counter';
+import { usePageMeta } from '../hooks/usePageMeta';
 import api from '../services/api';
 
 const STATS = [
@@ -66,24 +67,24 @@ const STEPS = [
 
 const PLANS = [
   {
-    name: 'Basic',
+    name: 'Starter',
     price: 999,
     tagline: 'For single-branch gyms getting started',
-    features: ['Member management', 'Attendance tracking', 'Fee reminders', 'Member mobile app'],
+    features: ['Member management', 'Attendance tracking', 'Fee collection', 'Mobile-friendly portal'],
     highlight: false,
   },
   {
-    name: 'Pro',
+    name: 'Professional',
     price: 2499,
     tagline: 'For growing gyms that want to scale',
-    features: ['Everything in Basic', 'Multi-branch support', 'Workout & diet slips', 'Lead CRM', 'GST invoicing', 'Advanced analytics'],
+    features: ['Everything in Starter', 'PT bookings & workout slips', 'Advanced reports', 'Priority support'],
     highlight: true,
   },
   {
-    name: 'All-Access',
-    price: 4999,
+    name: 'Enterprise',
+    price: 5999,
     tagline: 'For chains & enterprise fitness',
-    features: ['Everything in Pro', 'White-label app', 'Dedicated success manager', 'API & integrations', 'Priority support'],
+    features: ['Everything in Professional', 'Multi-gym management', 'API access', 'Dedicated account manager'],
     highlight: false,
   },
 ];
@@ -115,6 +116,7 @@ const TESTIMONIALS = [
 type HomeTestimonial = (typeof TESTIMONIALS)[number] & { imageUrl?: string | null };
 
 const HomePage = () => {
+  usePageMeta(undefined, undefined, '/');
   const [testimonials, setTestimonials] = useState<HomeTestimonial[]>(TESTIMONIALS);
 
   useEffect(() => {
@@ -146,9 +148,9 @@ const HomePage = () => {
             src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop"
             alt="Gym interior"
             fetchPriority="high"
-            className="w-full h-full object-cover opacity-15 dark:opacity-30"
+            className="w-full h-full object-cover opacity-30"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/90 via-[var(--color-base)]/80 to-[var(--color-base)] dark:from-[#0d0d0d]/95 dark:via-[#0d0d0d]/90 dark:to-[#0d0d0d]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/75 via-[var(--color-base)]/55 to-[var(--color-base)] dark:from-[#0d0d0d]/85 dark:via-[#0d0d0d]/70 dark:to-[#0d0d0d]" />
           <div className="absolute -top-32 -left-32 w-[34rem] h-[34rem] bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
           <div className="absolute top-1/3 -right-40 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
         </div>
@@ -368,10 +370,10 @@ const HomePage = () => {
                   </ul>
 
                   <Link
-                    to="/register"
+                    to="/subscription"
                     className={`w-full text-center ${plan.highlight ? 'btn-accent' : 'btn-outline'}`}
                   >
-                    Start 14-day Trial
+                    Choose Plan
                   </Link>
                 </div>
               </Reveal>
@@ -434,7 +436,7 @@ const HomePage = () => {
           8. CALL TO ACTION
           ============================================================ */}
       <section className="relative py-24 md:py-32 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-deepgray)] to-[var(--color-charcoal)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-section-dark)] to-[var(--color-section-dark-alt)]" />
         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-[800px] h-[800px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-20 animate-blob" />
         <div className="absolute bottom-0 left-0 -translate-x-1/3 translate-y-1/2 w-[600px] h-[600px] bg-[var(--color-accent)] rounded-full blur-3xl opacity-15 animate-blob [animation-delay:-9s]" />
 

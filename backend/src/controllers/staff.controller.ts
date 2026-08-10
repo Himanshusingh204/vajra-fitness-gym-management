@@ -6,25 +6,34 @@ import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
 import { FRONTEND_URL } from '../utils/env';
 import { notifyGymOwner } from '../services/notification.service';
 import { sendActivationEmail } from '../utils/email';
+import { assertGymCapacity } from '../services/entitlements.service';
 
 // Get all staff and trainers for a gym
 export const getStaff = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
+    const { branchId } = req.query;
     
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym || gym.ownerId !== req.user?.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    const where: any = { gymId };
+    if (branchId) {
+      const branch = await prisma.branch.findFirst({ where: { id: String(branchId), gymId } });
+      if (!branch) return res.status(400).json({ error: 'Branch does not belong to this gym' });
+      where.branchId = branchId;
+    }
+
     const trainers = await prisma.trainerDetails.findMany({
-      where: { gymId },
-      include: { user: { select: { id: true, username: true, email: true, phone: true } } }
+      where,
+      include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
     });
 
     const staff = await prisma.staffDetails.findMany({
-      where: { gymId },
-      include: { user: { select: { id: true, username: true, email: true, phone: true } } }
+      where,
+      include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
     });
 
     res.json({ trainers, staff });
@@ -37,7 +46,7 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
 export const addStaff = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
-    const { username, email, phone, roleType, roleSpecifics } = req.body; 
+    const { username, email, phone, roleType, roleSpecifics, branchId } = req.body; 
     // roleType: "TRAINER" or "STAFF"
     // roleSpecifics: specialization for Trainer, or role name for Staff
 
@@ -48,6 +57,19 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(400).json({ error: 'Email already exists' });
+
+    if (branchId) {
+      const branch = await prisma.branch.findFirst({ where: { id: branchId, gymId } });
+      if (!branch) return res.status(400).json({ error: 'Branch does not belong to this gym' });
+    }
+
+    // Enforce the gym's SaaS plan capacity before creating another trainer/staff.
+    try {
+      await assertGymCapacity(gymId, roleType === 'TRAINER' ? { addTrainers: 1 } : { addStaff: 1 });
+    } catch (err: any) {
+      if (err?.name === 'EntitlementError') return res.status(402).json({ error: err.message.split(':')[2] });
+      throw err;
+    }
 
     // No universal default password: the user activates their own password
     // through a one-time secure link.
@@ -62,11 +84,11 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
         role: roleType,
         ...(roleType === 'TRAINER' ? {
           trainerDetails: {
-            create: { gymId, specialization: roleSpecifics }
+            create: { gymId, specialization: roleSpecifics, branchId: branchId || null }
           }
         } : {
           staffDetails: {
-            create: { gymId, role: roleSpecifics }
+            create: { gymId, role: roleSpecifics, branchId: branchId || null }
           }
         })
       },
@@ -92,7 +114,8 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
       message: `${username} was added as ${roleSpecifics}.`,
     });
 
-    res.status(201).json({ ...user, activationLink });
+    const { password: _pw, ...safeUser } = user;
+    res.status(201).json({ ...safeUser, activationLink });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add staff' });
   }

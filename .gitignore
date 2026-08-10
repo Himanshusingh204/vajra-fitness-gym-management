@@ -6,3 +6,20 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local database files and seeds (never commit SQLite dumps — they contain
+# hashed passwords and other user data).
+*.db
+*.sqlite
+*.sqlite3
+backend/prisma/dev.db*
+
+# Local debug scripts (contain demo credentials / dump user data).
+backend/check-users.*
+backend/test-login.*
+backend/*.d.ts
+backend/*.d.ts.map
+# Compiled seed artifacts (contain plaintext demo passwords).
+backend/scripts/*.js
+backend/scripts/*.js.map
+backend/scripts/*.d.ts

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router';
-import { MapPin, Dumbbell, ShieldCheck, UserPlus, LogOut } from 'lucide-react';
+import { MapPin, Dumbbell, ShieldCheck, UserPlus, LogOut, Banknote, Smartphone, CreditCard } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
@@ -23,6 +23,7 @@ const MemberRegisterPage = () => {
 
   const [gymId, setGymId] = useState(preselectId);
   const [planId, setPlanId] = useState('');
+  const [preferredPaymentMethod, setPreferredPaymentMethod] = useState('UPI');
   const [formData, setFormData] = useState({ username: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -54,10 +55,10 @@ const MemberRegisterPage = () => {
     setIsSubmitting(true);
     try {
       if (isLoggedInMember) {
-        await enrollMember(gymId, planId);
+        await enrollMember(gymId, planId, preferredPaymentMethod);
         navigate('/dashboard', { replace: true });
       } else {
-        const payload = { ...formData, gymId, planId };
+        const payload = { ...formData, gymId, planId, preferredPaymentMethod };
         const response = await api.post('/auth/register/member', payload);
         const { token, user: newUser } = response.data;
         setAuth(newUser, token);
@@ -281,6 +282,29 @@ const MemberRegisterPage = () => {
                 </div>
               </div>
             )}
+
+            {/* Step 3: Payment method */}
+            <div className="mt-6">
+              <p className="text-sm font-bold text-[var(--color-charcoal)] dark:text-white mb-3">How would you like to pay?</p>
+              <div className="space-y-2.5">
+                {[
+                  { id: 'CASH', label: 'Pay at Gym (COD)', desc: 'Pay cash at the front desk after approval.', icon: Banknote },
+                  { id: 'UPI', label: 'UPI', desc: 'Google Pay, PhonePe, Paytm — pay online securely.', icon: Smartphone },
+                  { id: 'CARD', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay — pay online securely.', icon: CreditCard },
+                ].map((m) => (
+                  <label key={m.id} className={`block cursor-pointer rounded-xl border p-3.5 transition-all ${preferredPaymentMethod === m.id ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 ring-1 ring-[var(--color-primary)]/20' : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/40'}`}>
+                    <input type="radio" name="paymentMethod" value={m.id} checked={preferredPaymentMethod === m.id} onChange={() => setPreferredPaymentMethod(m.id)} className="sr-only" />
+                    <span className="flex items-center gap-3">
+                      <m.icon className="w-5 h-5 text-[var(--color-primary)] shrink-0" />
+                      <span>
+                        <span className="block font-bold text-sm dark:text-white">{m.label}</span>
+                        <span className="block text-xs text-[var(--color-muted)]">{m.desc}</span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <button
               type="submit"

@@ -29,7 +29,7 @@ export const getWorkoutSlips = async (req: AuthRequest, res: Response) => {
     }
 
     const slips = await prisma.workoutSlip.findMany({
-      where: { memberId },
+      where: { memberId, gymId: member.gymId },
       include: { trainer: { include: { user: { select: { username: true } } } } },
       orderBy: { assignedDate: 'desc' }
     });

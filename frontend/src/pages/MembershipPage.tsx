@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { MapPin, CreditCard, ShieldCheck, CalendarCheck, ArrowRight, Dumbbell, CheckCircle2 } from 'lucide-react';
 import { GymDirectory } from '../components/GymDirectory';
 import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const STEPS = [
   {
@@ -30,6 +31,11 @@ const PERKS = [
 ];
 
 const MembershipPage = () => {
+  usePageMeta(
+    'Gym Memberships & Plans',
+    'Explore verified gyms and flexible membership plans — monthly, quarterly or annual. Register, get approved, and start training with Vajra Fitness.',
+    '/membership',
+  );
   return (
     <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
       {/* HERO */}
@@ -38,9 +44,9 @@ const MembershipPage = () => {
           <img
             src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop"
             alt="Gym interior"
-            className="w-full h-full object-cover opacity-15 dark:opacity-30"
+            className="w-full h-full object-cover opacity-30"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/90 via-[var(--color-base)]/80 to-[var(--color-base)] dark:from-[#0d0d0d]/95 dark:via-[#0d0d0d]/90 dark:to-[#0d0d0d]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/75 via-[var(--color-base)]/55 to-[var(--color-base)] dark:from-[#0d0d0d]/85 dark:via-[#0d0d0d]/70 dark:to-[#0d0d0d]" />
           <div className="absolute -top-32 -right-32 w-[34rem] h-[34rem] bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
           <div className="absolute top-1/2 -left-40 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
         </div>
@@ -129,7 +135,7 @@ const MembershipPage = () => {
 
       {/* CTA */}
       <section className="relative py-24 md:py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-deepgray)] to-[var(--color-charcoal)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-section-dark)] to-[var(--color-section-dark-alt)]" />
         <div className="absolute top-0 left-0 -translate-y-1/2 -translate-x-1/3 w-[700px] h-[700px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-20 animate-blob" />
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
           <Reveal>

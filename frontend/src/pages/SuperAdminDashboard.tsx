@@ -3,18 +3,123 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, Users, Settings, BarChart3, CheckCircle, Clock,
   Plus, Pencil, Trash2, Search, Mail, FileText, Star, XCircle, Diamond, CreditCard,
+  DollarSign
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import api from '../services/api';
+import api, { downloadFile } from '../services/api';
 
-type Gym = { id: string; name: string; city: string; state: string; isApproved: boolean; createdAt: string; owner: { email: string; username: string } };
-type User = { id: string; username: string; email: string; phone: string | null; role: string; isActive: boolean; createdAt: string; memberDetails: { status: string; gym: { name: string } } | null; ownedGyms: { name: string; isApproved: boolean }[] };
-type Faq = { id: string; question: string; answer: string; isActive: boolean; order: number };
-type Testimonial = { id: string; name: string; role: string; content: string; imageUrl: string | null; rating: number; isActive: boolean; createdAt: string };
-type Ticket = { id: string; subject: string; message: string; status: string; priority: string; createdAt: string; user: { username: string; email: string; role: string } };
-type AuditLog = { id: string; action: string; entity: string; entityId: string | null; details: string | null; ipAddress: string | null; createdAt: string; user: { username: string; email: string } | null };
-type SaaSPlan = { id: string; name: string; code: string; description: string | null; price: number; billingCycle: string; maxGyms: number; maxMembers: number | null; maxTrainers: number | null; maxStaff: number | null; advancedReports: boolean; features: string; isActive: boolean };
-type Subscription = { id: string; status: string; startDate: string; endDate: string; amount: number; createdAt: string; gym: { id: string; name: string; city: string }; plan: { id: string; name: string; code: string; price: number; billingCycle: string } };
+type AnalyticsData = {
+  // Basic metrics
+  totalGyms: number;
+  activeGyms: number;
+  pendingGyms: number;
+  totalMembers: number;
+  pendingMembers: number;
+  totalStaff: number;
+  totalTrainers: number;
+  activeMembers: number;
+  platformRevenue: number;
+  
+  // SaaS metrics
+  mrr: number;
+  arr: number;
+  arpu: number;
+  cltv: number;
+  churnRate: number;
+  churnedCount: number;
+  newSubscriptionsThisMonth: number;
+  trialConversionRate: number;
+  failedPayments: number;
+  
+  // Breakdowns
+  revenueByPlan: Record<string, number>;
+  gymsByStatus: Record<string, number>;
+  monthlyRevenueTrend: Array<{ month: string; fees: number; subscriptions: number; total: number }>;
+  topGyms: Array<{ id: string; name: string; city: string; memberCount: number; plan: string; subscriptionStatus: string }>;
+};
+
+type Gym = {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string;
+  state: string;
+  gstNumber: string | null;
+  logoUrl: string | null;
+  imageUrl: string | null;
+  isApproved: boolean;
+  createdAt: string;
+  owner?: { username: string; email: string; phone: string | null } | null;
+};
+
+type User = {
+  id: string;
+  username: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+  memberDetails?: { status: string; gym?: { name: string } | null } | null;
+  ownedGyms?: { name: string; isApproved: boolean }[];
+};
+
+type Faq = { id: string; question: string; answer: string; isActive: boolean };
+
+type Testimonial = { id: string; name: string; role: string; content: string; rating: number; isActive: boolean };
+
+type Ticket = {
+  id: string;
+  subject: string;
+  message: string;
+  priority: string;
+  status: string;
+  createdAt: string;
+  user?: { username: string; email: string } | null;
+};
+
+type AuditLog = {
+  id: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  details: string | null;
+  createdAt: string;
+  user?: { username: string; email: string } | null;
+};
+
+type SaaSPlan = {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  monthlyPrice: number;
+  maxGyms: number;
+  maxMembers: number | null;
+  maxTrainers: number | null;
+  maxStaff: number | null;
+  advancedReports: boolean;
+  isActive: boolean;
+};
+
+type Subscription = {
+  id: string;
+  status: string;
+  amount: number;
+  startDate: string;
+  endDate: string;
+  gym: { id: string; name: string; city: string };
+  plan: { id: string; name: string; code: string; monthlyPrice: number };
+};
+
+type PlatformFee = {
+  id: string;
+  amount: number;
+  dueDate: string;
+  status: string;
+  member?: { user?: { username: string } | null } | null;
+  gym?: { name: string } | null;
+};
 
 const ROLES = ['ALL', 'SUPER_ADMIN', 'GYM_ADMIN', 'MEMBER', 'TRAINER', 'STAFF'];
 const STATUS_STYLES: Record<string, string> = {
@@ -59,53 +164,212 @@ const SuperAdminDashboard = () => {
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
 
-  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsLike>({
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
     queryKey: ['analytics'],
     queryFn: () => api.get('/admin/analytics').then((r) => r.data),
+    refetchInterval: 30000,
   });
 
   const { data: gyms = [], isLoading: gymsLoading } = useQuery<Gym[]>({
     queryKey: ['admin-gyms'],
     queryFn: () => api.get('/admin/gyms').then((r) => r.data),
+    refetchInterval: 30000,
   });
 
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ['admin-users'],
     queryFn: () => api.get('/admin/users').then((r) => r.data),
+    refetchInterval: 30000,
   });
 
   const { data: faqs = [], isLoading: faqsLoading } = useQuery<Faq[]>({
     queryKey: ['admin-faqs'],
     queryFn: () => api.get('/admin/cms/faqs').then((r) => r.data),
+    refetchInterval: 60000,
   });
 
   const { data: testimonials = [], isLoading: testisLoading } = useQuery<Testimonial[]>({
     queryKey: ['admin-testimonials'],
     queryFn: () => api.get('/admin/cms/testimonials').then((r) => r.data),
+    refetchInterval: 60000,
   });
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery<Ticket[]>({
     queryKey: ['admin-tickets'],
     queryFn: () => api.get('/admin/support/tickets').then((r) => r.data),
+    refetchInterval: 60000,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery<AuditLog[]>({
     queryKey: ['admin-audit'],
     queryFn: () => api.get('/admin/audit-logs').then((r) => r.data),
+    refetchInterval: 60000,
   });
+
+  // Chart rendering effect
+  React.useEffect(() => {
+    if (!analytics?.monthlyRevenueTrend || analyticsLoading) return;
+    
+    const canvas = document.getElementById('revenueChart') as HTMLCanvasElement;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const data = analytics.monthlyRevenueTrend;
+    const labels = data.map(d => d.month);
+    const feesData = data.map(d => d.fees);
+    const subsData = data.map(d => d.subscriptions);
+    const totalData = data.map(d => d.total);
+    
+    const maxVal = Math.max(...totalData, ...feesData, ...subsData, 1);
+    const padding = 40;
+    const chartWidth = canvas.width - padding * 2;
+    const chartHeight = canvas.height - padding * 2;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw grid lines
+    ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padding + (chartHeight / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(canvas.width - padding, y);
+      ctx.stroke();
+      
+      // Y-axis labels
+      ctx.fillStyle = '#888';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${Math.round((maxVal * (4 - i)) / 4).toLocaleString('en-IN')}`, padding - 10, y + 4);
+    }
+    
+    // Draw X-axis labels
+    ctx.fillStyle = '#888';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    labels.forEach((label, i) => {
+      const x = padding + (chartWidth / (labels.length - 1)) * i;
+      ctx.fillText(label, x, canvas.height - 10);
+    });
+    
+    // Draw datasets
+    const drawLine = (values: number[], color: string, fillColor: string) => {
+      const points = values.map((val, i) => ({
+        x: padding + (chartWidth / (labels.length - 1)) * i,
+        y: padding + chartHeight - (val / maxVal) * chartHeight
+      }));
+      
+      // Fill area
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, padding + chartHeight);
+      points.forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.lineTo(points[points.length - 1].x, padding + chartHeight);
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      
+      // Points
+      points.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+      });
+    };
+    
+    // Draw in order: total (background), fees, subscriptions
+    drawLine(totalData, 'rgba(16, 185, 129, 0.8)', 'rgba(16, 185, 129, 0.1)');
+    drawLine(feesData, 'rgba(99, 102, 241, 0.8)', 'rgba(99, 102, 241, 0.1)');
+    drawLine(subsData, 'rgba(245, 158, 11, 0.8)', 'rgba(245, 158, 11, 0.1)');
+    
+    // Legend
+    const legendItems = [
+      { label: 'Total Revenue', color: 'rgba(16, 185, 129, 0.8)' },
+      { label: 'Fees', color: 'rgba(99, 102, 241, 0.8)' },
+      { label: 'Subscriptions', color: 'rgba(245, 158, 11, 0.8)' }
+    ];
+    
+    legendItems.forEach((item, i) => {
+      const x = canvas.width - 180;
+      const y = 20 + i * 20;
+      ctx.fillStyle = item.color;
+      ctx.fillRect(x, y, 12, 12);
+      ctx.fillStyle = '#333';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText(item.label, x + 18, y + 10);
+    });
+  }, [analytics?.monthlyRevenueTrend, analyticsLoading]);
 
   const approve = useMutation({
     mutationFn: (id: string) => api.put(`/admin/gyms/${id}/approve`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-gyms', 'analytics', 'admin-audit'] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-gyms'] });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+    },
   });
   const suspend = useMutation({
     mutationFn: (id: string) => api.put(`/admin/gyms/${id}/suspend`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-gyms', 'analytics', 'admin-audit'] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-gyms'] });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+    },
+  });
+
+  const [gymForm, setGymForm] = useState<{ name: string; address: string; city: string; state: string; gstNumber: string; logoUrl: string; imageUrl: string }>({ name: '', address: '', city: '', state: '', gstNumber: '', logoUrl: '', imageUrl: '' });
+  const [editingGymId, setEditingGymId] = useState<string | null>(null);
+  const updateGymProfile = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: typeof gymForm }) => api.put(`/admin/gyms/${id}`, {
+      ...data,
+      name: data.name || undefined,
+      address: data.address || undefined,
+      city: data.city || undefined,
+      state: data.state || undefined,
+      gstNumber: data.gstNumber || undefined,
+      logoUrl: data.logoUrl || undefined,
+      imageUrl: data.imageUrl || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-gyms'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+      setEditingGymId(null);
+    },
+  });
+  const openGymEditor = (gym: Gym) => {
+    setGymForm({ name: gym.name, address: gym.address || '', city: gym.city, state: gym.state, gstNumber: gym.gstNumber || '', logoUrl: gym.logoUrl || '', imageUrl: gym.imageUrl || '' });
+    setEditingGymId(gym.id);
+  };
+
+  const { data: platformFees = [], isLoading: feesLoading } = useQuery<PlatformFee[]>({
+    queryKey: ['admin-fees'],
+    queryFn: () => api.get('/admin/fees').then((r) => r.data),
+    refetchInterval: 30000,
   });
 
   const setUserActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.put(`/admin/users/${id}/status`, { isActive }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users', 'admin-audit'] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+    },
   });
 
   const [faqForm, setFaqForm] = useState({ question: '', answer: '' });
@@ -146,37 +410,39 @@ const SuperAdminDashboard = () => {
   const { data: saasPlans = [], isLoading: saasPlansLoading } = useQuery<SaaSPlan[]>({
     queryKey: ['saas-plans'],
     queryFn: () => api.get('/saas/plans', { params: { all: 'true' } }).then((r) => r.data),
+    refetchInterval: 30000,
   });
   const { data: subscriptions = [], isLoading: subsLoading } = useQuery<Subscription[]>({
     queryKey: ['saas-subscriptions'],
     queryFn: () => api.get('/saas/subscriptions').then((r) => r.data),
+    refetchInterval: 30000,
   });
-  const [planForm, setPlanForm] = useState({ name: '', code: '', description: '', price: 0, billingCycle: 'MONTHLY', maxGyms: 1, maxMembers: '', maxTrainers: '', maxStaff: '', features: '' });
+  const [planForm, setPlanForm] = useState({ name: '', code: '', description: '', monthlyPrice: 0, maxGyms: 1, maxMembers: '', maxTrainers: '', maxStaff: '', features: '' });
   const createPlan = useMutation({
     mutationFn: (data: typeof planForm) => api.post('/saas/plans', {
       ...data,
       description: data.description || null,
-      price: Number(data.price),
+      monthlyPrice: Number(data.monthlyPrice) || 0,
       maxGyms: Number(data.maxGyms) || 1,
       maxMembers: data.maxMembers ? Number(data.maxMembers) : null,
       maxTrainers: data.maxTrainers ? Number(data.maxTrainers) : null,
       maxStaff: data.maxStaff ? Number(data.maxStaff) : null,
       features: data.features ? data.features.split(',').map((f) => f.trim()).filter(Boolean) : [],
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-plans', 'admin-audit'] }); setPlanForm({ name: '', code: '', description: '', price: 0, billingCycle: 'MONTHLY', maxGyms: 1, maxMembers: '', maxTrainers: '', maxStaff: '', features: '' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-plans'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); setPlanForm({ name: '', code: '', description: '', monthlyPrice: 0, maxGyms: 1, maxMembers: '', maxTrainers: '', maxStaff: '', features: '' }); },
   });
   const togglePlan = useMutation({
     mutationFn: (plan: SaaSPlan) => api.put(`/saas/plans/${plan.id}`, { isActive: !plan.isActive }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['saas-plans', 'admin-audit'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-plans'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); },
   });
   const [subForm, setSubForm] = useState({ gymId: '', planId: '', startDate: '' });
   const createSubscription = useMutation({
-    mutationFn: (data: typeof subForm) => api.post('/saas/subscriptions', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-subscriptions', 'admin-audit'] }); setSubForm({ gymId: '', planId: '', startDate: '' }); },
+    mutationFn: (data: typeof subForm) => api.post('/saas/subscriptions', { ...data, startDate: data.startDate || undefined }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-subscriptions'] }); qc.invalidateQueries({ queryKey: ['analytics'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); setSubForm({ gymId: '', planId: '', startDate: '' }); },
   });
   const updateSubStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/saas/subscriptions/${id}`, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['saas-subscriptions', 'admin-audit'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-subscriptions'] }); qc.invalidateQueries({ queryKey: ['analytics'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); },
   });
 
   const filteredUsers = users.filter((u) => {
@@ -200,6 +466,7 @@ const SuperAdminDashboard = () => {
   const tabs = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'gyms', label: 'Gyms', icon: Building2 },
+    { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'saas', label: 'SaaS & Subscriptions', icon: Diamond },
     { id: 'cms', label: 'Content (CMS)', icon: LayoutDashboard },
@@ -215,10 +482,12 @@ const SuperAdminDashboard = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-1">Signed in as <strong>{user?.email}</strong></p>
         </div>
 
-        <div className="flex gap-2 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl w-fit flex-wrap">
+        <div className="flex gap-2 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl w-fit flex-wrap" role="tablist" aria-label="Platform sections">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
+              role="tab"
+              aria-selected={activeTab === id}
               onClick={() => setActiveTab(id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === id
@@ -237,55 +506,232 @@ const SuperAdminDashboard = () => {
           <div className="space-y-8">
             {analyticsLoading ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[...Array(8)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+                {[...Array(12)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Total Gyms" value={analytics?.totalGyms ?? 0} sub={`${analytics?.activeGyms ?? 0} active`} color="text-[var(--color-primary)]" />
-                <StatCard label="Pending Approval" value={analytics?.pendingGyms ?? 0} color="text-amber-500" />
-                <StatCard label="Total Members" value={analytics?.totalMembers ?? 0} sub={`${analytics?.pendingMembers ?? 0} pending`} color="text-[var(--color-secondary)]" />
-                <StatCard label="Platform Revenue" value={`₹${(analytics?.platformRevenue ?? 0).toLocaleString('en-IN')}`} sub="from paid fees" color="text-green-600" />
-                <StatCard label="Staff Members" value={analytics?.totalStaff ?? 0} color="text-purple-500" />
-                <StatCard label="Pending Member Requests" value={analytics?.pendingMembers ?? 0} color="text-amber-500" />
-                <StatCard label="Active Gyms" value={analytics?.activeGyms ?? 0} color="text-green-600" />
-                <StatCard label="Registered Users" value={users.length} color="text-[var(--color-primary)]" />
-              </div>
-            )}
-
-            <Panel title="Recently Registered Gyms">
-              {gymsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : gyms.length === 0 ? (
-                <EmptyState text="No gyms registered yet." />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-white/5">
-                      <tr>
-                        {['Gym Name', 'Location', 'Owner', 'Registered', 'Status'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {gyms.slice(0, 5).map((gym) => (
-                        <tr key={gym.id}>
-                          <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{gym.name}</td>
-                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.city}, {gym.state}</td>
-                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.owner?.email}</td>
-                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(gym.createdAt).toLocaleDateString('en-IN')}</td>
-                          <td className="px-6 py-4">
-                            {gym.isApproved ? (
-                              <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold px-2.5 py-1 rounded-full"><CheckCircle className="w-3 h-3" /> Active</span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full"><Clock className="w-3 h-3" /> Pending</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <>
+                {/* Top Row - Core SaaS Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger">
+                  <StatCard 
+                    label="Monthly Recurring Revenue" 
+                    value={`₹${(analytics?.mrr ?? 0).toLocaleString('en-IN')}`} 
+                    sub="MRR" 
+                    color="text-[var(--color-primary)]" 
+                  />
+                  <StatCard 
+                    label="Annual Recurring Revenue" 
+                    value={`₹${(analytics?.arr ?? 0).toLocaleString('en-IN')}`} 
+                    sub="ARR" 
+                    color="text-emerald-600" 
+                  />
+                  <StatCard 
+                    label="Churn Rate" 
+                    value={`${analytics?.churnRate ?? 0}%`} 
+                    sub={`${analytics?.churnedCount ?? 0} churned this month`} 
+                    color={((analytics?.churnRate ?? 0) > 5 ? 'text-red-500' : 'text-green-600')} 
+                  />
+                  <StatCard 
+                    label="Customer Lifetime Value" 
+                    value={`₹${(analytics?.cltv ?? 0).toLocaleString('en-IN')}`} 
+                    sub="CLTV" 
+                    color="text-blue-500" 
+                  />
                 </div>
-              )}
-            </Panel>
+
+                {/* Second Row - Growth Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger">
+                  <StatCard 
+                    label="ARPU" 
+                    value={`₹${(analytics?.arpu ?? 0).toLocaleString('en-IN')}`} 
+                    sub="Avg Revenue Per Gym" 
+                    color="text-purple-500" 
+                  />
+                  <StatCard 
+                    label="New Subscriptions" 
+                    value={analytics?.newSubscriptionsThisMonth ?? 0} 
+                    sub="This Month" 
+                    color="text-[var(--color-primary)]" 
+                  />
+                  <StatCard 
+                    label="Trial Conversion" 
+                    value={`${analytics?.trialConversionRate ?? 0}%`} 
+                    sub="Trial → Paid" 
+                    color="text-amber-500" 
+                  />
+                  <StatCard 
+                    label="Failed Payments" 
+                    value={analytics?.failedPayments ?? 0} 
+                    sub="This Month" 
+                    color="text-red-500" 
+                  />
+                </div>
+
+                {/* Third Row - Operational Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger">
+                  <StatCard 
+                    label="Total Gyms" 
+                    value={analytics?.totalGyms ?? 0} 
+                    sub={`${analytics?.activeGyms ?? 0} active`} 
+                    color="text-[var(--color-primary)]" 
+                  />
+                  <StatCard 
+                    label="Total Members" 
+                    value={analytics?.totalMembers ?? 0} 
+                    sub={`${analytics?.activeMembers ?? 0} active`} 
+                    color="text-[var(--color-secondary)]" 
+                  />
+                  <StatCard 
+                    label="Platform Revenue" 
+                    value={`₹${(analytics?.platformRevenue ?? 0).toLocaleString('en-IN')}`} 
+                    sub="All-time fees" 
+                    color="text-green-600" 
+                  />
+                  <StatCard 
+                    label="Staff & Trainers" 
+                    value={(analytics?.totalStaff ?? 0) + (analytics?.totalTrainers ?? 0)} 
+                    sub={`${analytics?.totalTrainers ?? 0} trainers`} 
+                    color="text-purple-500" 
+                  />
+                </div>
+
+                {/* Revenue Trend Chart */}
+                <Panel title="Revenue Trend (Last 6 Months)">
+                  <div className="h-80">
+                    <canvas id="revenueChart" width="800" height="320" role="img" aria-label="Revenue trend chart showing total revenue, fees, and subscriptions over the last six months">Revenue trend chart</canvas>
+                  </div>
+                </Panel>
+
+                {/* Revenue by Plan & Gym Status */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Panel title="Revenue by Plan (MRR)">
+                    {Object.entries(analytics?.revenueByPlan || {}).length === 0 ? (
+                      <EmptyState text="No active subscriptions yet." />
+                    ) : (
+                      <div className="space-y-4">
+                        {Object.entries(analytics?.revenueByPlan || {}).map(([plan, revenue]) => (
+                          <div key={plan} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+                                <DollarSign className="w-5 h-5" />
+                              </div>
+                              <span className="font-semibold dark:text-white">{plan}</span>
+                            </div>
+                            <span className="font-bold text-[var(--color-primary)]">₹{revenue.toLocaleString('en-IN')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Panel>
+
+                  <Panel title="Gym Status Distribution">
+                    <div className="space-y-4">
+                      {Object.entries(analytics?.gymsByStatus || {}).map(([status, count]) => {
+                        const colors: Record<string, string> = {
+                          active: 'text-green-600',
+                          pending: 'text-amber-500',
+                          trial: 'text-blue-500',
+                          past_due: 'text-orange-500',
+                          expired: 'text-red-500',
+                        };
+                        const labels: Record<string, string> = {
+                          active: 'Active',
+                          pending: 'Pending Approval',
+                          trial: 'On Trial',
+                          past_due: 'Past Due',
+                          expired: 'Expired/Cancelled',
+                        };
+                        return (
+                          <div key={status} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-xl ${colors[status]}10 ${colors[status]} flex items-center justify-center`}>
+                                <Building2 className="w-5 h-5" />
+                              </div>
+                              <span className="font-semibold dark:text-white">{labels[status] || status}</span>
+                            </div>
+                            <span className={`font-bold ${colors[status]}`}>{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Panel>
+                </div>
+
+                {/* Top Performing Gyms */}
+                <Panel title="Top Gyms by Member Count">
+                  {(analytics?.topGyms?.length ?? 0) === 0 ? (
+                    <EmptyState text="No gyms with members yet." />
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-white/5">
+                          <tr>
+                            {['Gym', 'Location', 'Members', 'Plan', 'Subscription'].map((h) => (
+                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                          {analytics?.topGyms?.map((gym) => (
+                            <tr key={gym.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                              <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{gym.name}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.city}</td>
+                              <td className="px-6 py-4 font-bold dark:text-white">{gym.memberCount}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.plan}</td>
+                              <td className="px-6 py-4">
+                                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                                  gym.subscriptionStatus === 'ACTIVE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                                  gym.subscriptionStatus === 'TRIAL' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                                  gym.subscriptionStatus === 'PAST_DUE' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
+                                  'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400'
+                                }`}>
+                                  {gym.subscriptionStatus}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Panel>
+
+                {/* Recently Registered Gyms */}
+                <Panel title="Recently Registered Gyms">
+                  {gymsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : gyms.length === 0 ? (
+                    <EmptyState text="No gyms registered yet." />
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-white/5">
+                          <tr>
+                            {['Gym Name', 'Location', 'Owner', 'Registered', 'Status'].map((h) => (
+                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                          {gyms.slice(0, 5).map((gym) => (
+                            <tr key={gym.id}>
+                              <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{gym.name}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.city}, {gym.state}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.owner?.email}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(gym.createdAt).toLocaleDateString('en-IN')}</td>
+                              <td className="px-6 py-4">
+                                {gym.isApproved ? (
+                                  <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold px-2.5 py-1 rounded-full"><CheckCircle className="w-3 h-3" /> Active</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold px-2.5 py-1 rounded-full"><Clock className="w-3 h-3" /> Pending</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Panel>
+              </>
+            )}
           </div>
         )}
 
@@ -319,11 +765,109 @@ const SuperAdminDashboard = () => {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          {!gym.isApproved ? (
-                            <button onClick={() => approve.mutate(gym.id)} disabled={approve.isPending} className="text-green-600 hover:text-green-700 font-semibold text-sm hover:underline disabled:opacity-50">Approve</button>
-                          ) : (
-                            <button onClick={() => suspend.mutate(gym.id)} disabled={suspend.isPending} className="text-red-600 hover:text-red-700 font-semibold text-sm hover:underline disabled:opacity-50">Suspend</button>
-                          )}
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => openGymEditor(gym)} className="inline-flex items-center gap-1 text-gray-500 hover:text-[var(--color-primary)] font-semibold text-sm"><Pencil className="w-3.5 h-3.5" /> Edit</button>
+                            {!gym.isApproved ? (
+                              <button onClick={() => approve.mutate(gym.id)} disabled={approve.isPending} className="text-green-600 hover:text-green-700 font-semibold text-sm hover:underline disabled:opacity-50">Approve</button>
+                            ) : (
+                              <button onClick={() => suspend.mutate(gym.id)} disabled={suspend.isPending} className="text-red-600 hover:text-red-700 font-semibold text-sm hover:underline disabled:opacity-50">Suspend</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {/* ============ GYM EDITOR ============ */}
+        {editingGymId && (
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 mt-6">
+            <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-4">Edit Gym Details</h3>
+            <form
+              className="grid sm:grid-cols-2 gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateGymProfile.mutate({ id: editingGymId, data: gymForm });
+              }}
+            >
+              <label className="block text-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Name</span>
+                <input className="input-field mt-1" value={gymForm.name} onChange={(e) => setGymForm({ ...gymForm, name: e.target.value })} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">GST Number</span>
+                <input className="input-field mt-1" value={gymForm.gstNumber} onChange={(e) => setGymForm({ ...gymForm, gstNumber: e.target.value })} />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Address</span>
+                <input className="input-field mt-1" value={gymForm.address} onChange={(e) => setGymForm({ ...gymForm, address: e.target.value })} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">City</span>
+                <input className="input-field mt-1" value={gymForm.city} onChange={(e) => setGymForm({ ...gymForm, city: e.target.value })} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">State</span>
+                <input className="input-field mt-1" value={gymForm.state} onChange={(e) => setGymForm({ ...gymForm, state: e.target.value })} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Logo URL</span>
+                <input className="input-field mt-1" value={gymForm.logoUrl} onChange={(e) => setGymForm({ ...gymForm, logoUrl: e.target.value })} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Image URL</span>
+                <input className="input-field mt-1" value={gymForm.imageUrl} onChange={(e) => setGymForm({ ...gymForm, imageUrl: e.target.value })} />
+              </label>
+              <div className="sm:col-span-2 flex items-center gap-3">
+                <button type="submit" className="btn-primary px-5" disabled={updateGymProfile.isPending}>
+                  <CheckCircle className="w-4 h-4" /> {updateGymProfile.isPending ? 'Saving…' : 'Save Changes'}
+                </button>
+                <button type="button" onClick={() => setEditingGymId(null)} className="btn-outline px-5">Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ============ PAYMENTS ============ */}
+        {activeTab === 'payments' && (
+          <Panel
+            title={`Payments Ledger (${platformFees.length})`}
+            action={<span className="text-xs font-semibold text-gray-500">All fees across all gyms</span>}
+          >
+            {feesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : platformFees.length === 0 ? (
+              <EmptyState text="No fee records yet." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-white/5">
+                    <tr>
+                      {['Member', 'Gym', 'Amount', 'Due', 'Status', 'Receipt'].map((h) => (
+                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {platformFees.map((fee) => (
+                      <tr key={fee.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{fee.member?.user?.username || '—'}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{fee.gym?.name || '—'}</td>
+                        <td className="px-6 py-4 font-semibold dark:text-white">₹{fee.amount.toLocaleString('en-IN')}</td>
+                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(fee.dueDate).toLocaleDateString('en-IN')}</td>
+                        <td className="px-6 py-4">
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${fee.status === 'PAID' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : fee.status === 'OVERDUE' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>{fee.status}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => downloadFile(`/fees/${fee.id}/receipt`, `receipt-${fee.id.slice(0, 8)}.pdf`)}
+                            disabled={fee.status !== 'PAID'}
+                            className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:underline font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> {fee.status === 'PAID' ? 'Download' : '—'}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -342,9 +886,9 @@ const SuperAdminDashboard = () => {
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search users…" className="input-field pl-9! py-2! text-sm" />
+                  <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} aria-label="Search users" placeholder="Search users…" className="input-field pl-9! py-2! text-sm" />
                 </div>
-                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label="Filter by role" className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
                   {ROLES.map((r) => <option key={r} value={r}>{r === 'ALL' ? 'All roles' : r.replace('_', ' ')}</option>)}
                 </select>
               </div>
@@ -418,8 +962,8 @@ const SuperAdminDashboard = () => {
                   className="grid md:grid-cols-[1fr_1.4fr_auto] gap-3 items-start"
                   onSubmit={(e) => { e.preventDefault(); createFaq.mutate(faqForm); }}
                 >
-                  <input className="input-field" placeholder="Question" value={faqForm.question} onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })} required />
-                  <input className="input-field" placeholder="Answer" value={faqForm.answer} onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })} required />
+                  <input className="input-field" aria-label="FAQ question" placeholder="Question" value={faqForm.question} onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })} required />
+                  <input className="input-field" aria-label="FAQ answer" placeholder="Answer" value={faqForm.answer} onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })} required />
                   <button type="submit" className="btn-primary justify-center" disabled={createFaq.isPending}><Plus className="w-4 h-4" /> Add</button>
                 </form>
               </div>
@@ -431,8 +975,8 @@ const SuperAdminDashboard = () => {
                     <div key={faq.id} className="px-6 py-4 flex items-start justify-between gap-4">
                       {editingFaq?.id === faq.id ? (
                         <div className="flex-1 grid md:grid-cols-[1fr_1.4fr_auto] gap-3 items-start">
-                          <input className="input-field text-sm" defaultValue={faq.question} onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })} />
-                          <input className="input-field text-sm" defaultValue={faq.answer} onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="FAQ question" defaultValue={faq.question} onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="FAQ answer" defaultValue={faq.answer} onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })} />
                           <div className="flex gap-2">
                             <button onClick={() => updateFaq.mutate(editingFaq)} className="btn-primary text-sm px-4 py-2">Save</button>
                             <button onClick={() => setEditingFaq(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
@@ -451,8 +995,8 @@ const SuperAdminDashboard = () => {
                             >
                               {faq.isActive ? 'Active' : 'Hidden'}
                             </button>
-                            <button onClick={() => setEditingFaq(faq)} className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><Pencil className="w-4 h-4" /></button>
-                            <button onClick={() => deleteFaq.mutate(faq.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                            <button onClick={() => setEditingFaq(faq)} aria-label={`Edit FAQ: ${faq.question}`} className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><Pencil className="w-4 h-4" /></button>
+                            <button onClick={() => deleteFaq.mutate(faq.id)} aria-label={`Delete FAQ: ${faq.question}`} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         </>
                       )}
@@ -468,9 +1012,9 @@ const SuperAdminDashboard = () => {
                   className="grid md:grid-cols-2 gap-3"
                   onSubmit={(e) => { e.preventDefault(); createTesti.mutate(testiForm); }}
                 >
-                  <input className="input-field" placeholder="Name" value={testiForm.name} onChange={(e) => setTestiForm({ ...testiForm, name: e.target.value })} required />
-                  <input className="input-field" placeholder="Role (e.g. Gym Owner, Pro Trainer)" value={testiForm.role} onChange={(e) => setTestiForm({ ...testiForm, role: e.target.value })} required />
-                  <textarea className="input-field md:col-span-2" rows={2} placeholder="Testimonial content" value={testiForm.content} onChange={(e) => setTestiForm({ ...testiForm, content: e.target.value })} required />
+                  <input className="input-field" aria-label="Testimonial name" placeholder="Name" value={testiForm.name} onChange={(e) => setTestiForm({ ...testiForm, name: e.target.value })} required />
+                  <input className="input-field" aria-label="Testimonial role" placeholder="Role (e.g. Gym Owner, Pro Trainer)" value={testiForm.role} onChange={(e) => setTestiForm({ ...testiForm, role: e.target.value })} required />
+                  <textarea className="input-field md:col-span-2" rows={2} aria-label="Testimonial content" placeholder="Testimonial content" value={testiForm.content} onChange={(e) => setTestiForm({ ...testiForm, content: e.target.value })} required />
                   <div className="flex items-center gap-4 md:col-span-2">
                     <label className="text-sm font-semibold text-gray-600 dark:text-gray-300">Rating:</label>
                     <div className="flex gap-1">
@@ -492,9 +1036,9 @@ const SuperAdminDashboard = () => {
                     <div key={t.id} className="rounded-xl border border-gray-100 dark:border-white/10 p-4 bg-gray-50/50 dark:bg-white/[0.03]">
                       {editingTesti?.id === t.id ? (
                         <div className="space-y-2">
-                          <input className="input-field text-sm" defaultValue={t.name} onChange={(e) => setEditingTesti({ ...editingTesti, name: e.target.value })} />
-                          <input className="input-field text-sm" defaultValue={t.role} onChange={(e) => setEditingTesti({ ...editingTesti, role: e.target.value })} />
-                          <textarea className="input-field text-sm" rows={2} defaultValue={t.content} onChange={(e) => setEditingTesti({ ...editingTesti, content: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="Testimonial name" defaultValue={t.name} onChange={(e) => setEditingTesti({ ...editingTesti, name: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="Testimonial role" defaultValue={t.role} onChange={(e) => setEditingTesti({ ...editingTesti, role: e.target.value })} />
+                          <textarea className="input-field text-sm" rows={2} aria-label="Testimonial content" defaultValue={t.content} onChange={(e) => setEditingTesti({ ...editingTesti, content: e.target.value })} />
                           <div className="flex gap-2">
                             <button onClick={() => updateTesti.mutate(editingTesti)} className="btn-primary text-sm px-4 py-2">Save</button>
                             <button onClick={() => setEditingTesti(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
@@ -510,8 +1054,8 @@ const SuperAdminDashboard = () => {
                             <p className="text-sm font-bold text-[var(--color-deepgray)] dark:text-white">{t.name} <span className="font-medium text-xs text-gray-500">· {t.role}</span></p>
                             <div className="flex items-center gap-1">
                               <button onClick={() => updateTesti.mutate({ ...t, isActive: !t.isActive })} className={`text-xs font-bold px-2 py-1 rounded-full ${t.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}>{t.isActive ? 'Active' : 'Hidden'}</button>
-                              <button onClick={() => setEditingTesti(t)} className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--color-primary)]"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteTesti.mutate(t.id)} className="p-1.5 rounded-lg text-gray-500 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setEditingTesti(t)} aria-label={`Edit testimonial by ${t.name}`} className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--color-primary)]"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => deleteTesti.mutate(t.id)} aria-label={`Delete testimonial by ${t.name}`} className="p-1.5 rounded-lg text-gray-500 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
                         </>
@@ -609,8 +1153,8 @@ const SuperAdminDashboard = () => {
                             </div>
                             {p.description && <p className="text-xs text-gray-400 mt-0.5 max-w-[260px] truncate">{p.description}</p>}
                           </td>
-                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{p.billingCycle}</td>
-                          <td className="px-6 py-4 font-semibold">₹{p.price.toLocaleString('en-IN')}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">Monthly</td>
+                          <td className="px-6 py-4 font-semibold">₹{p.monthlyPrice.toLocaleString('en-IN')}/mo</td>
                           <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-xs">
                             {p.maxGyms} gym{p.maxGyms > 1 ? 's' : ''}
                             {p.maxMembers ? `, ${p.maxMembers} members` : ''}
@@ -641,19 +1185,16 @@ const SuperAdminDashboard = () => {
             <Panel title="Create SaaS Plan">
               <div className="p-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <input value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} placeholder="Plan name" className="input-field py-2! text-sm" />
-                  <input value={planForm.code} onChange={(e) => setPlanForm({ ...planForm, code: e.target.value.toUpperCase() })} placeholder="Code (e.g. GROW)" className="input-field py-2! text-sm" />
-                  <input type="number" value={planForm.price} onChange={(e) => setPlanForm({ ...planForm, price: Number(e.target.value) })} placeholder="Price (₹)" className="input-field py-2! text-sm" />
-                  <select value={planForm.billingCycle} onChange={(e) => setPlanForm({ ...planForm, billingCycle: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="YEARLY">Yearly</option>
-                  </select>
-                  <input type="number" min={1} value={planForm.maxGyms} onChange={(e) => setPlanForm({ ...planForm, maxGyms: Number(e.target.value) })} placeholder="Max gyms" className="input-field py-2! text-sm" />
-                  <input value={planForm.maxMembers} onChange={(e) => setPlanForm({ ...planForm, maxMembers: e.target.value })} placeholder="Max members (blank = unlimited)" className="input-field py-2! text-sm" />
-                  <input value={planForm.maxTrainers} onChange={(e) => setPlanForm({ ...planForm, maxTrainers: e.target.value })} placeholder="Max trainers (blank = unlimited)" className="input-field py-2! text-sm" />
-                  <input value={planForm.maxStaff} onChange={(e) => setPlanForm({ ...planForm, maxStaff: e.target.value })} placeholder="Max staff (blank = unlimited)" className="input-field py-2! text-sm" />
-                  <input value={planForm.features} onChange={(e) => setPlanForm({ ...planForm, features: e.target.value })} placeholder="Features (comma separated)" className="input-field py-2! text-sm md:col-span-2" />
-                  <input value={planForm.description} onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })} placeholder="Description" className="input-field py-2! text-sm md:col-span-2" />
+                  <input value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} aria-label="Plan name" placeholder="Plan name" className="input-field py-2! text-sm" />
+                  <input value={planForm.code} onChange={(e) => setPlanForm({ ...planForm, code: e.target.value.toUpperCase() })} aria-label="Plan code" placeholder="Code (e.g. GROW)" className="input-field py-2! text-sm" />
+                  <input type="number" value={planForm.monthlyPrice} onChange={(e) => setPlanForm({ ...planForm, monthlyPrice: Number(e.target.value) })} aria-label="Plan price" placeholder="Price (₹/mo)" className="input-field py-2! text-sm" />
+                  <div className="flex items-center text-sm text-gray-400 font-medium">Monthly billing</div>
+                  <input type="number" min={1} value={planForm.maxGyms} onChange={(e) => setPlanForm({ ...planForm, maxGyms: Number(e.target.value) })} aria-label="Max gyms" placeholder="Max gyms" className="input-field py-2! text-sm" />
+                  <input value={planForm.maxMembers} onChange={(e) => setPlanForm({ ...planForm, maxMembers: e.target.value })} aria-label="Max members" placeholder="Max members (blank = unlimited)" className="input-field py-2! text-sm" />
+                  <input value={planForm.maxTrainers} onChange={(e) => setPlanForm({ ...planForm, maxTrainers: e.target.value })} aria-label="Max trainers" placeholder="Max trainers (blank = unlimited)" className="input-field py-2! text-sm" />
+                  <input value={planForm.maxStaff} onChange={(e) => setPlanForm({ ...planForm, maxStaff: e.target.value })} aria-label="Max staff" placeholder="Max staff (blank = unlimited)" className="input-field py-2! text-sm" />
+                  <input value={planForm.features} onChange={(e) => setPlanForm({ ...planForm, features: e.target.value })} aria-label="Plan features" placeholder="Features (comma separated)" className="input-field py-2! text-sm md:col-span-2" />
+                  <input value={planForm.description} onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })} aria-label="Plan description" placeholder="Description" className="input-field py-2! text-sm md:col-span-2" />
                 </div>
                 {createPlan.isError && <p className="text-red-500 text-sm mt-3">Failed to create plan. Check the backend is running and fields are valid.</p>}
                 <button onClick={() => createPlan.mutate(planForm)} disabled={createPlan.isPending || !planForm.name || !planForm.code} className="mt-4 inline-flex items-center gap-2 bg-[var(--color-primary)] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50">
@@ -679,7 +1220,7 @@ const SuperAdminDashboard = () => {
                       {subscriptions.map((s) => (
                         <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                           <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{s.gym.name}<div className="text-xs text-gray-400 font-normal">{s.gym.city}</div></td>
-                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{s.plan.name} <span className="text-xs text-gray-400">({s.plan.billingCycle})</span></td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{s.plan.name} <span className="text-xs text-gray-400">(₹{s.plan.monthlyPrice.toLocaleString('en-IN')}/mo)</span></td>
                           <td className="px-6 py-4 font-semibold">₹{s.amount.toLocaleString('en-IN')}</td>
                           <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-xs">{new Date(s.startDate).toLocaleDateString('en-IN')} → {new Date(s.endDate).toLocaleDateString('en-IN')}</td>
                           <td className="px-6 py-4">
@@ -688,7 +1229,7 @@ const SuperAdminDashboard = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <select value={s.status} onChange={(e) => updateSubStatus.mutate({ id: s.id, status: e.target.value })} disabled={updateSubStatus.isPending} className="input-field py-1.5! text-xs bg-white! dark:bg-[#1a1a1a]!">
+                            <select aria-label={`Update status for ${s.gym.name}`} value={s.status} onChange={(e) => updateSubStatus.mutate({ id: s.id, status: e.target.value })} disabled={updateSubStatus.isPending} className="input-field py-1.5! text-xs bg-white! dark:bg-[#1a1a1a]!">
                               {['ACTIVE', 'PENDING', 'SUSPENDED', 'EXPIRED', 'CANCELLED'].map((st) => <option key={st} value={st}>{st}</option>)}
                             </select>
                           </td>
@@ -703,15 +1244,15 @@ const SuperAdminDashboard = () => {
             <Panel title="Assign Plan to Gym">
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <select value={subForm.gymId} onChange={(e) => setSubForm({ ...subForm, gymId: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                  <select aria-label="Select gym" value={subForm.gymId} onChange={(e) => setSubForm({ ...subForm, gymId: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
                     <option value="">Select gym…</option>
                     {gyms.map((g) => <option key={g.id} value={g.id}>{g.name} ({g.city})</option>)}
                   </select>
-                  <select value={subForm.planId} onChange={(e) => setSubForm({ ...subForm, planId: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+                  <select aria-label="Select plan" value={subForm.planId} onChange={(e) => setSubForm({ ...subForm, planId: e.target.value })} className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
                     <option value="">Select plan…</option>
-                    {saasPlans.filter((p) => p.isActive).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.price}/{p.billingCycle.toLowerCase()}</option>)}
+                    {saasPlans.filter((p) => p.isActive).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.monthlyPrice.toLocaleString('en-IN')}/mo</option>)}
                   </select>
-                  <input type="date" value={subForm.startDate} onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })} className="input-field py-2! text-sm" />
+                  <input type="date" aria-label="Subscription start date" value={subForm.startDate} onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })} className="input-field py-2! text-sm" />
                 </div>
                 {createSubscription.isError && <p className="text-red-500 text-sm mt-3">Failed to create subscription. Select a gym and an active plan.</p>}
                 <button onClick={() => createSubscription.mutate(subForm)} disabled={createSubscription.isPending || !subForm.gymId || !subForm.planId} className="mt-4 inline-flex items-center gap-2 bg-[var(--color-primary)] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50">
@@ -760,11 +1301,6 @@ const SuperAdminDashboard = () => {
       </div>
     </div>
   );
-};
-
-type AnalyticsLike = {
-  totalGyms: number; activeGyms: number; pendingGyms: number; totalMembers: number;
-  pendingMembers: number; totalStaff: number; platformRevenue: number;
 };
 
 export default SuperAdminDashboard;

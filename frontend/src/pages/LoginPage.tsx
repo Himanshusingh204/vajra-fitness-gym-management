@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, useLocation, Link } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,6 +19,7 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const setAuth = useAuthStore((s) => s.setAuth);
 
   const {
@@ -36,6 +37,13 @@ const LoginPage = () => {
       const response = await api.post('/auth/login', data);
 
       setAuth(response.data.user, response.data.token);
+
+      // Honor a safe same-site redirect (e.g. /subscription after login).
+      const redirect = new URLSearchParams(location.search).get('redirect');
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+        navigate(redirect);
+        return;
+      }
 
       const role = response.data.user.role;
       if (role === 'SUPER_ADMIN') navigate('/admin/super');

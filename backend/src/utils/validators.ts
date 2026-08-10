@@ -1,8 +1,47 @@
 import { z } from 'zod';
 
-const email = z.string().trim().toLowerCase().email();
-const username = z.string().trim().min(2).max(60);
-const phone = z.string().trim().min(5).max(20).optional().or(z.literal('').transform(() => undefined));
+// ---- Indian mobile number validation ----
+// Accepts "XXXXXXXXXX" (10 digits) or "+91XXXXXXXXXX". Rejects:
+//  - too short / too long / 20+ digit inputs
+//  - alphabetic / special characters
+//  - leading digits not valid for Indian mobile numbering (2-9)
+//  - obviously fake repeated/sequential numbers
+const INDIAN_MOBILE_RE = /^(\+?91[\s-]?)?([6-9]\d{9})$/;
+const REJECT_PATTERNS = [/^(\d)\1{9}$/, /^(0123456789|1234567890|9876543210)$/];
+
+const normalizeIndianMobile = (value: string): string | null => {
+  const trimmed = value.replace(/[\s-]/g, '');
+  const match = trimmed.match(INDIAN_MOBILE_RE);
+  if (!match) return null;
+  const local = match[2]!;
+  if (REJECT_PATTERNS.some((re) => re.test(local))) return null;
+  return local;
+};
+
+const indianPhone = (field = 'phone') =>
+  z
+    .string({ message: `${field} must be a string` })
+    .trim()
+    .min(10, `${field} must be a 10-digit Indian mobile number`)
+    .max(16, `${field} must be a valid Indian mobile number`)
+    .refine((v) => normalizeIndianMobile(v) !== null, {
+      message: `${field} must be a valid Indian mobile number (10 digits, starting 6-9, +91 optional)`,
+    });
+
+const optionalIndianPhone = (field = 'phone') =>
+  z
+    .union([indianPhone(field), z.literal(''), z.literal(null)])
+    .optional()
+    .transform((v) => (v ? normalizeIndianMobile(v) : undefined));
+
+// ---- Common field helpers ----
+const email = z.string().trim().toLowerCase().email('A valid email is required').max(254);
+const username = z
+  .string()
+  .trim()
+  .min(2, 'Name must be at least 2 characters')
+  .max(60, 'Name must be at most 60 characters')
+  .regex(/^[^<>{}[\]\\^`;]*$/, 'Name contains invalid characters');
 const password = z
   .string()
   .min(8, 'Password must be at least 8 characters')
@@ -14,28 +53,57 @@ const dateStr = z
   .string()
   .trim()
   .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Invalid date' });
-const uuid = z.string().uuid();
+const uuid = z.string().uuid('A valid id is required');
+
+// Pincode: exactly 6 digits, numeric only (India).
+const pincode = z
+  .string()
+  .trim()
+  .regex(/^[1-9][0-9]{5}$/, 'Pincode must be exactly 6 digits');
+
+// Strips HTML/script content from free-text fields. This is a sanitization
+// layer on top of zod; combined with React's escaping on the client it
+// prevents stored-XSS via user-supplied names, addresses and notes.
+const sanitize = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max, `Must be at most ${max} characters`)
+    .transform((v) => v.replace(/<[^>]*>/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''));
+
+// ---- Re-usable schemas ----
+export const nameSchema = username;
+export const emailSchema = email;
+export const phoneSchema = indianPhone();
+export const optionalPhoneSchema = optionalIndianPhone();
+
+// ---- URL param validators (used with validate(schema, ['params'])) ----
+export const idParams = z.object({ id: uuid });
+export const gymIdParams = z.object({ gymId: uuid });
+export const memberIdParams = z.object({ memberId: uuid });
 
 export const registerVendorSchema = z.object({
   username,
   email,
   password,
-  gymName: z.string().trim().min(2).max(120),
-  address: z.string().trim().min(3).max(300),
-  city: z.string().trim().min(2).max(80),
-  state: z.string().trim().min(2).max(80),
-  location: z.string().trim().max(300).optional().nullable(),
+  gymName: sanitize(120).pipe(z.string().min(2, 'Gym name must be at least 2 characters')),
+  address: sanitize(300).pipe(z.string().min(3, 'Address must be at least 3 characters')),
+  city: sanitize(80).pipe(z.string().min(2, 'City must be at least 2 characters')),
+  state: sanitize(80).pipe(z.string().min(2, 'State must be at least 2 characters')),
+  pincode: pincode.optional().nullable(),
+  location: sanitize(300).optional().nullable(),
   gstNumber: z.string().trim().max(40).optional().nullable(),
-  phone,
+  phone: indianPhone().optional().or(z.literal('').transform(() => undefined)),
 });
 
 export const registerMemberSchema = z.object({
   username,
   email,
   password,
-  phone,
+  phone: optionalIndianPhone(),
   gymId: uuid,
   planId: uuid.optional().nullable(),
+  preferredPaymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable(),
 });
 
 export const loginSchema = z.object({
@@ -78,24 +146,49 @@ export const updatePlanSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-const memberStatus = z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING']);
+const memberStatus = z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING', 'EXPIRED', 'FROZEN']);
 
 export const memberAddSchema = z.object({
   username,
   email,
-  phone,
+  phone: optionalIndianPhone(),
   planId: uuid.optional().nullable(),
   status: memberStatus.optional(),
+  branchId: uuid.optional().nullable(),
+});
+
+// Bulk CSV member import: raw CSV text with a username,email[,phone] header row.
+export const memberImportSchema = z.object({
+  csv: z.string().trim().min(1, 'CSV content is required'),
+  planId: uuid.optional().nullable(),
 });
 
 export const updateMemberSchema = z.object({
   status: memberStatus.optional(),
   planId: uuid.optional().nullable(),
+  branchId: uuid.optional().nullable(),
 });
 
 export const enrollSchema = z.object({
   gymId: uuid,
   planId: uuid.optional().nullable(),
+  preferredPaymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable(),
+});
+
+// Staff marks attendance for either a member or a fellow staff member (one required).
+export const markAttendanceSchema = z
+  .object({
+    memberId: uuid.optional(),
+    staffId: uuid.optional(),
+  })
+  .refine((v) => v.memberId || v.staffId, { message: 'memberId or staffId is required' });
+
+// Gym owners purchase a SaaS plan for their gym. Super Admins may pass gymId for another gym.
+export const subscriptionPurchaseSchema = z.object({
+  planId: uuid,
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
+  paymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional(),
+  gymId: uuid.optional(),
 });
 
 const paymentMethod = z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable();
@@ -117,6 +210,19 @@ export const updateFeeStatusSchema = z.object({
   paymentMethod,
   transactionId: z.string().trim().max(120).optional().nullable(),
   notes: z.string().trim().max(1000).optional().nullable(),
+});
+
+// ---- Razorpay online payments ----
+const razorpayId = z.string().trim().min(6).max(64).regex(/^[a-zA-Z0-9_]+$/);
+
+export const checkoutSchema = z.object({
+  feeId: uuid,
+});
+
+export const verifyPaymentSchema = z.object({
+  orderId: razorpayId,
+  paymentId: razorpayId,
+  signature: z.string().trim().length(64),
 });
 
 export const createMembershipSchema = z.object({
@@ -143,9 +249,10 @@ export const renewMembershipSchema = z.object({
 export const staffAddSchema = z.object({
   username,
   email,
-  phone,
+  phone: indianPhone('phone').optional().or(z.literal('').transform(() => undefined)),
   roleType: z.enum(['TRAINER', 'STAFF']),
-  roleSpecifics: z.string().trim().min(2).max(80),
+  roleSpecifics: sanitize(80).pipe(z.string().min(2, 'Role specifics must be at least 2 characters')),
+  branchId: uuid.optional().nullable(),
 });
 
 export const workoutSlipSchema = z.object({
@@ -156,28 +263,36 @@ export const workoutSlipSchema = z.object({
 });
 
 export const enquirySchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  phone: z.string().trim().min(5).max(20),
+  name: sanitize(100).pipe(z.string().min(2, 'Name must be at least 2 characters')),
+  phone: indianPhone(),
   email: email.optional().nullable(),
-  notes: z.string().trim().max(2000).optional().nullable(),
+  notes: sanitize(2000).optional().nullable(),
 });
 
 export const contactSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  phone: z.string().trim().max(20).optional().or(z.literal('').transform(() => undefined)),
+  name: sanitize(100).pipe(z.string().min(2, 'Name must be at least 2 characters')),
+  phone: optionalIndianPhone(),
   email,
-  subject: z.string().trim().max(200).optional().or(z.literal('').transform(() => undefined)),
-  message: z.string().trim().min(5).max(3000),
+  subject: sanitize(200).optional().nullable(),
+  // Max 1000 words AND a hard 6000-char server-side cap (belt and braces).
+  message: sanitize(6000).pipe(
+    z
+      .string()
+      .min(5, 'Message must be at least 5 characters')
+      .refine((v) => v.split(/\s+/).filter(Boolean).length <= 1000, {
+        message: 'Message must not exceed 1000 words',
+      }),
+  ),
 });
 
 export const updateEnquirySchema = z.object({
   status: z.enum(['PENDING', 'CONVERTED', 'CLOSED']).optional(),
-  notes: z.string().trim().max(2000).optional().nullable(),
+  notes: sanitize(2000).optional().nullable(),
 });
 
 export const ticketSchema = z.object({
-  subject: z.string().trim().min(3).max(200),
-  message: z.string().trim().min(5).max(3000),
+  subject: sanitize(200).pipe(z.string().min(3, 'Subject must be at least 3 characters')),
+  message: sanitize(3000).pipe(z.string().min(5, 'Message must be at least 5 characters')),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
 });
 
@@ -187,35 +302,83 @@ export const ticketAdminSchema = z.object({
 });
 
 export const gymUpdateSchema = z.object({
-  name: z.string().trim().min(2).max(120).optional(),
-  address: z.string().trim().min(3).max(300).optional(),
-  city: z.string().trim().min(2).max(80).optional(),
-  state: z.string().trim().min(2).max(80).optional(),
-  location: z.string().trim().max(300).optional().nullable(),
+  name: sanitize(120).pipe(z.string().min(2, 'Name must be at least 2 characters')).optional(),
+  address: sanitize(300).pipe(z.string().min(3, 'Address must be at least 3 characters')).optional(),
+  city: sanitize(80).pipe(z.string().min(2, 'City must be at least 2 characters')).optional(),
+  state: sanitize(80).pipe(z.string().min(2, 'State must be at least 2 characters')).optional(),
+  pincode: pincode.optional().nullable(),
+  location: sanitize(300).optional().nullable(),
   gstNumber: z.string().trim().max(40).optional().nullable(),
-  logoUrl: z.string().trim().max(1000).optional().nullable(),
-  imageUrl: z.string().trim().max(1000).optional().nullable(),
-  facilities: z.string().trim().max(2000).optional().nullable(),
+  logoUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
+  imageUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
+  facilities: sanitize(2000).optional().nullable(),
+  // White-label branding
+  brandColor: z
+    .string()
+    .trim()
+    .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Brand color must be a hex value like #800020')
+    .optional()
+    .nullable(),
+  tagline: sanitize(160).optional().nullable(),
+  subdomain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]([a-z0-9-]{1,28}[a-z0-9])?$/, 'Subdomain must be 3-30 characters: lowercase letters, numbers and hyphens')
+    .optional()
+    .nullable(),
+  customDomain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^(?=.{4,253}$)([a-z0-9-]+\.)+[a-z]{2,}$/, 'Custom domain must be a valid domain like gym.example.com')
+    .optional()
+    .nullable(),
 });
 
 export const userStatusSchema = z.object({
   isActive: z.boolean(),
 });
 
+// ---- Branches (multi-location support) ----
+export const branchCreateSchema = z.object({
+  name: sanitize(120).pipe(z.string().min(2, 'Branch name must be at least 2 characters')),
+  address: sanitize(300).pipe(z.string().min(3, 'Address must be at least 3 characters')),
+  city: sanitize(80).pipe(z.string().min(2, 'City must be at least 2 characters')),
+  state: sanitize(80).pipe(z.string().min(2, 'State must be at least 2 characters')),
+  phone: optionalIndianPhone(),
+});
+
+export const branchUpdateSchema = z.object({
+  name: sanitize(120).pipe(z.string().min(2, 'Branch name must be at least 2 characters')).optional(),
+  address: sanitize(300).pipe(z.string().min(3, 'Address must be at least 3 characters')).optional(),
+  city: sanitize(80).pipe(z.string().min(2, 'City must be at least 2 characters')).optional(),
+  state: sanitize(80).pipe(z.string().min(2, 'State must be at least 2 characters')).optional(),
+  phone: optionalIndianPhone(),
+  isActive: z.boolean().optional(),
+});
+
 export const faqSchema = z.object({
-  question: z.string().trim().min(3).max(300),
-  answer: z.string().trim().min(3).max(2000),
+  question: sanitize(300).pipe(z.string().min(3, 'Question must be at least 3 characters')),
+  answer: sanitize(2000).pipe(z.string().min(3, 'Answer must be at least 3 characters')),
   isActive: z.boolean().optional(),
   order: z.number().int().min(0).max(1000).optional(),
 });
 
+export const noticeSchema = z.object({
+  title: sanitize(150).pipe(z.string().min(2, 'Title must be at least 2 characters')),
+  content: sanitize(3000).pipe(z.string().min(2, 'Content must be at least 2 characters')),
+});
+
+export const updateNoticeSchema = noticeSchema.partial();
+
 export const updateFaqSchema = faqSchema.partial();
 
 export const testimonialSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  role: z.string().trim().min(2).max(100),
-  content: z.string().trim().min(3).max(1000),
-  imageUrl: z.string().trim().max(1000).optional().nullable(),
+  name: sanitize(100).pipe(z.string().min(2, 'Name must be at least 2 characters')),
+  role: sanitize(100).pipe(z.string().min(2, 'Role must be at least 2 characters')),
+  content: sanitize(1000).pipe(z.string().min(3, 'Content must be at least 3 characters')),
+  imageUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
   rating: z.number().int().min(1).max(5).optional(),
   isActive: z.boolean().optional(),
 });
@@ -270,18 +433,30 @@ export const nutritionPlanSchema = z.object({
 
 // ---- Vajra SaaS plans (sold to gym owners) ----
 export const saasPlanSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  code: z.string().trim().min(2).max(40),
-  description: z.string().trim().max(500).optional().nullable(),
-  price: z.number().nonnegative().max(1e7),
-  billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
+  name: sanitize(100).pipe(z.string().min(2, 'Name must be at least 2 characters')),
+  code: z
+    .string()
+    .trim()
+    .min(2, 'Code must be at least 2 characters')
+    .max(40)
+    .regex(/^[A-Z0-9_]+$/, 'Code may only contain uppercase letters, digits and underscores'),
+  description: sanitize(500).optional().nullable(),
+  monthlyPrice: z.number().nonnegative().max(1e7).default(0),
+  quarterlyPrice: z.number().nonnegative().max(1e7).default(0),
+  halfYearlyPrice: z.number().nonnegative().max(1e7).default(0),
+  yearlyPrice: z.number().nonnegative().max(1e7).default(0),
+  currency: z.string().trim().min(3).max(3).default('INR'),
   maxGyms: z.number().int().nonnegative().max(1000).optional(),
   maxMembers: z.number().int().nonnegative().max(1e7).optional().nullable(),
   maxTrainers: z.number().int().nonnegative().max(1e6).optional().nullable(),
   maxStaff: z.number().int().nonnegative().max(1e6).optional().nullable(),
+  maxBranches: z.number().int().nonnegative().max(1000).optional(),
+  maxClasses: z.number().int().nonnegative().max(1e6).optional().nullable(),
+  maxStorageMB: z.number().int().nonnegative().max(1e6).optional().nullable(),
   advancedReports: z.boolean().optional(),
   features: z.array(z.string().trim().min(1).max(200)).optional(),
   isActive: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(100000).optional(),
 });
 
 export const saasPlanUpdateSchema = saasPlanSchema.partial();

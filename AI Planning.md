@@ -6,9 +6,9 @@ You are acting as a **Senior Full-Stack Engineer, SaaS Architect, Database Engin
 
 You are working on an EXISTING project called:
 
-# Vajra Fitness
+# VajraFitness
 
-Vajra Fitness is a premium multi-gym management SaaS platform designed primarily for gyms in India.
+VajraFitness is a premium multi-gym management SaaS platform designed primarily for gyms in India.
 
 This is NOT a new project.
 
@@ -166,7 +166,7 @@ For visitors and prospective customers.
 
 ## B. Super Admin
 
-For managing the entire Vajra Fitness SaaS platform.
+For managing the entire VajraFitness SaaS platform.
 
 ## C. Gym Admin
 
@@ -300,7 +300,7 @@ Never log passwords, reset tokens, JWT secrets, refresh tokens, or sensitive cre
 
 # 9. MULTI-TENANT DATA SECURITY
 
-Vajra Fitness is a multi-gym system.
+VajraFitness is a multi-gym system.
 
 Every gym-specific resource must be correctly scoped.
 
@@ -984,9 +984,9 @@ Annual
 
 with:
 
-## Vajra Fitness SaaS Plans
+## VajraFitness SaaS Plans
 
-Purchased by GYM OWNERS for using the Vajra Fitness platform.
+Purchased by GYM OWNERS for using the VajraFitness platform.
 
 These are separate business concepts.
 
@@ -1080,7 +1080,7 @@ Hero
 
 Trusted/Platform Stats
 
-Problems Vajra Fitness Solves
+Problems VajraFitness Solves
 
 Core Features
 
@@ -2416,7 +2416,7 @@ Do not claim something was completed if it was not actually implemented or teste
 
 # FINAL COMMAND
 
-Now inspect the complete existing Vajra Fitness repository before making major changes.
+Now inspect the complete existing VajraFitness repository before making major changes.
 
 Treat the existing codebase as the source of truth.
 
@@ -2436,4 +2436,4 @@ Do not unnecessarily rebuild working code.
 
 Do not leave placeholder implementations for core features.
 
-Build Vajra Fitness into a secure, responsive, polished, production-ready full-stack multi-gym SaaS management platform.
+Build VajraFitness into a secure, responsive, polished, production-ready full-stack multi-gym SaaS management platform.

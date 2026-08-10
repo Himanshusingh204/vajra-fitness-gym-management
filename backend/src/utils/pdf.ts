@@ -69,7 +69,7 @@ export const buildFeeReceipt = (doc: PDFKit.PDFDocument, data: ReceiptData) => {
     .rect(0, 0, doc.page.width, 130)
     .fill('#111827');
   doc.fill('#ffffff').fontSize(22).font('Helvetica-Bold')
-    .text('IRON PULSE', doc.page.margins.left, 36, { width: pageWidth, align: 'center' });
+    .text('VAJRA FITNESS', doc.page.margins.left, 36, { width: pageWidth, align: 'center' });
   doc.fontSize(12).font('Helvetica').text('Fee Payment Receipt', 0, 68, { width: doc.page.width, align: 'center' });
 
   doc.y = 160;
@@ -117,7 +117,7 @@ export const buildFeeReceipt = (doc: PDFKit.PDFDocument, data: ReceiptData) => {
     .fill('#F3F4F6');
   doc.fill('#6B7280').fontSize(9).font('Helvetica')
     .text('This is a computer-generated receipt and does not require a physical signature.', doc.page.margins.left, doc.page.height - 74, { width: pageWidth, align: 'center' });
-  doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Iron Pulse / Vajra Fitness`, doc.page.margins.left, doc.page.height - 52, { width: pageWidth, align: 'center' });
+  doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Vajra Fitness`, doc.page.margins.left, doc.page.height - 52, { width: pageWidth, align: 'center' });
 };
 
 type SlipData = {
@@ -138,7 +138,7 @@ export const buildWorkoutSlip = (doc: PDFKit.PDFDocument, data: SlipData) => {
     .rect(0, 0, doc.page.width, 130)
     .fill('#111827');
   doc.fill('#ffffff').fontSize(22).font('Helvetica-Bold')
-    .text('IRON PULSE', doc.page.margins.left, 36, { width: pageWidth, align: 'center' });
+    .text('VAJRA FITNESS', doc.page.margins.left, 36, { width: pageWidth, align: 'center' });
   doc.fontSize(12).font('Helvetica').text('Workout Slip', 0, 68, { width: doc.page.width, align: 'center' });
 
   doc.y = 160;
@@ -180,5 +180,5 @@ export const buildWorkoutSlip = (doc: PDFKit.PDFDocument, data: SlipData) => {
   doc.moveDown(1.5);
   doc.fill('#6B7280').fontSize(9).font('Helvetica')
     .text('Please warm up before exercising and consult a trainer for correct form.', doc.page.margins.left, undefined, { width: pageWidth });
-  doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Iron Pulse / Vajra Fitness`, undefined, undefined, { width: pageWidth });
+  doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Vajra Fitness`, undefined, undefined, { width: pageWidth });
 };

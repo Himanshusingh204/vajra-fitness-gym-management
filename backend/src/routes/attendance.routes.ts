@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getAttendance, markAttendance, getMyAttendance } from '../controllers/attendance.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate.middleware';
+import { markAttendanceSchema } from '../utils/validators';
 
 const router = Router();
 
@@ -15,6 +17,6 @@ router.get('/my', authenticate, authorize(['MEMBER']), asyncHandler(getMyAttenda
 router.use(authenticate, authorize(['GYM_ADMIN', 'STAFF', 'SUPER_ADMIN']));
 
 router.get('/gym/:gymId', asyncHandler(getAttendance));
-router.post('/gym/:gymId', asyncHandler(markAttendance));
+router.post('/gym/:gymId', validate(markAttendanceSchema), asyncHandler(markAttendance));
 
 export default router;

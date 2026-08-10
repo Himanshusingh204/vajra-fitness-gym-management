@@ -31,7 +31,7 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:5000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
-# Apply the schema to a fresh Postgres, then boot.
-# `prisma db push` mirrors the established dev workflow; switch to `prisma migrate deploy`
-# once you adopt formal migrations for production.
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/server.js"]
+# Apply committed migrations to the database, then boot.
+# Prisma's engine is generated at image build time; only the migration layer
+# runs at startup. New schema changes are shipped as additional migrations.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

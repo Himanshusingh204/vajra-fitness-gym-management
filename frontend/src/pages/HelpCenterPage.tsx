@@ -8,6 +8,7 @@ import {
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 type Faq = { id: string; question: string; answer: string };
 type Ticket = {
@@ -34,6 +35,11 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 const HelpCenterPage = () => {
+  usePageMeta(
+    'Help Center & FAQ',
+    'Answers to common questions about Vajra Fitness — memberships, payments, bookings, and account help. Search the FAQ or raise a support ticket.',
+    '/help',
+  );
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [openFaq, setOpenFaq] = useState<string | null>(null);

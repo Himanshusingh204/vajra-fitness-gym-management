@@ -8,9 +8,9 @@ export const listTrainers = async (_req: AuthRequest, res: Response) => {
   try {
     const { gymId } = _req.query as { gymId?: string };
     const trainers = await prisma.trainerDetails.findMany({
-      where: { ...(gymId ? { gymId } : { gym: { isApproved: true } }) },
+      where: { ...(gymId ? { gymId, gym: { isApproved: true } } : { gym: { isApproved: true } }) },
       include: {
-        user: { select: { id: true, username: true, email: true } },
+        user: { select: { id: true, username: true } },
         gym: { select: { id: true, name: true, city: true } },
       },
       orderBy: { joiningDate: 'desc' },
@@ -36,6 +36,14 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
     });
     if (!trainer || trainer.role !== 'TRAINER' || !trainer.trainerDetails) {
       return res.status(400).json({ error: 'Selected trainer is not valid' });
+    }
+
+    const member = await prisma.memberDetails.findFirst({
+      where: { userId },
+      select: { gymId: true, status: true },
+    });
+    if (!member || member.status !== 'ACTIVE' || member.gymId !== trainer.trainerDetails.gymId) {
+      return res.status(403).json({ error: 'You can only book trainers at your own gym' });
     }
 
     // A member can only book a trainer in the past is not allowed

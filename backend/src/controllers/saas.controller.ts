@@ -3,42 +3,73 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { logAudit } from '../utils/audit';
 import { createNotification } from '../services/notification.service';
+import {
+  createSaaSOrder,
+  verifySaaSOrder,
+  onlinePaymentsEnabled,
+  PaymentDisabledError,
+} from '../services/payment.service';
+import {
+  activateSubscription,
+  startTrial,
+  extendSubscription,
+  cancelSubscription,
+  upgradeSubscription,
+  downgradeSubscription,
+  generateSaaSInvoice,
+} from '../services/subscription.service';
+import { getGymSubscriptionSummary } from '../services/entitlements.service';
+import { clearSubscriptionCache } from '../middlewares/subscription.middleware';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Public & Super Admin: list active SaaS plans
+// ========================================
+// PUBLIC & SUPER ADMIN: PLAN MANAGEMENT
+// ========================================
+
 export const getSaaSPlans = async (req: Request, res: Response) => {
   try {
     const includeInactive = req.query.all === 'true';
     const plans = await prisma.saaSPlan.findMany({
       where: includeInactive ? {} : { isActive: true },
-      orderBy: { price: 'asc' },
+      orderBy: { sortOrder: 'asc' },
     });
-    res.json(plans);
+    // Parse features for each plan
+    const parsed = plans.map((p) => ({
+      ...p,
+      features: (() => { try { return JSON.parse(p.features || '[]'); } catch { return []; } })(),
+    }));
+    res.json(parsed);
   } catch {
     res.status(500).json({ error: 'Failed to fetch plans' });
   }
 };
 
-// Super Admin: create a SaaS plan
 export const createSaaSPlan = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, code, description, price, billingCycle, maxGyms, maxMembers, maxTrainers, maxStaff, advancedReports, features, isActive } = req.body;
+    const { name, code, description, monthlyPrice, quarterlyPrice, halfYearlyPrice, yearlyPrice, currency, maxGyms, maxMembers, maxTrainers, maxStaff, maxBranches, maxClasses, maxStorageMB, advancedReports, features, isActive, sortOrder } = req.body;
 
     const plan = await prisma.saaSPlan.create({
       data: {
         name,
         code,
         description: description ?? null,
-        price,
-        billingCycle: billingCycle || 'MONTHLY',
+        monthlyPrice: monthlyPrice ?? 0,
+        quarterlyPrice: quarterlyPrice ?? 0,
+        halfYearlyPrice: halfYearlyPrice ?? 0,
+        yearlyPrice: yearlyPrice ?? 0,
+        currency: currency || 'INR',
         maxGyms: maxGyms ?? 1,
         maxMembers: maxMembers ?? null,
         maxTrainers: maxTrainers ?? null,
         maxStaff: maxStaff ?? null,
+        maxBranches: maxBranches ?? 1,
+        maxClasses: maxClasses ?? null,
+        maxStorageMB: maxStorageMB ?? null,
         advancedReports: advancedReports ?? false,
         features: JSON.stringify(features ?? []),
         isActive: isActive ?? true,
+        sortOrder: sortOrder ?? 0,
       },
     });
 
@@ -46,7 +77,7 @@ export const createSaaSPlan = async (req: AuthRequest, res: Response) => {
       action: 'SAAS_PLAN_CREATED',
       entity: 'SaaSPlan',
       entityId: plan.id,
-      details: JSON.stringify({ name, price, billingCycle }),
+      details: JSON.stringify({ name, monthlyPrice, code }),
       userId: req.user?.userId ?? null,
     });
 
@@ -59,38 +90,23 @@ export const createSaaSPlan = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Super Admin: update a SaaS plan
 export const updateSaaSPlan = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { name, code, description, price, billingCycle, maxGyms, maxMembers, maxTrainers, maxStaff, advancedReports, features, isActive } = req.body;
-
     const plan = await prisma.saaSPlan.findUnique({ where: { id } });
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
 
-    const updated = await prisma.saaSPlan.update({
-      where: { id },
-      data: {
-        ...(name !== undefined ? { name } : {}),
-        ...(code !== undefined ? { code } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(price !== undefined ? { price } : {}),
-        ...(billingCycle !== undefined ? { billingCycle } : {}),
-        ...(maxGyms !== undefined ? { maxGyms } : {}),
-        ...(maxMembers !== undefined ? { maxMembers } : {}),
-        ...(maxTrainers !== undefined ? { maxTrainers } : {}),
-        ...(maxStaff !== undefined ? { maxStaff } : {}),
-        ...(advancedReports !== undefined ? { advancedReports } : {}),
-        ...(features !== undefined ? { features: JSON.stringify(features) } : {}),
-        ...(isActive !== undefined ? { isActive } : {}),
-      },
-    });
+    const { features, ...rest } = req.body;
+    const data: any = { ...rest };
+    if (features !== undefined) data.features = JSON.stringify(features);
+
+    const updated = await prisma.saaSPlan.update({ where: { id }, data });
 
     await logAudit({
       action: 'SAAS_PLAN_UPDATED',
       entity: 'SaaSPlan',
       entityId: id,
-      details: JSON.stringify({ name, price }),
+      details: JSON.stringify({ name: updated.name }),
       userId: req.user?.userId ?? null,
     });
 
@@ -103,13 +119,11 @@ export const updateSaaSPlan = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Super Admin: delete a SaaS plan (soft: deactivate)
 export const deleteSaaSPlan = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const plan = await prisma.saaSPlan.findUnique({ where: { id } });
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
-
     await prisma.saaSPlan.update({ where: { id }, data: { isActive: false } });
     res.json({ message: 'Plan deactivated' });
   } catch {
@@ -117,7 +131,10 @@ export const deleteSaaSPlan = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Super Admin: list gym subscriptions
+// ========================================
+// SUPER ADMIN: SUBSCRIPTION MANAGEMENT
+// ========================================
+
 export const getSubscriptions = async (req: AuthRequest, res: Response) => {
   try {
     const { status, gymId } = req.query as { status?: string; gymId?: string };
@@ -128,7 +145,7 @@ export const getSubscriptions = async (req: AuthRequest, res: Response) => {
       },
       include: {
         gym: { select: { id: true, name: true, city: true, ownerId: true } },
-        plan: { select: { id: true, name: true, code: true, price: true, billingCycle: true } },
+        plan: { select: { id: true, name: true, code: true, monthlyPrice: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -138,7 +155,6 @@ export const getSubscriptions = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Super Admin: create a subscription for a gym
 export const createSubscription = async (req: AuthRequest, res: Response) => {
   try {
     const { gymId, planId, startDate } = req.body;
@@ -151,8 +167,7 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
     const start = startDate ? new Date(startDate) : new Date();
     if (Number.isNaN(start.getTime())) return res.status(400).json({ error: 'Invalid start date' });
 
-    const cyclesPerYear = plan.billingCycle === 'YEARLY' ? 1 : 12;
-    const months = plan.billingCycle === 'YEARLY' ? 12 : 1;
+    const months = 1; // Default monthly
     const end = new Date(start.getTime());
     end.setMonth(end.getMonth() + months);
 
@@ -163,10 +178,12 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
         status: 'ACTIVE',
         startDate: start,
         endDate: end,
-        amount: plan.price * cyclesPerYear,
+        amount: plan.monthlyPrice,
       },
       include: { plan: { select: { name: true } }, gym: { select: { name: true } } },
     });
+
+    await prisma.gym.update({ where: { id: gymId }, data: { isApproved: true } });
 
     await createNotification({
       userId: gym.ownerId,
@@ -184,19 +201,19 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
       userId: req.user?.userId ?? null,
     });
 
+    clearSubscriptionCache(gymId);
     res.status(201).json(subscription);
   } catch {
     res.status(500).json({ error: 'Failed to create subscription' });
   }
 };
 
-// Super Admin: update subscription status
 export const updateSubscriptionStatus = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { status } = req.body as { status: string };
 
-    if (!['ACTIVE', 'PENDING', 'EXPIRED', 'SUSPENDED', 'CANCELLED'].includes(status)) {
+    if (!['ACTIVE', 'PENDING', 'EXPIRED', 'SUSPENDED', 'CANCELLED', 'TRIAL', 'GRACE_PERIOD'].includes(status)) {
       return res.status(400).json({ error: 'Invalid subscription status' });
     }
 
@@ -216,13 +233,17 @@ export const updateSubscriptionStatus = async (req: AuthRequest, res: Response) 
       link: '/admin/gym',
     });
 
+    clearSubscriptionCache(subscription.gymId);
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update subscription' });
   }
 };
 
-// Gym Admin: view their own active subscription
+// ========================================
+// GYM ADMIN: SUBSCRIPTION PURCHASE
+// ========================================
+
 export const getMyGymSubscription = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -230,14 +251,292 @@ export const getMyGymSubscription = async (req: AuthRequest, res: Response) => {
     const gym = await prisma.gym.findFirst({ where: { ownerId: userId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
 
-    const subscription = await prisma.gymSubscription.findFirst({
-      where: { gymId: gym.id, status: 'ACTIVE' },
-      orderBy: { createdAt: 'desc' },
-      include: { plan: { select: { id: true, name: true, code: true, price: true, billingCycle: true, features: true, maxGyms: true, maxMembers: true, maxTrainers: true, maxStaff: true, advancedReports: true } } },
-    });
-
-    res.json({ gymId: gym.id, subscription });
+    const summary = await getGymSubscriptionSummary(gym.id);
+    res.json(summary);
   } catch {
     res.status(500).json({ error: 'Failed to fetch subscription' });
+  }
+};
+
+interface SaaSQuote {
+  gym: { id: string; ownerId: string; name: string; isApproved: boolean };
+  plan: { id: string; name: string };
+  cycle: 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
+  months: number;
+  amount: number;
+  start: Date;
+  end: Date;
+}
+
+const quoteError = (status: number, error: string) => {
+  const err = new Error(error) as Error & { status?: number };
+  err.status = status;
+  return err;
+};
+
+const getSaaSQuote = async (input: {
+  planId: string;
+  billingCycle?: string;
+  gymId?: string;
+  userId: string;
+  role: string;
+}): Promise<SaaSQuote> => {
+  const isSuperAdmin = input.role === 'SUPER_ADMIN';
+  const gym = isSuperAdmin && input.gymId
+    ? await prisma.gym.findUnique({ where: { id: input.gymId } })
+    : await prisma.gym.findFirst({ where: { ownerId: input.userId } });
+
+  if (!gym) throw quoteError(404, 'Gym not found');
+  if (!gym.isApproved) throw quoteError(403, 'Your gym must be approved before subscribing');
+
+  const plan = await prisma.saaSPlan.findUnique({ where: { id: input.planId } });
+  if (!plan || !plan.isActive) throw quoteError(404, 'Plan not found');
+
+  const cycle = (input.billingCycle ?? 'MONTHLY') as 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
+  if (!['MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY'].includes(cycle)) throw quoteError(400, 'Invalid billing cycle');
+
+  const months = cycle === 'YEARLY' ? 12 : cycle === 'HALF_YEARLY' ? 6 : cycle === 'QUARTERLY' ? 3 : 1;
+  const amount = (cycle === 'YEARLY' ? plan.yearlyPrice :
+    cycle === 'HALF_YEARLY' ? plan.halfYearlyPrice :
+    cycle === 'QUARTERLY' ? plan.quarterlyPrice :
+    plan.monthlyPrice).toNumber();
+
+  const active = await prisma.gymSubscription.findFirst({
+    where: { gymId: gym.id, status: { in: ['ACTIVE', 'PENDING', 'TRIAL'] } },
+  });
+  if (active) throw quoteError(409, 'This gym already has an active or pending subscription');
+
+  const start = new Date();
+  const end = new Date(start.getTime());
+  end.setMonth(end.getMonth() + months);
+
+  return { gym, plan, cycle, months, amount, start, end };
+};
+
+const createPendingSubscription = async (quote: SaaSQuote, paymentMethod: string | undefined, userId: string) => {
+  const subscription = await prisma.gymSubscription.create({
+    data: {
+      gymId: quote.gym.id,
+      planId: quote.plan.id,
+      status: 'PENDING',
+      startDate: quote.start,
+      endDate: quote.end,
+      amount: quote.amount,
+      billingCycle: quote.cycle,
+      paymentMethod: paymentMethod ?? null,
+    },
+    include: { plan: { select: { name: true } }, gym: { select: { name: true } } },
+  });
+
+  await createNotification({
+    userId: quote.gym.ownerId,
+    type: 'INFO',
+    title: 'Subscription purchase submitted',
+    message: `Your ${quote.plan.name} subscription request is pending payment of ₹${subscription.amount.toNumber().toLocaleString('en-IN')}.`,
+    link: '/subscription',
+  });
+
+  await logAudit({
+    action: 'SUBSCRIPTION_PURCHASED',
+    entity: 'GymSubscription',
+    entityId: subscription.id,
+    details: JSON.stringify({ gymId: quote.gym.id, planId: quote.plan.id, amount: subscription.amount, paymentMethod }),
+    userId,
+  });
+
+  return subscription;
+};
+
+export const purchaseSubscription = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const quote = await getSaaSQuote({ ...req.body, userId, role: req.user!.role });
+    const subscription = await createPendingSubscription(quote, req.body.paymentMethod, userId);
+    res.status(201).json(subscription);
+  } catch (error: any) {
+    if (error?.status) return res.status(error.status).json({ error: error.message });
+    console.error('[saas] purchaseSubscription failed:', error);
+    res.status(500).json({ error: 'Failed to purchase subscription' });
+  }
+};
+
+export const checkoutSubscription = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const role = req.user!.role;
+    const paymentMethod = (req.body.paymentMethod as string | undefined) ?? 'CASH';
+    const quote = await getSaaSQuote({ ...req.body, userId, role });
+    const subscription = await createPendingSubscription(quote, paymentMethod, userId);
+
+    const wantsOnline = paymentMethod === 'UPI' || paymentMethod === 'CARD';
+    if (wantsOnline && onlinePaymentsEnabled()) {
+      const order = await createSaaSOrder(subscription.id);
+      return res.status(201).json({
+        mode: 'online',
+        keyId: order.keyId,
+        orderId: order.orderId,
+        amount: order.amount,
+        currency: order.currency,
+        subscription,
+      });
+    }
+
+    res.status(201).json({ mode: 'manual', subscription });
+  } catch (error: any) {
+    if (error?.status) return res.status(error.status).json({ error: error.message });
+    if (error instanceof PaymentDisabledError) {
+      return res.status(503).json({ error: 'ONLINE_PAYMENTS_DISABLED' });
+    }
+    console.error('[saas] checkoutSubscription failed:', error);
+    res.status(500).json({ error: 'Failed to start subscription checkout' });
+  }
+};
+
+export const verifySaaS = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const result = await verifySaaSOrder({ ...req.body, userId, role: req.user!.role });
+    res.json(result);
+  } catch (error: any) {
+    const message = error?.message ?? '';
+    if (message === 'INVALID_SIGNATURE') return res.status(400).json({ error: 'Payment verification failed' });
+    if (message === 'SUBSCRIPTION_NOT_FOUND') return res.status(404).json({ error: 'Subscription not found' });
+    if (message === 'SUBSCRIPTION_NOT_OWNED') return res.status(403).json({ error: 'You can only verify your own subscription payments' });
+    console.error('[saas] verifySaaS failed:', error);
+    res.status(500).json({ error: 'Failed to verify payment' });
+  }
+};
+
+// ========================================
+// GYM ADMIN: TRIAL & LIFECYCLE
+// ========================================
+
+export const startTrialHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const gym = await prisma.gym.findFirst({ where: { ownerId: userId } });
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+
+    const { planId, trialDays } = req.body;
+    const subscription = await startTrial(gym.id, planId, trialDays || 7);
+    res.status(201).json(subscription);
+  } catch (error: any) {
+    const message = error?.message || '';
+    if (message.includes('NOT_FOUND')) return res.status(404).json({ error: message.replace('_', ' ') });
+    console.error('[saas] startTrial failed:', error);
+    res.status(500).json({ error: 'Failed to start trial' });
+  }
+};
+
+// ========================================
+// SUPER ADMIN: EXTEND / CANCEL / UPGRADE
+// ========================================
+
+export const extendSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { days } = req.body;
+    const result = await extendSubscription(id, days, req.user!.userId);
+    res.json(result);
+  } catch (error: any) {
+    if (error?.message === 'SUBSCRIPTION_NOT_FOUND') return res.status(404).json({ error: 'Subscription not found' });
+    res.status(500).json({ error: 'Failed to extend subscription' });
+  }
+};
+
+export const cancelSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { reason } = req.body;
+    const result = await cancelSubscription(id, reason, req.user!.userId);
+    res.json(result);
+  } catch (error: any) {
+    if (error?.message === 'SUBSCRIPTION_NOT_FOUND') return res.status(404).json({ error: 'Subscription not found' });
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+};
+
+export const upgradeSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const gym = req.user!.role === 'SUPER_ADMIN'
+      ? await prisma.gym.findUnique({ where: { id: req.body.gymId } })
+      : await prisma.gym.findFirst({ where: { ownerId: userId } });
+
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+
+    const result = await upgradeSubscription(gym.id, req.body.planId, userId);
+    res.json(result);
+  } catch (error: any) {
+    const message = error?.message || '';
+    if (message.includes('NOT_FOUND')) return res.status(404).json({ error: message.replace('_', ' ') });
+    res.status(500).json({ error: 'Failed to upgrade subscription' });
+  }
+};
+
+export const downgradeSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const gym = req.user!.role === 'SUPER_ADMIN'
+      ? await prisma.gym.findUnique({ where: { id: req.body.gymId } })
+      : await prisma.gym.findFirst({ where: { ownerId: userId } });
+
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+
+    const result = await downgradeSubscription(gym.id, req.body.planId, userId);
+    res.json(result);
+  } catch (error: any) {
+    const message = error?.message || '';
+    if (message.includes('NOT_FOUND')) return res.status(404).json({ error: message.replace('_', ' ') });
+    res.status(500).json({ error: 'Failed to downgrade subscription' });
+  }
+};
+
+// ========================================
+// INVOICES
+// ========================================
+
+export const getInvoices = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    let gymId: string | undefined;
+    if (req.user!.role === 'SUPER_ADMIN') {
+      gymId = req.query.gymId as string | undefined;
+    } else {
+      const gym = await prisma.gym.findFirst({ where: { ownerId: userId } });
+      if (!gym) return res.status(404).json({ error: 'Gym not found' });
+      gymId = gym.id;
+    }
+
+    const where = gymId ? { gymId } : {};
+    const invoices = await prisma.subscriptionInvoice.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(invoices);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch invoices' });
+  }
+};
+
+export const generateInvoiceHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const { subscriptionId } = req.body;
+    const invoice = await generateSaaSInvoice(subscriptionId);
+    res.status(201).json(invoice);
+  } catch (error: any) {
+    if (error?.message === 'SUBSCRIPTION_NOT_FOUND') return res.status(404).json({ error: 'Subscription not found' });
+    res.status(500).json({ error: 'Failed to generate invoice' });
   }
 };

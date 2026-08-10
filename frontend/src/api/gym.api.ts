@@ -29,7 +29,11 @@ export const getPublicGyms = async (): Promise<Gym[]> => {
   return response.data;
 };
 
-export const enrollMember = async (gymId: string, planId?: string) => {
-  const response = await api.post('/members/enroll', { gymId, planId });
+export const enrollMember = async (gymId: string, planId?: string, preferredPaymentMethod?: string) => {
+  const response = await api.post('/members/enroll', {
+    gymId,
+    planId,
+    ...(preferredPaymentMethod ? { preferredPaymentMethod } : {}),
+  });
   return response.data;
 };

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router';
 import Navbar from '../components/Navbar';
+import CookieConsent from '../components/CookieConsent';
+import PageTransition from '../components/PageTransition';
 import { MapPin, Phone, Mail, ArrowUpRight } from 'lucide-react';
 
 const InstagramIcon = ({ className }: { className?: string }) => (
@@ -36,14 +38,15 @@ const FOOTER_LINKS = {
   Legal: [
     ['Terms & Conditions', '/terms'],
     ['Privacy Policy', '/privacy'],
+    ['Cookie Policy', '/cookies'],
     ['Refund Policy', '/refund'],
   ],
 };
 
 const SOCIALS = [
-  { label: 'Instagram', href: 'https://instagram.com', icon: InstagramIcon },
-  { label: 'Facebook', href: 'https://facebook.com', icon: FacebookIcon },
-  { label: 'YouTube', href: 'https://youtube.com', icon: YoutubeIcon },
+  { label: 'Instagram', href: 'https://instagram.com/vajrafitness', icon: InstagramIcon },
+  { label: 'Facebook', href: 'https://facebook.com/vajrafitness', icon: FacebookIcon },
+  { label: 'YouTube', href: 'https://youtube.com/@vajrafitness', icon: YoutubeIcon },
 ];
 
 const MainLayout = () => {
@@ -52,19 +55,20 @@ const MainLayout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-base)] dark:bg-[#0d0d0d]">
       <Navbar />
-      <main className="flex-grow pt-16 md:pt-[72px]">
-        <Outlet />
+      <main className="flex-grow pt-20 md:pt-[88px]">
+        <PageTransition>
+          <Outlet />
+        </PageTransition>
       </main>
 
-      <footer className="bg-[var(--color-deepgray)] text-white relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)] to-transparent" />
+      <footer className="bg-[var(--color-section-dark)] text-white relative overflow-hidden">        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)] to-transparent" />
         <div className="absolute -top-32 right-0 w-[500px] h-[500px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-10 pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12">
 
           <div>
             <Link to="/" className="flex items-center gap-3 mb-4 w-fit">
-              <img src="/logo.png" alt="Vajra Fitness" className="h-8 w-auto" />
+              <img src="/logo.webp" alt="Vajra Fitness" width="36" height="36" className="h-8 w-auto" />
               <span className="text-xl font-extrabold tracking-tight">
                 Vajra<span className="text-[var(--color-primary)]">Fitness</span>
               </span>
@@ -122,12 +126,12 @@ const MainLayout = () => {
               </li>
             </ul>
 
-            <a href="/register" className="btn-accent mt-6 w-full">Partner With Us</a>
+            <Link to="/register" className="btn-accent mt-6 w-full">Partner With Us</Link>
           </div>
         </div>
 
         <div className="border-t border-white/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-500">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-400">
             <span>© {year} Vajra Fitness. All rights reserved.</span>
             <div className="flex gap-5">
               <Link to="/about" className="hover:text-white transition-colors">About</Link>
@@ -137,6 +141,8 @@ const MainLayout = () => {
           </div>
         </div>
       </footer>
+
+      <CookieConsent />
     </div>
   );
 };

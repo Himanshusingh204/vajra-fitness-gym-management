@@ -17,6 +17,8 @@ import {
   updateSupportTicket,
   getAuditLogs,
   setUserActive,
+  updateGymProfile,
+  getAllFees,
 } from '../controllers/admin.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
@@ -34,6 +36,8 @@ router.use(authenticate, authorize(['SUPER_ADMIN']));
 router.get('/gyms', asyncHandler(getGyms));
 router.put('/gyms/:gymId/approve', asyncHandler(approveGym));
 router.put('/gyms/:gymId/suspend', asyncHandler(suspendGym));
+router.put('/gyms/:gymId', asyncHandler(updateGymProfile));
+router.get('/fees', asyncHandler(getAllFees));
 router.get('/analytics', asyncHandler(getPlatformAnalytics));
 router.get('/users', asyncHandler(getUsers));
 router.put('/users/:id/status', validate(userStatusSchema), asyncHandler(setUserActive));

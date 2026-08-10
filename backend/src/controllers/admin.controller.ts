@@ -2,6 +2,51 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
+import { createNotification } from '../services/notification.service';
+
+// Helper function to calculate monthly revenue
+async function calculateMonthlyRevenue() {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+    months.push({ startOfMonth, endOfMonth, label: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) });
+  }
+  return months;
+}
+
+// Helper to calculate churn rate
+async function calculateChurnRate() {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  
+  // Get subscriptions that were active 30 days ago
+  const subscriptions30DaysAgo = await prisma.gymSubscription.findMany({
+    where: {
+      startDate: { lte: thirtyDaysAgo },
+      endDate: { gte: thirtyDaysAgo }
+    },
+    include: { plan: true }
+  });
+  
+  // Get subscriptions that are currently active
+  const activeSubscriptions = await prisma.gymSubscription.findMany({
+    where: {
+      status: 'ACTIVE',
+      startDate: { lte: now },
+      endDate: { gte: now }
+    },
+    include: { plan: true }
+  });
+  
+  const previousCount = subscriptions30DaysAgo.length;
+  const currentCount = activeSubscriptions.length;
+  const churnedCount = Math.max(0, previousCount - currentCount);
+  const churnRate = previousCount > 0 ? (churnedCount / previousCount) * 100 : 0;
+  
+  return { churnRate, churnedCount, previousCount, currentCount };
+}
 
 // Get all gym registrations (pending/approved)
 export const getGyms = async (req: AuthRequest, res: Response) => {
@@ -25,7 +70,19 @@ export const approveGym = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.update({
       where: { id: gymId },
-      data: { isApproved: true }
+      data: { isApproved: true },
+      include: { owner: { select: { id: true, username: true } } },
+    });
+
+    // Re-activate the owner so they can access their dashboard again.
+    await prisma.user.update({ where: { id: gym.owner.id }, data: { isActive: true } });
+
+    await createNotification({
+      userId: gym.owner.id,
+      type: 'SUCCESS',
+      title: 'Your gym is approved',
+      message: `${gym.name} is now live on the Vajra Fitness platform.`,
+      link: '/admin/gym',
     });
 
     await logAudit({
@@ -49,7 +106,23 @@ export const suspendGym = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.update({
       where: { id: gymId },
-      data: { isApproved: false }
+      data: { isApproved: false },
+      include: { owner: { select: { id: true, username: true } } },
+    });
+
+    // Revoke access immediately: deactivate the owner and invalidate all of
+    // their active sessions (tokenVersion bump) so a live JWT stops working.
+    await prisma.user.update({
+      where: { id: gym.owner.id },
+      data: { isActive: false, tokenVersion: { increment: 1 } },
+    });
+
+    await createNotification({
+      userId: gym.owner.id,
+      type: 'ERROR',
+      title: 'Your gym has been suspended',
+      message: `${gym.name} was suspended by the platform. Contact support to resolve this.`,
+      link: '/contact',
     });
 
     await logAudit({
@@ -68,29 +141,210 @@ export const suspendGym = async (req: AuthRequest, res: Response) => {
 
 export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
   try {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    
+    // Basic counts
     const totalGyms = await prisma.gym.count();
     const activeGyms = await prisma.gym.count({ where: { isApproved: true } });
     const pendingGyms = totalGyms - activeGyms;
     const totalMembers = await prisma.memberDetails.count();
     const totalStaff = await prisma.staffDetails.count();
-
+    const totalTrainers = await prisma.staffDetails.count({ where: { role: 'TRAINER' } });
+    
+    // Revenue
     const revenueResult = await prisma.fee.aggregate({
       _sum: { amount: true },
       where: { status: 'PAID' },
     });
-
+    const platformRevenue = revenueResult._sum.amount ?? 0;
+    
     const pendingMembers = await prisma.memberDetails.count({ where: { status: 'PENDING' } });
-
+    
+    // ============ SAAS METRICS ============
+    // All subscriptions
+    const allSubscriptions = await prisma.gymSubscription.findMany({
+      include: { plan: true, gym: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    // Active subscriptions
+    const activeSubscriptions = allSubscriptions.filter(s => 
+      s.status === 'ACTIVE' && 
+      new Date(s.startDate) <= now && 
+      new Date(s.endDate) >= now
+    );
+    
+    // Trial subscriptions
+    const trialSubscriptions = allSubscriptions.filter(s => s.status === 'TRIAL');
+    
+    // Past due subscriptions
+    const pastDueSubscriptions = allSubscriptions.filter(s => s.status === 'PAST_DUE');
+    
+    // Expired subscriptions
+    const expiredSubscriptions = allSubscriptions.filter(s => s.status === 'EXPIRED' || s.status === 'CANCELLED');
+    
+    // MRR - Monthly Recurring Revenue from active subscriptions
+    const mrr = activeSubscriptions.reduce((sum, sub) => {
+      let monthlyAmount = sub.amount.toNumber();
+      if (sub.billingCycle === 'QUARTERLY') monthlyAmount = sub.amount.toNumber() / 3;
+      else if (sub.billingCycle === 'HALF_YEARLY') monthlyAmount = sub.amount.toNumber() / 6;
+      else if (sub.billingCycle === 'YEARLY') monthlyAmount = sub.amount.toNumber() / 12;
+      return sum + monthlyAmount;
+    }, 0);
+    
+    // ARR - Annual Recurring Revenue
+    const arr = mrr * 12;
+    
+    // Revenue by plan
+    const revenueByPlan = activeSubscriptions.reduce((acc, sub) => {
+      const planName = sub.plan?.name || 'Unknown';
+      let monthlyAmount = sub.amount.toNumber();
+      if (sub.billingCycle === 'QUARTERLY') monthlyAmount = sub.amount.toNumber() / 3;
+      else if (sub.billingCycle === 'HALF_YEARLY') monthlyAmount = sub.amount.toNumber() / 6;
+      else if (sub.billingCycle === 'YEARLY') monthlyAmount = sub.amount.toNumber() / 12;
+      acc[planName] = (acc[planName] || 0) + monthlyAmount;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Churn calculation
+    const subscriptions30DaysAgo = allSubscriptions.filter(s => 
+      new Date(s.startDate) <= thirtyDaysAgo && 
+      new Date(s.endDate) >= thirtyDaysAgo
+    );
+    const previousCount = subscriptions30DaysAgo.length;
+    const currentCount = activeSubscriptions.length;
+    const churnedCount = Math.max(0, previousCount - currentCount);
+    const churnRate = previousCount > 0 ? (churnedCount / previousCount) * 100 : 0;
+    
+    // New subscriptions this month
+    const newSubscriptionsThisMonth = allSubscriptions.filter(s => 
+      new Date(s.createdAt) >= new Date(now.getFullYear(), now.getMonth(), 1)
+    ).length;
+    
+    // Trial to paid conversion
+    const trialsLast30Days = allSubscriptions.filter(s => 
+      s.status === 'TRIAL' && new Date(s.createdAt) >= thirtyDaysAgo
+    ).length;
+    const convertedFromTrial = allSubscriptions.filter(s => 
+      s.status === 'ACTIVE' && s.trialEndsAt && new Date(s.trialEndsAt) >= thirtyDaysAgo && new Date(s.trialEndsAt) <= now
+    ).length;
+    const trialConversionRate = trialsLast30Days > 0 ? (convertedFromTrial / trialsLast30Days) * 100 : 0;
+    
+    // Failed payments this month
+    const failedPayments = await prisma.paymentOrder.count({
+      where: {
+        status: 'FAILED',
+        createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), 1) }
+      }
+    });
+    
+    // Monthly revenue trend (last 6 months)
+    const monthlyRevenueTrend = [];
+    for (let i = 5; i >= 0; i--) {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+      
+      const monthFees = await prisma.fee.aggregate({
+        _sum: { amount: true },
+        where: { 
+          status: 'PAID',
+          paymentDate: { gte: startOfMonth, lte: endOfMonth }
+        }
+      });
+      
+      const monthSubscriptions = await prisma.gymSubscription.findMany({
+        where: {
+          createdAt: { gte: startOfMonth, lte: endOfMonth },
+          status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
+        },
+        include: { plan: true }
+      });
+      
+      const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => sum + sub.amount.toNumber(), 0);
+      
+      monthlyRevenueTrend.push({
+        month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        fees: monthFees._sum.amount?.toNumber() ?? 0,
+        subscriptions: subscriptionRevenue,
+        total: (monthFees._sum.amount?.toNumber() ?? 0) + subscriptionRevenue
+      });
+    }
+    
+    // ARPU - Average Revenue Per User (gym)
+    const arpu = activeGyms > 0 ? mrr / activeGyms : 0;
+    
+    // CLTV - Customer Lifetime Value (simplified: ARPU / monthly churn rate)
+    const monthlyChurnRate = churnRate / 100;
+    const cltv = monthlyChurnRate > 0 ? arpu / monthlyChurnRate : 0;
+    
+    // Active members across all gyms
+    const activeMembers = await prisma.memberDetails.count({ where: { status: 'ACTIVE' } });
+    
+    // Gyms by status
+    const gymsByStatus = {
+      active: activeGyms,
+      pending: pendingGyms,
+      trial: trialSubscriptions.length,
+      past_due: pastDueSubscriptions.length,
+      expired: expiredSubscriptions.length,
+    };
+    
+    // Top performing gyms by member count
+    const topGyms = await prisma.gym.findMany({
+      where: { isApproved: true },
+      include: {
+        _count: { select: { members: true } },
+        subscriptions: { 
+          where: { status: 'ACTIVE' },
+          include: { plan: true },
+          take: 1,
+          orderBy: { createdAt: 'desc' }
+        }
+      },
+      orderBy: { members: { _count: 'desc' } },
+      take: 10
+    });
+    
     res.json({
+      // Basic metrics
       totalGyms,
       activeGyms,
       pendingGyms,
       totalMembers,
       pendingMembers,
       totalStaff,
-      platformRevenue: revenueResult._sum.amount ?? 0,
+      totalTrainers,
+      activeMembers,
+      platformRevenue,
+      
+      // SaaS metrics
+      mrr: Math.round(mrr * 100) / 100,
+      arr: Math.round(arr * 100) / 100,
+      arpu: Math.round(arpu * 100) / 100,
+      cltv: Math.round(cltv * 100) / 100,
+      churnRate: Math.round(churnRate * 100) / 100,
+      churnedCount,
+      newSubscriptionsThisMonth,
+      trialConversionRate: Math.round(trialConversionRate * 100) / 100,
+      failedPayments,
+      
+      // Breakdowns
+      revenueByPlan,
+      gymsByStatus,
+      monthlyRevenueTrend,
+      topGyms: topGyms.map(g => ({
+        id: g.id,
+        name: g.name,
+        city: g.city,
+        memberCount: g._count.members,
+        plan: g.subscriptions[0]?.plan?.name || 'None',
+        subscriptionStatus: g.subscriptions[0]?.status || 'NONE'
+      }))
     });
   } catch (error) {
+    console.error('Get platform analytics error:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 };
@@ -300,5 +554,69 @@ export const getAuditLogs = async (_req: Request, res: Response) => {
     res.json(logs);
   } catch {
     res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+};
+
+// ---------------- Super Admin: gym profile editing ----------------
+// Lets a Super Admin correct a gym's details (address, GST, images, facilities)
+// directly, without needing the gym owner.
+export const updateGymProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    const gymId = req.params.gymId as string;
+    const { name, address, city, state, location, gstNumber, logoUrl, imageUrl, facilities } = req.body;
+
+    const existing = await prisma.gym.findUnique({ where: { id: gymId } });
+    if (!existing) return res.status(404).json({ error: 'Gym not found' });
+
+    const gym = await prisma.gym.update({
+      where: { id: gymId },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(address !== undefined ? { address } : {}),
+        ...(city !== undefined ? { city } : {}),
+        ...(state !== undefined ? { state } : {}),
+        ...(location !== undefined ? { location } : {}),
+        ...(gstNumber !== undefined ? { gstNumber } : {}),
+        ...(logoUrl !== undefined ? { logoUrl } : {}),
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+        ...(facilities !== undefined ? { facilities } : {}),
+      },
+    });
+
+    await logAudit({
+      action: 'GYM_UPDATED',
+      entity: 'Gym',
+      entityId: gymId,
+      details: JSON.stringify({ name: gym.name }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json(gym);
+  } catch {
+    res.status(500).json({ error: 'Failed to update gym' });
+  }
+};
+
+// ---------------- Super Admin: payments across all gyms ----------------
+// Global fee ledger so the platform can see (and issue receipts for) every
+// payment on the system.
+export const getAllFees = async (req: AuthRequest, res: Response) => {
+  try {
+    const { status, gymId } = req.query as { status?: string; gymId?: string };
+    const fees = await prisma.fee.findMany({
+      where: {
+        ...(status ? { status } : {}),
+        ...(gymId ? { gymId } : {}),
+      },
+      include: {
+        member: { include: { user: { select: { username: true, email: true } } } },
+        gym: { select: { id: true, name: true, gstNumber: true } },
+      },
+      orderBy: { dueDate: 'desc' },
+      take: 500,
+    });
+    res.json(fees);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch fees' });
   }
 };

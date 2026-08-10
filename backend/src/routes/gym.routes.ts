@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getMyGym, updateGym, listPublicGyms, getGymStats } from '../controllers/gym.controller';
+import { getMyGym, updateGym, listPublicGyms, getGymStats, checkSubdomain } from '../controllers/gym.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { gymUpdateSchema } from '../utils/validators';
@@ -21,5 +21,8 @@ router.use(authenticate, authorize(['GYM_ADMIN']));
 
 router.get('/my-branch', asyncHandler(getMyGym));
 router.put('/my-branch', validate(gymUpdateSchema), asyncHandler(updateGym));
+
+// Subdomain availability for white-label branding (owner or Super Admin)
+router.get('/subdomain-availability', asyncHandler(checkSubdomain));
 
 export default router;
