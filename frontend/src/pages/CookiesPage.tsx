@@ -16,7 +16,7 @@ const CookiesPage = () => {
     '/cookies',
   );
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20">
         <h1 className="text-4xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-3">Cookie Policy</h1>
         <p className="text-gray-500 dark:text-gray-400 mb-12 text-sm">Last updated: August 2026</p>

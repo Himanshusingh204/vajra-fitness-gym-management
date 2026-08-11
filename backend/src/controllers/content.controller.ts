@@ -18,12 +18,42 @@ export const getPublicTestimonials = async (_req: Request, res: Response) => {
   try {
     const testimonials = await prisma.testimonial.findMany({
       where: { isActive: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
       take: 12,
     });
     res.json(testimonials);
   } catch {
     res.status(500).json({ error: 'Failed to fetch testimonials' });
+  }
+};
+
+export const getPublicSiteContent = async (_req: Request, res: Response) => {
+  try {
+    const entries = await prisma.siteContent.findMany({
+      where: { isActive: true },
+      orderBy: { key: 'asc' },
+    });
+    res.json(entries);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch site content' });
+  }
+};
+
+// Public, unauthenticated aggregate platform stats for marketing pages (home/about).
+// Only safe aggregate counts are returned — no PII, no per-gym or per-user data.
+export const getPublicStats = async (_req: Request, res: Response) => {
+  try {
+    const [gyms, members, trainers, cityGroups] = await Promise.all([
+      prisma.gym.count({ where: { isApproved: true } }),
+      prisma.memberDetails.count({ where: { status: 'ACTIVE', gym: { isApproved: true } } }),
+      prisma.user.count({
+        where: { role: 'TRAINER', isActive: true, trainerDetails: { gym: { isApproved: true } } },
+      }),
+      prisma.gym.groupBy({ by: ['city'], where: { isApproved: true, city: { not: '' } } }),
+    ]);
+    res.json({ gyms, members, trainers, cities: cityGroups.length });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch stats' });
   }
 };
 

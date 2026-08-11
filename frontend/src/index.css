@@ -240,10 +240,6 @@
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold text-white transition-all duration-300 cursor-pointer bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] shadow-lg shadow-[var(--color-primary)]/25 hover:shadow-xl hover:shadow-[var(--color-primary)]/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-ring)];
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold text-white transition-all duration-300 cursor-pointer bg-gradient-to-r from-[var(--color-secondary)] to-[var(--color-secondary-light)] shadow-lg shadow-[var(--color-secondary)]/25 hover:shadow-xl hover:shadow-[var(--color-secondary)]/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-secondary)]/30;
-  }
-
   .btn-accent {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold text-white transition-all duration-300 cursor-pointer bg-gradient-to-r from-[var(--color-accent)] to-[#ff7b00] shadow-lg shadow-[var(--color-accent)]/25 hover:shadow-xl hover:shadow-[var(--color-accent)]/35 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-accent)]/30;
   }
@@ -265,6 +261,10 @@
     @apply bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-primary)]/40 hover:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)];
   }
 
+  .dash-card {
+    @apply bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6;
+  }
+
   /* ---------- Forms ---------- */
   .input-field {
     @apply w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-charcoal)] placeholder:text-[var(--color-muted)] transition-all duration-300 outline-none focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-ring)]/60;
@@ -274,6 +274,10 @@
     @apply cursor-pointer appearance-none bg-no-repeat pr-10;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371797e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-position: right 0.9rem center;
+  }
+
+  [data-theme="dark"] select.input-field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
   /* ---------- Glass ---------- */
@@ -316,14 +320,6 @@
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
   }
-
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
 }
 
 /* ============================================================
@@ -335,19 +331,9 @@
   50% { transform: translateY(-14px); }
 }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes float-slow {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-22px) rotate(3deg); }
 }
 
 @keyframes blob {
@@ -372,7 +358,6 @@
 }
 
 .animate-float { animation: float 6s ease-in-out infinite; }
-.animate-float-slow { animation: float-slow 9s ease-in-out infinite; }
 .animate-blob { animation: blob 18s ease-in-out infinite; }
 .animate-gradient-x {
   background-size: 200% 200%;
@@ -389,12 +374,6 @@
    Staggered via animation-delay with the .stagger utility on parents. */
 .animate-page {
   animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.animate-fade-in {
-  animation: fade-in 0.6s ease both;
-}
-.animate-fade-up {
-  animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .stagger > * {
   animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;

@@ -16,6 +16,24 @@ const endOfDay = (d: Date) => {
 
 const today = () => new Date();
 
+// A membership is "active on date D" if it has startDate <= end of D and
+// endDate >= start of D, and its (current) status is not CANCELLED,
+// SUSPENDED or FROZEN.
+const INACTIVE_STATUSES = new Set(['CANCELLED', 'SUSPENDED', 'FROZEN']);
+
+type MembershipSlice = { memberId: string; startDate: Date; endDate: Date; status: string };
+
+const activeMemberIdsOn = (memberships: MembershipSlice[], date: Date): Set<string> => {
+  const dayStart = startOfDay(date);
+  const dayEnd = endOfDay(date);
+  const ids = new Set<string>();
+  for (const m of memberships) {
+    if (INACTIVE_STATUSES.has(m.status)) continue;
+    if (m.startDate <= dayEnd && m.endDate >= dayStart) ids.add(m.memberId);
+  }
+  return ids;
+};
+
 // Revenue report for a gym with optional date range & CSV export.
 export const revenueReport = async (req: AuthRequest, res: Response) => {
   try {
@@ -158,7 +176,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     for (let i = 5; i >= 0; i--) {
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
       const count = await prisma.memberDetails.count({
-        where: { gymId, createdAt: { lte: endOfMonth } }
+        where: { gymId, joiningDate: { lte: endOfMonth } }
       });
       memberGrowth.push({
         month: endOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
@@ -266,6 +284,94 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       take: 10
     });
 
+    // ---- Churn & retention analytics ----
+    // Fetch once, reused for churnTrend, retentionRate, revenuePerMember and cohortRetention.
+    const gymMemberships: MembershipSlice[] = await prisma.membership.findMany({
+      where: { gymId, status: { not: 'CANCELLED' } },
+      select: { memberId: true, startDate: true, endDate: true, status: true }
+    });
+
+    // Churn trend: for each of the last 6 months, who was active at month
+    // start vs. still active at month end.
+    const churnTrend = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+      const startSet = activeMemberIdsOn(gymMemberships, monthStart);
+      const endSet = activeMemberIdsOn(gymMemberships, monthEnd);
+      let lost = 0;
+      startSet.forEach((id) => {
+        if (!endSet.has(id)) lost += 1;
+      });
+      const startActive = startSet.size;
+      churnTrend.push({
+        month: monthStart.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        startActive,
+        lost,
+        churnRate: startActive > 0 ? lost / startActive : 0
+      });
+    }
+
+    // Retention rate: of members active at the start of the 6-month window,
+    // what fraction are still active today.
+    const windowStartSet = activeMemberIdsOn(gymMemberships, sixMonthsAgo);
+    const nowActiveSet = activeMemberIdsOn(gymMemberships, now);
+    let stillActive = 0;
+    windowStartSet.forEach((id) => {
+      if (nowActiveSet.has(id)) stillActive += 1;
+    });
+    const retentionRate = windowStartSet.size > 0 ? stillActive / windowStartSet.size : 0;
+
+    // Revenue per member: last-30-days PAID revenue divided by current active members.
+    const last30DaysPaid = await prisma.fee.aggregate({
+      _sum: { amount: true },
+      where: { gymId, status: 'PAID', paymentDate: { gte: thirtyDaysAgo } }
+    });
+    const currentActiveCount = nowActiveSet.size;
+    const revenuePerMember = currentActiveCount > 0
+      ? (last30DaysPaid._sum.amount?.toNumber() ?? 0) / currentActiveCount
+      : 0;
+
+    // Cohort retention: group members by the month of their earliest
+    // membership start, then track % still active at month offsets 0..5
+    // relative to the cohort month (triangular — null beyond the current window).
+    const memberEarliestStart = new Map<string, Date>();
+    for (const m of gymMemberships) {
+      const current = memberEarliestStart.get(m.memberId);
+      if (!current || m.startDate < current) memberEarliestStart.set(m.memberId, m.startDate);
+    }
+
+    const nowSerial = now.getFullYear() * 12 + now.getMonth();
+    const cohortRetention = [];
+    for (let i = 5; i >= 0; i--) {
+      const cohortMonthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const cohortSerial = nowSerial - i;
+      const cohortMemberIds: string[] = [];
+      memberEarliestStart.forEach((startDate, memberId) => {
+        const serial = startDate.getFullYear() * 12 + startDate.getMonth();
+        if (serial === cohortSerial) cohortMemberIds.push(memberId);
+      });
+
+      const retention: (number | null)[] = [];
+      for (let offset = 0; offset <= 5; offset++) {
+        const targetSerial = cohortSerial + offset;
+        if (targetSerial > nowSerial || cohortMemberIds.length === 0) {
+          retention.push(null);
+          continue;
+        }
+        const targetMonthEnd = new Date(now.getFullYear(), now.getMonth() - i + offset + 1, 0, 23, 59, 59, 999);
+        const activeAtTarget = activeMemberIdsOn(gymMemberships, targetMonthEnd);
+        const retained = cohortMemberIds.filter((id) => activeAtTarget.has(id)).length;
+        retention.push(retained / cohortMemberIds.length);
+      }
+
+      cohortRetention.push({
+        cohortMonth: cohortMonthStart.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        cohortSize: cohortMemberIds.length,
+        retention
+      });
+    }
+
     res.json({
       monthlyRevenueTrend,
       planDistribution: planDistribution.map(p => ({
@@ -307,11 +413,105 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
         email: f.member.user.email,
         amount: f.amount.toNumber(),
         dueDate: f.dueDate.toISOString().slice(0, 10)
-      }))
+      })),
+      churnTrend,
+      retentionRate,
+      revenuePerMember,
+      cohortRetention
     });
   } catch (error) {
     console.error('Gym analytics error:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+};
+
+// Per-trainer performance: bookings, workout slips, classes taught.
+// NOTE: Booking.trainerId references the trainer's User id, while
+// WorkoutSlip.trainerId and GymClass.trainerId reference the TrainerDetails id.
+export const trainerPerformance = async (req: AuthRequest, res: Response) => {
+  try {
+    const gymId = req.params.gymId as string;
+    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { from, to } = req.query as { from?: string; to?: string };
+
+    const trainers = await prisma.trainerDetails.findMany({
+      where: { gymId },
+      include: { user: { select: { username: true, email: true } } }
+    });
+
+    // Booking.date is a plain 'YYYY-MM-DD' string; lexicographic comparison
+    // works for that fixed-width format.
+    const bookingDateFilter: { gte?: string; lte?: string } = {};
+    if (from) bookingDateFilter.gte = from;
+    if (to) bookingDateFilter.lte = to;
+
+    const slipDateFilter: { gte?: Date; lte?: Date } = {};
+    if (from) {
+      const fromDate = new Date(from);
+      if (!Number.isNaN(fromDate.getTime())) slipDateFilter.gte = startOfDay(fromDate);
+    }
+    if (to) {
+      const toDate = new Date(to);
+      if (!Number.isNaN(toDate.getTime())) slipDateFilter.lte = endOfDay(toDate);
+    }
+
+    const performance = await Promise.all(
+      trainers.map(async (trainer) => {
+        const bookingWhere: Record<string, unknown> = { trainerId: trainer.userId, gymId };
+        if (Object.keys(bookingDateFilter).length) bookingWhere.date = bookingDateFilter;
+
+        const slipWhere: Record<string, unknown> = { trainerId: trainer.id, gymId };
+        if (Object.keys(slipDateFilter).length) slipWhere.assignedDate = slipDateFilter;
+
+        const [bookingsByStatus, distinctMemberBookings, slipCount, distinctSlipMembers, classCount] = await Promise.all([
+          prisma.booking.groupBy({ by: ['status'], where: bookingWhere, _count: true }),
+          prisma.booking.findMany({ where: bookingWhere, select: { userId: true }, distinct: ['userId'] }),
+          prisma.workoutSlip.count({ where: slipWhere }),
+          prisma.workoutSlip.findMany({ where: slipWhere, select: { memberId: true }, distinct: ['memberId'] }),
+          prisma.gymClass.count({ where: { trainerId: trainer.id, gymId } })
+        ]);
+
+        const statusCounts: Record<string, number> = { PENDING: 0, CONFIRMED: 0, COMPLETED: 0, CANCELLED: 0 };
+        let totalBookings = 0;
+        bookingsByStatus.forEach((b) => {
+          statusCounts[b.status] = b._count;
+          totalBookings += b._count;
+        });
+
+        const cancellationRate = totalBookings > 0 ? statusCounts.CANCELLED! / totalBookings : 0;
+        const completionRate = totalBookings > 0 ? statusCounts.COMPLETED! / totalBookings : 0;
+
+        return {
+          trainerId: trainer.id,
+          name: trainer.user.username,
+          email: trainer.user.email,
+          specialization: trainer.specialization,
+          hourlyRate: trainer.hourlyRate?.toNumber() ?? null,
+          bookings: {
+            total: totalBookings,
+            byStatus: statusCounts,
+            cancellationRate,
+            completionRate,
+            distinctMembers: distinctMemberBookings.length
+          },
+          workoutSlips: {
+            assigned: slipCount,
+            distinctMembers: distinctSlipMembers.length
+          },
+          classesTaught: classCount
+        };
+      })
+    );
+
+    res.json(performance);
+  } catch (error) {
+    console.error('Trainer performance error:', error);
+    res.status(500).json({ error: 'Failed to fetch trainer performance' });
   }
 };
 

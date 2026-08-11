@@ -413,6 +413,7 @@ export const branchRejectSchema = z.object({
 export const faqSchema = z.object({
   question: sanitize(300).pipe(z.string().min(3, 'Question must be at least 3 characters')),
   answer: sanitize(2000).pipe(z.string().min(3, 'Answer must be at least 3 characters')),
+  category: sanitize(50).optional().nullable(),
   isActive: z.boolean().optional(),
   order: z.number().int().min(0).max(1000).optional(),
 });
@@ -431,11 +432,28 @@ export const testimonialSchema = z.object({
   role: sanitize(100).pipe(z.string().min(2, 'Role must be at least 2 characters')),
   content: sanitize(1000).pipe(z.string().min(3, 'Content must be at least 3 characters')),
   imageUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
+  gymName: sanitize(120).optional().nullable(),
   rating: z.number().int().min(1).max(5).optional(),
+  featured: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 
 export const updateTestimonialSchema = testimonialSchema.partial();
+
+// ---- CMS: Site Content ----
+export const siteContentSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1, 'Key is required')
+    .max(120, 'Key must be at most 120 characters')
+    .regex(/^[a-z0-9_]+$/, 'Key must contain only lowercase letters, numbers, and underscores'),
+  value: sanitize(5000),
+  section: sanitize(50).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateSiteContentSchema = siteContentSchema.partial();
 
 // ---- Personal trainer bookings ----
 const bookingTime = z

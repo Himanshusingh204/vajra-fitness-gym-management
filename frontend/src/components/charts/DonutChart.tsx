@@ -26,11 +26,11 @@ export const DonutChart: React.FC<DonutChartProps> = ({
       'var(--color-primary)',
       'var(--color-secondary)',
       'var(--color-accent)',
-      '#8b5cf6',
-      '#ec4899',
-      '#06b6d4',
-      '#f59e0b',
-      '#10b981',
+      'var(--color-primary-light)',
+      'var(--color-secondary-light)',
+      '#ff7b00',
+      'var(--color-primary-dark)',
+      '#022417',
     ],
   } = config;
 
@@ -150,7 +150,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`w-full h-auto ${className}`}
+      className={`w-full h-full ${className}`}
       role="img"
       aria-label="Donut chart"
     />

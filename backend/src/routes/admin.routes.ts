@@ -14,6 +14,10 @@ import {
   createTestimonial,
   updateTestimonial,
   deleteTestimonial,
+  getSiteContent,
+  createSiteContent,
+  updateSiteContent,
+  deleteSiteContent,
   getSupportTickets,
   updateSupportTicket,
   getAuditLogs,
@@ -25,7 +29,7 @@ import {
 } from '../controllers/admin.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { userStatusSchema, faqSchema, updateFaqSchema, testimonialSchema, updateTestimonialSchema, ticketAdminSchema, gymIdParams, userIdParams, idParams, faqIdParams, testimonialIdParams } from '../utils/validators';
+import { userStatusSchema, faqSchema, updateFaqSchema, testimonialSchema, updateTestimonialSchema, siteContentSchema, updateSiteContentSchema, ticketAdminSchema, gymIdParams, userIdParams, idParams, faqIdParams, testimonialIdParams } from '../utils/validators';
 
 const router = Router();
 
@@ -60,5 +64,10 @@ router.get('/cms/testimonials', asyncHandler(getTestimonials));
 router.post('/cms/testimonials', validate(testimonialSchema), asyncHandler(createTestimonial));
 router.put('/cms/testimonials/:id', validate(testimonialIdParams, ['params']), validate(updateTestimonialSchema), asyncHandler(updateTestimonial));
 router.delete('/cms/testimonials/:id', validate(testimonialIdParams, ['params']), asyncHandler(deleteTestimonial));
+
+router.get('/cms/site-content', asyncHandler(getSiteContent));
+router.post('/cms/site-content', validate(siteContentSchema), asyncHandler(createSiteContent));
+router.put('/cms/site-content/:id', validate(idParams, ['params']), validate(updateSiteContentSchema), asyncHandler(updateSiteContent));
+router.delete('/cms/site-content/:id', validate(idParams, ['params']), asyncHandler(deleteSiteContent));
 
 export default router;

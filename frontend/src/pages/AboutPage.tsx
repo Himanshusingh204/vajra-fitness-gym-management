@@ -2,17 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
 import { Link } from 'react-router';
 import {
-  Target, Eye, Users, Briefcase, Handshake, Trophy,
-  ChevronDown, ArrowRight, Mail, Sparkles, ShieldCheck, Rocket, HeartHandshake, TrendingUp,
+  Target, Eye, Users, Briefcase, ChevronDown, ArrowRight, Mail, Sparkles, ShieldCheck, Rocket, HeartHandshake, TrendingUp,
 } from 'lucide-react';
 import { Reveal } from '../components/Reveal';
 import { usePageMeta } from '../hooks/usePageMeta';
-
-const TEAM = [
-  { name: 'Rahul Sharma', role: 'Founder & CEO', initials: 'RS' },
-  { name: 'Anita Desai', role: 'CTO', initials: 'AD' },
-  { name: 'Vikram Singh', role: 'Head of Product', initials: 'VS' },
-];
+import { getPublicStats } from '../api/content.api';
 
 const VALUES = [
   { title: 'Member First', text: 'Every decision starts with what makes gym owners and members more successful.', icon: HeartHandshake },
@@ -20,14 +14,6 @@ const VALUES = [
   { title: 'Trust & Security', text: 'Bank-grade encryption, Indian data residency, and zero compromise.', icon: ShieldCheck },
   { title: 'Data Driven', text: 'Analytics and insights power every workflow in the platform.', icon: TrendingUp },
 ];
-
-const AWARDS = [
-  'Best Fitness SaaS Startup 2025 — India Tech Awards',
-  'Top 50 Innovative Companies — Startup India',
-  'G2 High Performer — Gym Management Software 2026',
-];
-
-const PARTNERS = ['Technogym', 'Life Fitness', 'Fitness First India', 'ACE Certified', 'K11 Academy', 'GST Suvidha'];
 
 const FAQS = [
   {
@@ -89,11 +75,12 @@ const FaqItem = ({ q, a, open, onToggle }: { q: string; a: string; open: boolean
 const AboutPage = () => {
   usePageMeta(
     'About Vajra Fitness',
-    'Learn about Vajra Fitness — the enterprise gym management platform built for Indian fitness businesses. Our story, mission, and the team behind the platform.',
+    'Learn about Vajra Fitness — the enterprise gym management platform built for Indian fitness businesses. Our story, mission, and vision.',
     '/about',
   );
   const { hash } = useLocation();
   const [openFaq, setOpenFaq] = useState(0);
+  const [gymCount, setGymCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (hash) {
@@ -103,8 +90,18 @@ const AboutPage = () => {
     }
   }, [hash]);
 
+  useEffect(() => {
+    let active = true;
+    getPublicStats()
+      .then((data) => { if (active) setGymCount(data.gyms); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const gymCountLabel = gymCount && gymCount > 0 ? `${gymCount}+` : 'growing numbers of';
+
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
       {/* ===== Hero ===== */}
       <section className="relative pt-36 pb-20 md:pt-44 md:pb-24 overflow-hidden">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
@@ -123,7 +120,7 @@ const AboutPage = () => {
           <Reveal delay={200}>
             <p className="section-lead mt-6 text-lg md:text-xl text-[var(--color-muted)]!">
               India's leading SaaS platform built exclusively for gym owners and fitness professionals.
-              We power 500+ gyms with automated payments, smart attendance, and digital workout tracking —
+              We power {gymCountLabel} gyms with automated payments, smart attendance, and digital workout tracking —
               so you can focus on your clients' health, not spreadsheets.
             </p>
           </Reveal>
@@ -175,7 +172,7 @@ const AboutPage = () => {
                 className="relative z-10 rounded-3xl shadow-2xl border border-[var(--color-border)] aspect-[4/3] object-cover"
               />
               <div className="glass-strong absolute -bottom-6 -left-6 rounded-2xl px-6 py-4 hidden sm:block">
-                <p className="text-3xl font-extrabold text-[var(--color-primary)]">500+</p>
+                <p className="text-3xl font-extrabold text-[var(--color-primary)]">{gymCount !== null ? gymCount : '—'}</p>
                 <p className="text-sm font-semibold text-[var(--color-muted)]">Partner gyms and growing</p>
               </div>
             </Reveal>
@@ -228,26 +225,6 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* ===== Team ===== */}
-      <section id="team" className="section-pad scroll-mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Leadership" title="The People Behind the Platform" lead="A team of operators, engineers, and fitness enthusiasts building the operating system for modern gyms." />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {TEAM.map((member, i) => (
-              <Reveal key={member.name} delay={i * 120}>
-                <div className="card-hover text-center group">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white text-2xl font-extrabold flex items-center justify-center mx-auto mb-5 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
-                    {member.initials}
-                  </div>
-                  <h3 className="font-extrabold text-lg">{member.name}</h3>
-                  <p className="text-sm font-semibold text-[var(--color-primary)] mt-1">{member.role}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ===== Careers ===== */}
       <section id="careers" className="section-pad scroll-mt-24 bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -290,41 +267,6 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* ===== Partners ===== */}
-      <section id="partners" className="section-pad scroll-mt-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Partners" title="Trusted by the Industry" lead="We partner with the best equipment manufacturers, certification bodies, and payment providers to bring you exclusive deals and verified trainers." />
-          <Reveal>
-            <div className="flex flex-wrap items-center justify-center gap-4 max-w-4xl mx-auto">
-              {PARTNERS.map((p) => (
-                <span key={p} className="chip border border-[var(--color-border)] bg-[var(--color-surface)]/70 text-[var(--color-charcoal)] px-5! py-2.5! text-sm hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors">
-                  <Handshake className="w-4 h-4 text-[var(--color-primary)]" /> {p}
-                </span>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ===== Awards ===== */}
-      <section id="awards" className="section-pad scroll-mt-24 bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Recognition" title="Awards & Milestones" />
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {AWARDS.map((award, i) => (
-              <Reveal key={award} delay={i * 120}>
-                <div className="card-hover h-full flex flex-col items-center text-center p-8!">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white flex items-center justify-center mb-5">
-                    <Trophy className="w-7 h-7" />
-                  </div>
-                  <p className="font-semibold text-[var(--color-charcoal)] leading-relaxed">{award}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ===== FAQ ===== */}
       <section id="faq" className="section-pad scroll-mt-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -360,7 +302,7 @@ const AboutPage = () => {
               Ready to modernize your gym?
             </h2>
             <p className="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
-              Join 500+ gyms across India running their business on Vajra Fitness.
+              Join {gymCountLabel} gyms across India running their business on Vajra Fitness.
               Start your 14-day free trial today — no credit card required.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">

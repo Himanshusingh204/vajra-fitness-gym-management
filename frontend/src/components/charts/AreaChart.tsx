@@ -24,9 +24,9 @@ export const AreaChart: React.FC<AreaChartProps> = ({
       'var(--color-primary)',
       'var(--color-secondary)',
       'var(--color-accent)',
-      '#8b5cf6',
-      '#ec4899',
-      '#06b6d4',
+      'var(--color-primary-light)',
+      'var(--color-secondary-light)',
+      '#ff7b00',
     ],
   } = config;
 
@@ -167,7 +167,7 @@ export const AreaChart: React.FC<AreaChartProps> = ({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`w-full h-auto ${className}`}
+      className={`w-full h-full ${className}`}
       role="img"
       aria-label="Area chart"
     />

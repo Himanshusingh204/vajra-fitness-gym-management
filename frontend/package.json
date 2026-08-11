@@ -29,6 +29,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "autoprefixer": "^10.5.4",
     "oxlint": "^1.75.0",
+    "playwright": "^1.62.1",
     "postcss": "^8.5.25",
     "sharp": "^0.35.3",
     "svgo": "^4.0.2",

@@ -57,10 +57,46 @@ export interface GymAnalytics {
     amount: number;
     dueDate: string;
   }[];
+  churnTrend: {
+    month: string;
+    startActive: number;
+    lost: number;
+    churnRate: number;
+  }[];
+  retentionRate: number;
+  revenuePerMember: number;
+  cohortRetention: {
+    cohortMonth: string;
+    cohortSize: number;
+    retention: (number | null)[];
+  }[];
+}
+
+export interface TrainerPerformance {
+  trainerId: string;
+  name: string;
+  email: string;
+  specialization: string | null;
+  hourlyRate: number | null;
+  bookings: {
+    total: number;
+    byStatus: Record<string, number>;
+    cancellationRate: number;
+    completionRate: number;
+    distinctMembers: number;
+  };
+  workoutSlips: {
+    assigned: number;
+    distinctMembers: number;
+  };
+  classesTaught: number;
 }
 
 export const getGymAnalytics = (gymId: string): Promise<GymAnalytics> =>
   api.get(`/reports/gym/${gymId}/analytics`).then((r) => r.data);
+
+export const getTrainerPerformance = (gymId: string, params?: { from?: string; to?: string }): Promise<TrainerPerformance[]> =>
+  api.get(`/reports/gym/${gymId}/trainers`, { params }).then((r) => r.data);
 
 export const getGymStats = (gymId: string): Promise<any> =>
   api.get(`/reports/gym/${gymId}/stats`).then((r) => r.data);

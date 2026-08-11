@@ -223,7 +223,7 @@ const MemberDashboard = () => {
   };
 
   if (profileLoading) return (
-    <div className="min-h-screen pt-32 pb-12 flex items-center justify-center bg-[var(--color-base)] dark:bg-[#0a0a0a]">
+    <div className="min-h-screen pt-32 pb-12 flex items-center justify-center bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="animate-pulse text-gray-500">Loading your profile...</div>
     </div>
   );
@@ -285,9 +285,9 @@ const MemberDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen pt-20 bg-[var(--color-base)] dark:bg-[#0a0a0a] flex flex-col md:flex-row">
+    <div className="min-h-screen pt-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] flex flex-col md:flex-row">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white/50 dark:bg-[#1a1a1a]/50 backdrop-blur-xl border-r border-gray-200 dark:border-white/10 md:h-[calc(100vh-5rem)] sticky top-20 flex-shrink-0">
+      <aside className="w-full md:w-64 bg-[var(--color-surface)]/50 backdrop-blur-xl border-r border-[var(--color-border)] md:h-[calc(100vh-5rem)] sticky top-20 flex-shrink-0">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white font-bold text-xl">
@@ -313,7 +313,7 @@ const MemberDashboard = () => {
       <main className="flex-1 p-6 md:p-10 overflow-y-auto">
         {activeTab === 'overview' && (
           <div className="max-w-5xl">
-            <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 border-b border-gray-200 dark:border-white/10 pb-6 gap-4">
+            <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 border-b border-[var(--color-border)] pb-6 gap-4">
               <div>
                 <h1 className="text-3xl md:text-4xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-2">Dashboard</h1>
                 <p className="text-gray-500 dark:text-gray-400">
@@ -375,7 +375,7 @@ const MemberDashboard = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-              <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm relative overflow-hidden group">
+              <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-[var(--color-primary)]/5 rounded-full group-hover:scale-150 transition-transform duration-500" />
                 <Activity className="w-8 h-8 text-[var(--color-primary)] mb-4" />
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Current Plan</h3>
@@ -384,7 +384,7 @@ const MemberDashboard = () => {
                 </p>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm relative overflow-hidden group">
+              <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-500/5 rounded-full group-hover:scale-150 transition-transform duration-500" />
                 <CreditCard className="w-8 h-8 text-amber-500 mb-4" />
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Next Payment</h3>
@@ -393,7 +393,7 @@ const MemberDashboard = () => {
                 </p>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm relative overflow-hidden group">
+              <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/5 rounded-full group-hover:scale-150 transition-transform duration-500" />
                 <CalendarDays className="w-8 h-8 text-emerald-500 mb-4" />
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">This Month</h3>
@@ -412,7 +412,7 @@ const MemberDashboard = () => {
             </div>
 
             {/* Activity chart */}
-            <div className="mt-8 bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm">
+            <div className="mt-8 bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
@@ -428,9 +428,9 @@ const MemberDashboard = () => {
                 </button>
               </div>
               {attendanceLoading ? (
-                <div className="h-40 flex items-center justify-center text-gray-400">Loading activity…</div>
+                <div className="h-40 flex items-center justify-center text-[var(--color-muted)]">Loading activity…</div>
               ) : (attendance?.records?.length ?? 0) === 0 ? (
-                <div className="h-40 flex items-center justify-center text-gray-400">No check-ins yet — head to your gym and check in!</div>
+                <div className="h-40 flex items-center justify-center text-[var(--color-muted)]">No check-ins yet — head to your gym and check in!</div>
               ) : (
                 <div className="text-gray-800 dark:text-gray-200">
                   <ActivityChart data={dailyAttendance(14)} color="var(--color-primary)" />
@@ -447,11 +447,11 @@ const MemberDashboard = () => {
                 <h2 className="text-xl font-bold dark:text-white">Announcements</h2>
               </div>
               {noticesLoading ? (
-                <div className="p-8 text-center text-gray-400 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10">Loading announcements...</div>
+                <div className="p-8 text-center text-[var(--color-muted)] bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)]">Loading announcements...</div>
               ) : notices && notices.length > 0 ? (
                 <div className="space-y-3">
                   {notices.map((n: any) => (
-                    <div key={n.id} className="bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl border border-gray-100 dark:border-white/10">
+                    <div key={n.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
                       <div className="flex items-start justify-between gap-3">
                         <h3 className="font-bold dark:text-white">{n.title}</h3>
                         <span className="text-xs text-gray-400 shrink-0">{new Date(n.createdAt).toLocaleDateString('en-IN')}</span>
@@ -461,7 +461,7 @@ const MemberDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                   No announcements from your gym right now.
                 </div>
               )}
@@ -481,7 +481,7 @@ const MemberDashboard = () => {
 
             <div className="space-y-4">
               {memberships?.map((m: any) => (
-                <div key={m.id} className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+                <div key={m.id} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -510,7 +510,7 @@ const MemberDashboard = () => {
                 </div>
               ))}
               {(!memberships || memberships.length === 0) && (
-                <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                   No membership records yet.
                 </div>
               )}
@@ -529,10 +529,10 @@ const MemberDashboard = () => {
               <span className="ml-auto text-sm font-semibold text-gray-500">Total visits: {attendance?.total ?? 0}</span>
             </div>
 
-            {attendanceLoading ? <div className="p-8 text-center text-gray-400">Loading attendance...</div> : (
+            {attendanceLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading attendance...</div> : (
               <div className="space-y-3">
                 {attendance?.records?.map((r: any) => (
-                  <div key={r.id} className="bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl border border-gray-100 dark:border-white/10 flex justify-between items-center">
+                  <div key={r.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)] flex justify-between items-center">
                     <div>
                       <p className="font-bold dark:text-white">{new Date(r.checkIn).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</p>
                       <p className="text-xs text-gray-500">Checked in at {new Date(r.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
@@ -543,7 +543,7 @@ const MemberDashboard = () => {
                   </div>
                 ))}
                 {(!attendance?.records || attendance.records.length === 0) && (
-                  <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No attendance records yet.
                   </div>
                 )}
@@ -567,10 +567,10 @@ const MemberDashboard = () => {
               </button>
             </div>
 
-            {notificationsLoading ? <div className="p-8 text-center text-gray-400">Loading...</div> : (
+            {notificationsLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading...</div> : (
               <div className="space-y-3">
                 {notifications?.notifications?.map((n: any) => (
-                  <div key={n.id} onClick={() => markReadMutation.mutate(n.id)} className={`p-5 rounded-2xl border cursor-pointer transition-colors ${n.isRead ? 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-white/10' : 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20'}`}>
+                  <div key={n.id} onClick={() => markReadMutation.mutate(n.id)} className={`p-5 rounded-2xl border cursor-pointer transition-colors ${n.isRead ? 'bg-[var(--color-surface)] border-[var(--color-border)]' : 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20'}`}>
                     <div className="flex items-center justify-between">
                       <p className="font-bold dark:text-white flex items-center gap-2">
                         {n.title}
@@ -582,7 +582,7 @@ const MemberDashboard = () => {
                   </div>
                 ))}
                 {(!notifications?.notifications || notifications.notifications.length === 0) && (
-                  <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No notifications yet.
                   </div>
                 )}
@@ -601,24 +601,24 @@ const MemberDashboard = () => {
               <h2 className="text-2xl font-bold dark:text-white">My Progress</h2>
             </div>
 
-            {progressLoading ? <div className="p-8 text-center text-gray-400">Loading progress...</div> : (
+            {progressLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading progress...</div> : (
               <>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-                  <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Latest Weight</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress?.latest ? `${progress.latest.weight} kg` : '—'}</p>
                   </div>
-                  <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">BMI</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress?.bmi ?? '—'}</p>
                   </div>
-                  <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Weight Change</p>
                     <p className={`text-2xl font-extrabold ${(progress?.weightChange ?? 0) > 0 ? 'text-red-500' : (progress?.weightChange ?? 0) < 0 ? 'text-green-500' : 'dark:text-white'}`}>
                       {progress?.weightChange != null ? `${progress.weightChange > 0 ? '+' : ''}${progress.weightChange} kg` : '—'}
                     </p>
                   </div>
-                  <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Log Entries</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress?.entries ?? 0}</p>
                   </div>
@@ -632,7 +632,7 @@ const MemberDashboard = () => {
                     {progress?.logs && progress.logs.length > 0 ? (
                       <div className="space-y-3">
                         {progress.logs.map((log) => (
-                          <div key={log.id} className="bg-white dark:bg-[#1a1a1a] p-4 rounded-2xl border border-gray-100 dark:border-white/10 flex justify-between items-center">
+                          <div key={log.id} className="bg-[var(--color-surface)] p-4 rounded-2xl border border-[var(--color-border)] flex justify-between items-center">
                             <div>
                               <p className="font-bold dark:text-white">{new Date(log.date).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</p>
                               <p className="text-xs text-gray-500 mt-0.5">
@@ -645,7 +645,7 @@ const MemberDashboard = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                      <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                         No progress entries yet. Add your first weight log.
                       </div>
                     )}
@@ -671,12 +671,12 @@ const MemberDashboard = () => {
 
               <div>
                 <h3 className="text-xl font-bold dark:text-white mb-4">My Plans</h3>
-                {nutritionLoading ? <div className="text-gray-400">Loading plans...</div> : nutritionPlans && nutritionPlans.length > 0 ? (
+                {nutritionLoading ? <div className="text-[var(--color-muted)]">Loading plans...</div> : nutritionPlans && nutritionPlans.length > 0 ? (
                   <div className="space-y-4">
                     {nutritionPlans.map((plan) => {
                       const meals = parseNutritionMeals(plan.meals);
                       return (
-                        <div key={plan.id} className="bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl border border-gray-100 dark:border-white/10">
+                        <div key={plan.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
                           <div className="flex justify-between items-start gap-3">
                             <div>
                               <h4 className="font-bold dark:text-white">{plan.title}</h4>
@@ -705,7 +705,7 @@ const MemberDashboard = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No nutrition plans yet. Create one to track your daily meals.
                   </div>
                 )}
@@ -728,7 +728,7 @@ const MemberDashboard = () => {
               <h2 className="text-2xl font-bold dark:text-white">My Workout Slips</h2>
             </div>
 
-            <div className="mb-8 bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-sm">
+            <div className="mb-8 bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                   <TrendingUp className="w-5 h-5" />
@@ -743,10 +743,10 @@ const MemberDashboard = () => {
               </div>
             </div>
 
-            {workoutsLoading ? <div className="p-8 text-center text-gray-400">Loading workouts...</div> : (
+            {workoutsLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading workouts...</div> : (
               <div className="space-y-4">
                 {workouts?.map((slip: any) => (
-                  <div key={slip.id} className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 hover:border-[var(--color-primary)] dark:hover:border-[var(--color-primary)] transition-colors group">
+                  <div key={slip.id} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] hover:border-[var(--color-primary)] dark:hover:border-[var(--color-primary)] transition-colors group">
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="font-bold text-lg dark:text-white">{slip.title || 'Workout Plan'}</h3>
@@ -765,7 +765,7 @@ const MemberDashboard = () => {
                   </div>
                 ))}
                 {(!workouts || workouts.length === 0) && (
-                  <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No workouts assigned yet. Ask your trainer!
                   </div>
                 )}
@@ -784,7 +784,7 @@ const MemberDashboard = () => {
             </div>
 
             {payConfigLoading ? (
-              <div className="p-4 mb-6 bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-xl text-sm text-gray-400 animate-pulse">Checking payment options…</div>
+              <div className="p-4 mb-6 bg-gray-50 dark:bg-white/5 border border-[var(--color-border)] rounded-xl text-sm text-gray-400 animate-pulse">Checking payment options…</div>
             ) : !payConfig?.enabled ? (
               <div className="p-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl text-sm text-amber-700 dark:text-amber-400">
                 Online payments aren't configured yet — contact your gym front desk to pay. Receipts are available here once paid.
@@ -816,10 +816,10 @@ const MemberDashboard = () => {
               </div>
             )}
 
-            {feesLoading ? <div className="p-8 text-center text-gray-400">Loading history...</div> : (
+            {feesLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading history...</div> : (
               <div className="space-y-4">
                 {fees?.map((fee: any) => (
-                  <div key={fee.id} className="bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl border border-gray-100 dark:border-white/10 flex justify-between items-center hover:border-gray-300 dark:hover:border-white/20 transition-colors">
+                  <div key={fee.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)] flex justify-between items-center hover:border-gray-300 dark:hover:border-white/20 transition-colors">
                     <div>
                       <h3 className="font-extrabold text-xl dark:text-white">₹{fee.amount.toLocaleString('en-IN')}</h3>
                       <p className="text-sm font-medium text-gray-500 mt-1">Due: {new Date(fee.dueDate).toLocaleDateString('en-IN')}</p>
@@ -851,7 +851,7 @@ const MemberDashboard = () => {
                   </div>
                 ))}
                 {(!fees || fees.length === 0) && (
-                  <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No payment history found.
                   </div>
                 )}
@@ -876,10 +876,10 @@ const MemberDashboard = () => {
 
               <div>
                 <h3 className="text-xl font-bold dark:text-white mb-4">My Bookings</h3>
-                {bookingsLoading ? <div className="text-gray-400">Loading bookings...</div> : (
+                {bookingsLoading ? <div className="text-[var(--color-muted)]">Loading bookings...</div> : (
                   <div className="space-y-4">
                     {bookings?.map((b: any) => (
-                      <div key={b.id} className="bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl border border-gray-100 dark:border-white/10">
+                      <div key={b.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <h4 className="font-bold dark:text-white">Trainer: {b.trainer?.username}</h4>
@@ -910,7 +910,7 @@ const MemberDashboard = () => {
                       </div>
                     ))}
                     {(!bookings || bookings.length === 0) && (
-                      <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+                      <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                         No PT sessions booked yet.
                       </div>
                     )}
@@ -931,15 +931,15 @@ const MemberDashboard = () => {
             </div>
 
             {classesLoading ? (
-              <div className="text-gray-400">Loading classes...</div>
+              <div className="text-[var(--color-muted)]">Loading classes...</div>
             ) : gymClasses.length === 0 ? (
-              <div className="p-8 text-center bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 text-gray-500">
+              <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                 No group classes available at your gym yet.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {gymClasses.map((cls: any) => (
-                  <div key={cls.id} className="bg-white dark:bg-[#1a1a1a] p-5 rounded-2xl border border-gray-100 dark:border-white/10">
+                  <div key={cls.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-bold text-lg dark:text-white">{cls.name}</h3>
                       <span className={`px-2 py-1 rounded text-xs font-bold ${cls.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -996,7 +996,7 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-lg">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg">
       <h3 className="text-xl font-bold dark:text-white mb-4">Book a Session</h3>
       {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded">{error}</div>}
       {success && <div className="text-green-500 mb-4 bg-green-50 dark:bg-green-900/20 p-3 rounded">{success}</div>}
@@ -1062,7 +1062,7 @@ const ProgressLogForm = ({ onSubmit }: { onSubmit: (data: { weight: number; heig
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-lg self-start">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg self-start">
       <h3 className="text-xl font-bold dark:text-white mb-1">Log Your Progress</h3>
       <p className="text-sm text-gray-500 mb-4">Track weight, height and body fat over time.</p>
       {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
@@ -1128,7 +1128,7 @@ const NutritionPlanForm = ({ onCreated }: { onCreated: () => void }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10 shadow-lg self-start">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg self-start">
       <h3 className="text-xl font-bold dark:text-white mb-1">Create a Nutrition Plan</h3>
       <p className="text-sm text-gray-500 mb-4">Write each meal on its own line, e.g. <code className="text-xs">Breakfast: Oats + eggs</code></p>
       {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
@@ -1193,7 +1193,7 @@ const SettingsTab = () => {
         <h2 className="text-2xl font-bold dark:text-white">Account Settings</h2>
       </div>
 
-      <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+      <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
         <h3 className="font-bold dark:text-white mb-4">Profile</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
@@ -1207,7 +1207,7 @@ const SettingsTab = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+      <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
         <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><KeyRound className="w-4 h-4" /> Change Password</h3>
         {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
         {success && <div className="text-green-500 mb-4 bg-green-50 dark:bg-green-900/20 p-3 rounded text-sm">{success}</div>}

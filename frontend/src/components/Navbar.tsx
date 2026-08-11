@@ -90,7 +90,7 @@ const Navbar = () => {
   }`;
 
   const barClass = scrolled
-    ? 'bg-white/70 dark:bg-[#0a0a0a]/70 backdrop-blur-2xl border border-[var(--color-border)] shadow-[0_8px_32px_rgba(0,0,0,0.08)] mt-4 mx-4 lg:mx-auto max-w-7xl rounded-2xl'
+    ? 'bg-white/70 dark:bg-[var(--color-base)]/70 backdrop-blur-2xl border border-[var(--color-border)] shadow-[0_8px_32px_rgba(0,0,0,0.08)] mt-4 mx-4 lg:mx-auto max-w-7xl rounded-2xl'
     : 'bg-transparent border border-transparent mt-4 mx-4 lg:mx-auto max-w-7xl';
 
   return (
@@ -273,7 +273,7 @@ const Navbar = () => {
 
       {/* Mobile menu */}
       <div
-        className={`md:hidden absolute top-20 left-4 right-4 rounded-2xl transition-all duration-300 overflow-hidden bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-2xl border border-[var(--color-border)] shadow-2xl ${
+        className={`md:hidden absolute top-20 left-4 right-4 rounded-2xl transition-all duration-300 overflow-hidden bg-white/90 dark:bg-[var(--color-base)]/90 backdrop-blur-2xl border border-[var(--color-border)] shadow-2xl ${
           mobileOpen ? 'max-h-[70vh] overflow-y-auto opacity-100 visible' : 'max-h-0 opacity-0 invisible border-transparent'
         }`}
       >

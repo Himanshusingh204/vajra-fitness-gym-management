@@ -152,7 +152,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`w-full h-auto ${className}`}
+      className={`w-full h-full ${className}`}
       role="img"
       aria-label="Heatmap chart"
     />

@@ -169,7 +169,7 @@ const SubscriptionPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
       {/* HERO */}
       <section className="relative pt-32 pb-16 md:pt-40 md:pb-20 overflow-hidden">
         <div className="absolute inset-0 z-0">
@@ -225,7 +225,7 @@ const SubscriptionPage = () => {
                     <Reveal key={plan.id} delay={i * 100} className="h-full">
                       <button
                         onClick={() => { setSelectedPlanId(plan.id); setInlineError(''); setSuccess(''); }}
-                        className={`w-full h-full text-left rounded-2xl p-6 transition-all duration-300 ${selectedPlanId === plan.id ? 'ring-2 ring-[var(--color-primary)] shadow-xl scale-[1.02]' : 'card-hover'} ${highlight ? 'bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white' : 'bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10'}`}
+                        className={`w-full h-full text-left rounded-2xl p-6 transition-all duration-300 ${selectedPlanId === plan.id ? 'ring-2 ring-[var(--color-primary)] shadow-xl scale-[1.02]' : 'card-hover'} ${highlight ? 'bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white' : 'bg-[var(--color-surface)] border border-[var(--color-border)]'}`}
                       >
                         {highlight && (
                           <span className="inline-flex items-center gap-1 chip bg-white text-[var(--color-primary)] mb-3"><Sparkles className="w-3.5 h-3.5" /> Most Popular</span>

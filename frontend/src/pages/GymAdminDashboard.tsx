@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, Bell, Megaphone, Wrench, Gift, TrendingUp, Activity, ArrowUpRight, ArrowDownRight, PieChart, Menu, X, Sparkles } from 'lucide-react';
+import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, Bell, Megaphone, Wrench, Gift, TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, PieChart, Menu, X, Sparkles, Award } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api, { downloadFile } from '../services/api';
 import { getGymBookings, updateBookingStatus, getGymMemberships, createMembership, renewMembership } from '../api/booking.api';
@@ -10,7 +10,7 @@ import { getGymNotices, createNotice, updateNotice, deleteNotice } from '../api/
 import { getEquipment, addEquipment, deleteEquipment } from '../api/equipment.api';
 import { getBranches, createBranch, deleteBranch, type GymBranch } from '../api/branch.api';
 import { getReferrals, createReferral, updateReferralStatus, getReferralStats } from '../api/referral.api';
-import { getGymAnalytics } from '../api/reports.api';
+import { getGymAnalytics, getTrainerPerformance, type TrainerPerformance } from '../api/reports.api';
 import { getMyGymSubscription, getInvoices } from '../api/saas.api';
 import { LineChart, BarChart, AreaChart, DonutChart, HeatmapChart } from '../components/charts';
 import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
@@ -177,6 +177,13 @@ const GymAdminDashboard = () => {
   const { data: analytics, isLoading: analyticsLoading } = useQuery({
     queryKey: ['gymAnalytics', branch?.id],
     queryFn: () => getGymAnalytics(branch?.id),
+    enabled: !!branch?.id && activeTab === 'analytics',
+    refetchInterval: 60000,
+  });
+
+  const { data: trainerPerformance = [], isLoading: trainerPerformanceLoading } = useQuery<TrainerPerformance[]>({
+    queryKey: ['trainerPerformance', branch?.id],
+    queryFn: () => getTrainerPerformance(branch?.id),
     enabled: !!branch?.id && activeTab === 'analytics',
     refetchInterval: 60000,
   });
@@ -572,9 +579,9 @@ const GymAdminDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] lg:flex">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] lg:flex">
       {/* Mobile top bar */}
-      <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-white/10 bg-white dark:bg-[#141414] sticky top-0 z-30">
+      <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-30">
         <div className="min-w-0">
           <h1 className="text-lg font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">
             {branchLoading ? 'Loading…' : branch?.name || 'Gym Dashboard'}
@@ -599,11 +606,11 @@ const GymAdminDashboard = () => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#141414] border-r border-gray-100 dark:border-white/10 flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-6 border-b border-gray-100 dark:border-white/10 flex items-start justify-between gap-2">
+        <div className="p-6 border-b border-[var(--color-border)] flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h1 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">
               {branchLoading ? 'Loading…' : branch?.name || 'Gym Dashboard'}
@@ -666,7 +673,7 @@ const GymAdminDashboard = () => {
                     { label: 'Pending Fees', value: stats?.pendingFees ?? 0, color: 'text-red-500' },
                     { label: 'Open Enquiries', value: enquiries.filter((e: any) => e.status === 'PENDING').length, color: 'text-purple-500' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 border border-gray-100 dark:border-white/10">
+                    <div key={label} className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)]">
                       <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
                       <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
                     </div>
@@ -674,7 +681,7 @@ const GymAdminDashboard = () => {
                 </>
               )}
             </div>
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
               <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-3">At a glance</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Trainers</p><p className="font-bold dark:text-white">{stats?.trainers ?? 0}</p></div>
@@ -695,8 +702,82 @@ const GymAdminDashboard = () => {
               </div>
             ) : analytics ? (
               <>
+                {/* Churn / Retention KPIs */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    {
+                      label: 'Monthly Churn Rate',
+                      value: `${((analytics.churnTrend[analytics.churnTrend.length - 1]?.churnRate ?? 0) * 100).toFixed(1)}%`,
+                      color: 'text-red-500',
+                    },
+                    {
+                      label: 'Retention Rate (6mo)',
+                      value: `${(analytics.retentionRate * 100).toFixed(1)}%`,
+                      color: 'text-green-600',
+                    },
+                    {
+                      label: 'Revenue Per Member',
+                      value: `₹${analytics.revenuePerMember.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+                      color: 'text-[var(--color-primary)]',
+                    },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)]">
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
+                      <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Churn Trend */}
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                  <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
+                    <TrendingDown className="w-5 h-5 text-red-500" />
+                    Churn Trend (Last 6 Months)
+                  </h3>
+                  <div className="h-72">
+                    <LineChart
+                      series={[
+                        { name: 'Churn Rate %', data: analytics.churnTrend.map(d => ({ label: d.month, value: Math.round(d.churnRate * 1000) / 10 })) },
+                      ]}
+                      config={{ height: 280 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Cohort Retention */}
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                  <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-600" />
+                    Cohort Retention
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-white/5">
+                        <tr>
+                          <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cohort</th>
+                          <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Size</th>
+                          {[0, 1, 2, 3, 4, 5].map((m) => (
+                            <th key={m} className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">M{m}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                        {analytics.cohortRetention.map((c) => (
+                          <tr key={c.cohortMonth}>
+                            <td className="px-4 py-3 font-semibold text-[var(--color-deepgray)] dark:text-white">{c.cohortMonth}</td>
+                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.cohortSize}</td>
+                            {c.retention.map((r, i) => (
+                              <td key={i} className="px-4 py-3 text-gray-600 dark:text-gray-300">{r === null ? '—' : `${(r * 100).toFixed(0)}%`}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
                 {/* Revenue Trend */}
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-[var(--color-primary)]" />
                     Revenue Trend (Last 6 Months)
@@ -714,7 +795,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Member Growth */}
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-green-600" />
                     Member Growth (Last 6 Months)
@@ -730,7 +811,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Membership Plan Distribution */}
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <PieChart className="w-5 h-5 text-purple-600" />
                     Membership Plan Distribution
@@ -744,7 +825,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Attendance Trend */}
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-blue-600" />
                     Daily Attendance (Last 30 Days)
@@ -760,7 +841,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Peak Hours Heatmap */}
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-amber-600" />
                     Peak Hours Heatmap (Last 30 Days)
@@ -775,7 +856,7 @@ const GymAdminDashboard = () => {
 
                 {/* Payment Status & Methods */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <CreditCard className="w-5 h-5 text-emerald-600" />
                       Payment Status (Last 30 Days)
@@ -788,7 +869,7 @@ const GymAdminDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <CreditCard className="w-5 h-5 text-orange-600" />
                       Payment Methods (Last 30 Days)
@@ -803,7 +884,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Member Status */}
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-cyan-600" />
                     Member Status Breakdown
@@ -820,7 +901,7 @@ const GymAdminDashboard = () => {
 
                 {/* Top Members & Expiring/Overdue */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <ArrowUpRight className="w-5 h-5 text-green-600" />
                       Top Members by Attendance
@@ -847,7 +928,7 @@ const GymAdminDashboard = () => {
                     )}
                   </div>
 
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <ArrowDownRight className="w-5 h-5 text-amber-600" />
                       Expiring Memberships & Overdue Fees
@@ -882,6 +963,54 @@ const GymAdminDashboard = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Trainer Performance */}
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                  <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
+                    <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white flex items-center gap-2">
+                      <Award className="w-5 h-5 text-amber-500" />
+                      Trainer Performance
+                    </h3>
+                  </div>
+                  {trainerPerformanceLoading ? (
+                    <div className="p-8 text-center text-gray-400">Loading…</div>
+                  ) : trainerPerformance.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400">No trainers yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-white/5">
+                          <tr>
+                            {['Trainer', 'Bookings', 'Completion', 'Cancellation', 'Members Served', 'Slips Assigned', 'Classes Taught'].map((h) => (
+                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                          {trainerPerformance.map((t) => (
+                            <tr key={t.trainerId} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                              <td className="px-6 py-4">
+                                <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{t.name}</p>
+                                <p className="text-xs text-gray-500">{t.email} · {t.specialization || 'Trainer'}</p>
+                              </td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">
+                                {t.bookings.total} total
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {t.bookings.byStatus.PENDING ?? 0} pending · {t.bookings.byStatus.CONFIRMED ?? 0} confirmed · {t.bookings.byStatus.COMPLETED ?? 0} done · {t.bookings.byStatus.CANCELLED ?? 0} cancelled
+                                </p>
+                              </td>
+                              <td className="px-6 py-4 font-semibold text-green-600">{(t.bookings.completionRate * 100).toFixed(0)}%</td>
+                              <td className="px-6 py-4 font-semibold text-red-500">{(t.bookings.cancellationRate * 100).toFixed(0)}%</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{t.bookings.distinctMembers}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{t.workoutSlips.assigned} <span className="text-xs text-gray-400">({t.workoutSlips.distinctMembers} members)</span></td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{t.classesTaught}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <div className="text-center py-12 text-gray-500">No analytics data available</div>
@@ -892,8 +1021,8 @@ const GymAdminDashboard = () => {
         {/* Members */}
         {activeTab === 'members' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h2 className="font-bold text-lg dark:text-white">Members ({members.length})</h2>
                 <div className="flex items-center gap-3">
                   <input
@@ -927,7 +1056,7 @@ const GymAdminDashboard = () => {
                           <td className="px-6 py-4">
                             {approvedBranches.length > 0 ? (
                               <select
-                                className="text-sm border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 bg-transparent text-gray-600 dark:text-gray-300"
+                                className="text-sm border border-[var(--color-border)] rounded-lg px-2 py-1 bg-transparent text-gray-600 dark:text-gray-300"
                                 value={m.branch?.id || ''}
                                 onChange={(e) => assignMemberBranch.mutate({ id: m.id, branchId: e.target.value })}
                               >
@@ -997,7 +1126,7 @@ const GymAdminDashboard = () => {
               )}
             </div>
 
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 max-w-3xl">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 max-w-3xl">
               <h3 className="font-bold text-lg dark:text-white mb-4">Add Member Manually</h3>
               <form
                 className="grid sm:grid-cols-2 gap-4"
@@ -1041,7 +1170,7 @@ const GymAdminDashboard = () => {
         {/* Membership Plans */}
         {activeTab === 'plans' && (
           <div className="grid lg:grid-cols-2 gap-6 items-start">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
               <h3 className="font-bold text-lg dark:text-white mb-4">{editingPlan ? 'Edit Plan' : 'Create Membership Plan'}</h3>
               <form
                 className="space-y-4"
@@ -1084,8 +1213,8 @@ const GymAdminDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center">
                 <h2 className="font-bold text-lg dark:text-white">Current Plans ({plans.length})</h2>
               </div>
               {plansLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : plans.length === 0 ? (
@@ -1130,7 +1259,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'memberships' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Create Membership</h3>
                 <form
                   className="space-y-4"
@@ -1204,8 +1333,8 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                <div className="px-6 py-4 border-b border-[var(--color-border)]">
                   <h2 className="font-bold text-lg dark:text-white">Memberships ({memberships.length})</h2>
                 </div>
                 {membershipsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : memberships.length === 0 ? (
@@ -1250,7 +1379,7 @@ const GymAdminDashboard = () => {
 
             {renewTarget && (
               <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRenewTarget(null)}>
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                   <h3 className="font-bold text-lg dark:text-white mb-1">Renew Membership</h3>
                   <p className="text-sm text-gray-500 mb-4">{renewTarget.member?.user?.username} — {renewTarget.plan?.name || 'Custom'}</p>
                   <div className="space-y-4">
@@ -1289,8 +1418,8 @@ const GymAdminDashboard = () => {
 
         {/* PT Bookings */}
         {activeTab === 'bookings' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">PT Bookings ({bookings.length})</h2>
             </div>
             {bookingsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : bookings.length === 0 ? (
@@ -1338,8 +1467,8 @@ const GymAdminDashboard = () => {
 
         {/* Notifications */}
         {activeTab === 'notifications' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center">
               <h2 className="font-bold text-lg dark:text-white">Notifications ({notifs?.unreadCount ?? 0} unread)</h2>
               <button onClick={() => markAllRead.mutate()} className="text-sm font-semibold text-[var(--color-primary)] hover:underline">
                 Mark all read
@@ -1371,26 +1500,26 @@ const GymAdminDashboard = () => {
         {activeTab === 'fees' && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Collected This Month</p>
                 <p className="text-2xl font-extrabold text-green-600">₹{feeStats.collectedThisMonth.toLocaleString('en-IN')}</p>
               </div>
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Collected</p>
                 <p className="text-2xl font-extrabold text-emerald-600">₹{feeStats.collected.toLocaleString('en-IN')}</p>
               </div>
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
                 <p className="text-2xl font-extrabold text-amber-500">₹{feeStats.pending.toLocaleString('en-IN')}</p>
               </div>
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Overdue</p>
                 <p className="text-2xl font-extrabold text-red-500">₹{feeStats.overdue.toLocaleString('en-IN')}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{feeStats.overdueCount} record{feeStats.overdueCount === 1 ? '' : 's'}</p>
               </div>
             </div>
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Record a Fee</h3>
                 <form
                   className="grid sm:grid-cols-2 gap-4"
@@ -1425,11 +1554,11 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex flex-wrap justify-between items-center gap-3">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
                   <h2 className="font-bold text-lg dark:text-white">Fee Records ({filteredFees.length})</h2>
                   <div className="flex items-center gap-2">
-                    <div className="flex rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
+                    <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
                       {['ALL', 'PENDING', 'PAID', 'OVERDUE'].map((s) => (
                         <button
                           key={s}
@@ -1496,7 +1625,7 @@ const GymAdminDashboard = () => {
 
             {markPaidTarget && (
               <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setMarkPaidTarget(null)}>
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                   <h3 className="font-bold text-lg dark:text-white mb-1">Mark Fee as Paid</h3>
                   <p className="text-sm text-gray-500 mb-4">{markPaidTarget.member?.user?.username} · ₹{markPaidTarget.amount.toLocaleString('en-IN')}</p>
                   <div className="space-y-4">
@@ -1549,7 +1678,7 @@ const GymAdminDashboard = () => {
                 {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
               </div>
             ) : !subscription?.hasSubscription ? (
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-10 text-center">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] p-10 text-center">
                 <Diamond className="w-10 h-10 text-[var(--color-primary)] mx-auto mb-4" />
                 <h3 className="font-bold text-lg dark:text-white mb-2">No active platform subscription</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
@@ -1574,7 +1703,7 @@ const GymAdminDashboard = () => {
                     ? Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
                     : null;
                   return (
-                    <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                    <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                       <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
@@ -1604,7 +1733,7 @@ const GymAdminDashboard = () => {
                   );
                 })()}
 
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4">Plan Usage & Limits</h3>
                   <div className="grid sm:grid-cols-2 gap-4">
                     {([
@@ -1635,8 +1764,8 @@ const GymAdminDashboard = () => {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                  <div className="px-6 py-4 border-b border-[var(--color-border)]">
                     <h2 className="font-bold text-lg dark:text-white">Billing History ({subscriptionInvoices.length})</h2>
                   </div>
                   {invoicesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : subscriptionInvoices.length === 0 ? (
@@ -1678,7 +1807,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'workouts' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Assign a Workout Slip</h3>
                 <form
                   className="space-y-4"
@@ -1726,8 +1855,8 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                <div className="px-6 py-4 border-b border-[var(--color-border)]">
                   <h2 className="font-bold text-lg dark:text-white">Workout Slips ({workouts.length})</h2>
                 </div>
                 {workoutsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : workouts.length === 0 ? (
@@ -1765,7 +1894,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'attendance' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Check-in</h3>
                 <form
                   className="space-y-4"
@@ -1796,8 +1925,8 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center gap-3">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center gap-3">
                   <h2 className="font-bold text-lg dark:text-white">Today's Attendance ({attendance.length})</h2>
                   <div className="flex items-center gap-3">
                     {branches.length > 0 && branchFilterSelect}
@@ -1830,7 +1959,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'staff' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Add Staff / Trainer</h3>
                 <form
                   className="space-y-4"
@@ -1890,7 +2019,7 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <h2 className="font-bold text-lg dark:text-white">Team ({staffData?.trainers.length || 0} trainers · {staffData?.staff.length || 0} staff)</h2>
                   {branches.length > 0 && branchFilterSelect}
@@ -1909,8 +2038,8 @@ const GymAdminDashboard = () => {
 
         {/* Enquiries */}
         {activeTab === 'enquiries' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Enquiries / Leads</h2>
             </div>
             {enquiriesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : (
@@ -1971,7 +2100,7 @@ const GymAdminDashboard = () => {
         {/* Notices / Announcements */}
         {activeTab === 'notices' && (
           <div className="grid lg:grid-cols-2 gap-6 items-start">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
               <h3 className="font-bold text-lg dark:text-white mb-4">{editingNotice ? 'Edit Notice' : 'Post Announcement'}</h3>
               <form
                 className="space-y-4"
@@ -2001,8 +2130,8 @@ const GymAdminDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--color-border)]">
                 <h2 className="font-bold text-lg dark:text-white">Announcements ({notices.length})</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Shown to members, trainers and staff on their dashboards.</p>
               </div>
@@ -2044,7 +2173,7 @@ const GymAdminDashboard = () => {
         {/* Branch Settings */}
         {activeTab === 'branch' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
               <div className="flex items-center justify-between gap-3 mb-6">
                 <div>
                   <h2 className="font-bold text-lg dark:text-white">Branches</h2>
@@ -2060,7 +2189,7 @@ const GymAdminDashboard = () => {
               ) : (
                 <div className="grid sm:grid-cols-2 gap-4 mb-6">
                   {branches.map((b) => (
-                    <div key={b.id} className={`rounded-xl border p-4 ${b.isActive ? 'border-gray-100 dark:border-white/10' : 'border-gray-100 dark:border-white/10 opacity-80'}`}>
+                    <div key={b.id} className={`rounded-2xl border p-4 ${b.isActive ? 'border-[var(--color-border)]' : 'border-[var(--color-border)] opacity-80'}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-bold text-[var(--color-deepgray)] dark:text-white flex items-center gap-2 flex-wrap">
@@ -2127,7 +2256,7 @@ const GymAdminDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8 max-w-2xl">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8 max-w-2xl">
               <h2 className="font-bold text-lg dark:text-white mb-6">Gym Settings</h2>
               <form
                 onSubmit={(e) => {
@@ -2180,22 +2309,22 @@ const GymAdminDashboard = () => {
         {/* Equipment Tab */}
         {activeTab === 'equipment' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
               <h2 className="font-bold text-lg dark:text-white mb-4">Equipment</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Equipment</p>
                   <p className="text-2xl font-extrabold text-[var(--color-primary)]">{equipment.length}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Good Condition</p>
                   <p className="text-2xl font-extrabold text-green-600">{equipment.filter((e: any) => e.condition === 'EXCELLENT' || e.condition === 'GOOD').length}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Needs Repair</p>
                   <p className="text-2xl font-extrabold text-amber-500">{equipment.filter((e: any) => e.condition === 'FAIR' || e.condition === 'POOR').length}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Value</p>
                   <p className="text-2xl font-extrabold text-blue-500">₹{equipment.reduce((s: number, e: any) => s + (e.purchaseCost || 0), 0).toLocaleString('en-IN')}</p>
                 </div>
@@ -2247,22 +2376,22 @@ const GymAdminDashboard = () => {
         {/* Referrals Tab */}
         {activeTab === 'referrals' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
               <h2 className="font-bold text-lg dark:text-white mb-4">Referral Program</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Referrals</p>
                   <p className="text-2xl font-extrabold text-[var(--color-primary)]">{referralStats?.totalReferrals || 0}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
                   <p className="text-2xl font-extrabold text-amber-500">{referralStats?.pendingReferrals || 0}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Completed</p>
                   <p className="text-2xl font-extrabold text-green-600">{referralStats?.completedReferrals || 0}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Rewards</p>
                   <p className="text-2xl font-extrabold text-blue-500">₹{(referralStats?.totalRewardValue || 0).toLocaleString('en-IN')}</p>
                 </div>
@@ -2316,7 +2445,7 @@ const GymAdminDashboard = () => {
         {/* Reports Tab */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
               <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
                 <h2 className="font-bold text-lg dark:text-white">Revenue & Growth Reports</h2>
                 <div className="flex gap-2">
@@ -2325,19 +2454,19 @@ const GymAdminDashboard = () => {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Collected</p>
                   <p className="text-2xl font-extrabold text-green-600">₹{fees.filter((f: any) => f.status === 'PAID').reduce((s: number, f: any) => s + f.amount, 0).toLocaleString('en-IN')}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Outstanding</p>
                   <p className="text-2xl font-extrabold text-amber-500">₹{fees.filter((f: any) => f.status !== 'PAID').reduce((s: number, f: any) => s + f.amount, 0).toLocaleString('en-IN')}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Members</p>
                   <p className="text-2xl font-extrabold text-[var(--color-primary)]">{members.length}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Active Plans</p>
                   <p className="text-2xl font-extrabold text-blue-500">{plans.filter((p) => p.isActive).length}</p>
                 </div>
@@ -2345,7 +2474,7 @@ const GymAdminDashboard = () => {
 
               <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-3">Monthly Fee Summary</h3>
               {monthlyRows.length === 0 ? (
-                <div className="h-32 bg-gray-50 dark:bg-white/5 rounded-xl border border-dashed border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-400">
+                <div className="h-32 bg-gray-50 dark:bg-white/5 rounded-xl border border-dashed border-[var(--color-border)] flex items-center justify-center text-gray-400">
                   No fee records to chart yet.
                 </div>
               ) : (

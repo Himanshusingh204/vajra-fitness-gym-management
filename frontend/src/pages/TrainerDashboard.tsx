@@ -73,9 +73,9 @@ const TrainerDashboard = () => {
   const mySlipCount = slips?.filter((s: any) => s.trainer?.user?.username === user?.username).length ?? 0;
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8 border-b border-gray-200 dark:border-white/10 pb-6">
+        <div className="mb-8 border-b border-[var(--color-border)] pb-6">
           <h1 className="text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-2">
             Trainer Portal
           </h1>
@@ -85,7 +85,7 @@ const TrainerDashboard = () => {
           </p>
         </div>
 
-        <div className="flex gap-2 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl w-fit flex-wrap">
+        <div className="flex gap-2 mb-8 bg-[var(--color-surface)] border border-[var(--color-border)] p-1 rounded-xl w-fit flex-wrap">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -104,22 +104,22 @@ const TrainerDashboard = () => {
 
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 stagger">
-            <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
               <Calendar className="w-8 h-8 text-[var(--color-primary)] mb-4" />
               <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Today's Sessions</p>
               <p className="text-3xl font-extrabold dark:text-white">{todayCount}</p>
             </div>
-            <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
               <Clock className="w-8 h-8 text-amber-500 mb-4" />
               <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Upcoming Sessions</p>
               <p className="text-3xl font-extrabold dark:text-white">{upcomingCount}</p>
             </div>
-            <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
               <Dumbbell className="w-8 h-8 text-purple-500 mb-4" />
               <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Slips Assigned</p>
               <p className="text-3xl font-extrabold dark:text-white">{mySlipCount}</p>
             </div>
-            <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-2xl border border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
               <CheckCircle className="w-8 h-8 text-green-500 mb-4" />
               <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Completed Sessions</p>
               <p className="text-3xl font-extrabold dark:text-white">{completedCount}</p>
@@ -128,8 +128,8 @@ const TrainerDashboard = () => {
         )}
 
         {activeTab === 'clients' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Members at {me?.trainerDetails?.gym?.name || 'your gym'}</h2>
             </div>
             {membersLoading ? (
@@ -167,8 +167,8 @@ const TrainerDashboard = () => {
 
         {activeTab === 'workouts' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--color-border)]">
                 <h2 className="font-bold text-lg dark:text-white">Create Workout Slip</h2>
               </div>
               <div className="p-6">
@@ -179,8 +179,8 @@ const TrainerDashboard = () => {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--color-border)]">
                 <h2 className="font-bold text-lg dark:text-white">All Workout Slips</h2>
               </div>
               {slipsLoading ? (
@@ -217,7 +217,7 @@ const TrainerDashboard = () => {
 
         {activeTab === 'progress' && (
           <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Select a member</label>
               <select
                 className="input-field bg-white! dark:bg-[#1a1a1a]! max-w-sm"
@@ -232,40 +232,40 @@ const TrainerDashboard = () => {
             </div>
 
             {!progressMemberId ? (
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-10 text-center text-gray-400">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] p-10 text-center text-gray-400">
                 Pick a member above to see their weight trend and measurement history.
               </div>
             ) : progressLoading ? (
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-10 text-center text-gray-400">Loading…</div>
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-10 text-center text-gray-400">Loading…</div>
             ) : !progress || progress.entries === 0 ? (
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-10 text-center text-gray-400">
+              <div className="bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] p-10 text-center text-gray-400">
                 This member hasn't logged any progress entries yet.
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Current Weight</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress.latest?.weight ?? '—'} kg</p>
                   </div>
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">BMI</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress.bmi ?? '—'}</p>
                   </div>
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Change Since Start</p>
                     <p className={`text-2xl font-extrabold ${(progress.weightChange ?? 0) <= 0 ? 'text-green-600' : 'text-amber-500'}`}>
                       {progress.weightChange != null ? `${progress.weightChange > 0 ? '+' : ''}${progress.weightChange} kg` : '—'}
                     </p>
                   </div>
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                  <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Entries Logged</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress.entries}</p>
                   </div>
                 </div>
 
                 {progress.logs.length >= 2 && (
-                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4">Weight Trend</h3>
                     <div className="h-64">
                       <LineChart
@@ -282,8 +282,8 @@ const TrainerDashboard = () => {
                   </div>
                 )}
 
-                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                  <div className="px-6 py-4 border-b border-[var(--color-border)]">
                     <h2 className="font-bold text-lg dark:text-white">Measurement History</h2>
                   </div>
                   <div className="overflow-x-auto">
@@ -314,15 +314,15 @@ const TrainerDashboard = () => {
         )}
 
         {activeTab === 'bookings' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Session Bookings</h2>
             </div>
             <div className="p-6">
               {bookingsLoading ? <div className="text-gray-400">Loading bookings...</div> : (
                 <div className="space-y-4">
                   {bookings?.map((b: any) => (
-                    <div key={b.id} className="p-5 rounded-2xl border border-gray-100 dark:border-white/10 bg-gray-50 dark:bg-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div key={b.id} className="p-5 rounded-2xl border border-[var(--color-border)] bg-gray-50 dark:bg-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div>
                         <h4 className="font-bold dark:text-white text-lg">{b.user?.username}</h4>
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1 font-medium">

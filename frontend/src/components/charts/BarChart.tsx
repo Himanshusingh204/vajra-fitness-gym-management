@@ -28,9 +28,9 @@ export const BarChart: React.FC<BarChartProps> = ({
       'var(--color-primary)',
       'var(--color-secondary)',
       'var(--color-accent)',
-      '#8b5cf6',
-      '#ec4899',
-      '#06b6d4',
+      'var(--color-primary-light)',
+      'var(--color-secondary-light)',
+      '#ff7b00',
     ],
   } = config;
 
@@ -261,7 +261,7 @@ export const BarChart: React.FC<BarChartProps> = ({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`w-full h-auto ${className}`}
+      className={`w-full h-full ${className}`}
       role="img"
       aria-label="Bar chart"
     />

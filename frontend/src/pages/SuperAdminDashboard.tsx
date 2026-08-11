@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, Users, Settings, BarChart3, CheckCircle, Clock,
   Plus, Pencil, Trash2, Search, Mail, FileText, Star, XCircle, Diamond, CreditCard,
-  DollarSign, AlertTriangle, MessageSquare, Archive, MapPinned
+  DollarSign, AlertTriangle, MessageSquare, Archive, MapPinned, Pin, Tag, FileCode
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { useThemeStore } from '../store/useThemeStore';
 import api, { downloadFile } from '../services/api';
 import { getPendingBranches, approveBranch, rejectBranch, type PendingBranch } from '../api/branch.api';
 
@@ -65,9 +66,11 @@ type User = {
   ownedGyms?: { name: string; isApproved: boolean }[];
 };
 
-type Faq = { id: string; question: string; answer: string; isActive: boolean };
+type Faq = { id: string; question: string; answer: string; category: string | null; isActive: boolean };
 
-type Testimonial = { id: string; name: string; role: string; content: string; rating: number; isActive: boolean };
+type Testimonial = { id: string; name: string; role: string; content: string; gymName: string | null; rating: number; featured: boolean; isActive: boolean };
+
+type SiteContent = { id: string; key: string; value: string; section: string | null; isActive: boolean };
 
 type Ticket = {
   id: string;
@@ -148,7 +151,7 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 const StatCard = ({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) => (
-  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 border border-gray-100 dark:border-white/10 shadow-sm">
+  <div className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)] shadow-sm">
     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{label}</p>
     <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
     {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
@@ -156,8 +159,8 @@ const StatCard = ({ label, value, sub, color }: { label: string; value: string |
 );
 
 const Panel = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
-  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-    <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
+  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+    <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap items-center justify-between gap-3">
       <h2 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white">{title}</h2>
       {action}
     </div>
@@ -174,6 +177,7 @@ const SuperAdminDashboard = () => {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [userSearch, setUserSearch] = useState('');
   const user = useAuthStore((s) => s.user);
+  const theme = useThemeStore((s) => s.theme);
   const qc = useQueryClient();
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
@@ -203,6 +207,12 @@ const SuperAdminDashboard = () => {
   const { data: testimonials = [], isLoading: testisLoading } = useQuery<Testimonial[]>({
     queryKey: ['admin-testimonials'],
     queryFn: () => api.get('/admin/cms/testimonials').then((r) => r.data),
+    refetchInterval: 60000,
+  });
+
+  const { data: siteContent = [], isLoading: siteContentLoading } = useQuery<SiteContent[]>({
+    queryKey: ['admin-site-content'],
+    queryFn: () => api.get('/admin/cms/site-content').then((r) => r.data),
     refetchInterval: 60000,
   });
 
@@ -246,14 +256,18 @@ const SuperAdminDashboard = () => {
     const subsData = data.map(d => d.subscriptions);
     const totalData = data.map(d => d.total);
     
+    const isDark = theme === 'dark';
+    const axisColor = isDark ? '#aaa' : '#888';
+    const legendTextColor = isDark ? '#e5e5e5' : '#333';
+
     const maxVal = Math.max(...totalData, ...feesData, ...subsData, 1);
     const padding = 40;
     const chartWidth = canvas.width - padding * 2;
     const chartHeight = canvas.height - padding * 2;
-    
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Draw grid lines
     ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)';
     ctx.lineWidth = 1;
@@ -263,16 +277,16 @@ const SuperAdminDashboard = () => {
       ctx.moveTo(padding, y);
       ctx.lineTo(canvas.width - padding, y);
       ctx.stroke();
-      
+
       // Y-axis labels
-      ctx.fillStyle = '#888';
+      ctx.fillStyle = axisColor;
       ctx.font = '11px system-ui';
       ctx.textAlign = 'right';
       ctx.fillText(`${Math.round((maxVal * (4 - i)) / 4).toLocaleString('en-IN')}`, padding - 10, y + 4);
     }
-    
+
     // Draw X-axis labels
-    ctx.fillStyle = '#888';
+    ctx.fillStyle = axisColor;
     ctx.font = '11px system-ui';
     ctx.textAlign = 'center';
     labels.forEach((label, i) => {
@@ -318,28 +332,28 @@ const SuperAdminDashboard = () => {
     };
     
     // Draw in order: total (background), fees, subscriptions
-    drawLine(totalData, 'rgba(16, 185, 129, 0.8)', 'rgba(16, 185, 129, 0.1)');
-    drawLine(feesData, 'rgba(99, 102, 241, 0.8)', 'rgba(99, 102, 241, 0.1)');
-    drawLine(subsData, 'rgba(245, 158, 11, 0.8)', 'rgba(245, 158, 11, 0.1)');
-    
+    drawLine(totalData, 'rgba(1, 50, 32, 0.8)', 'rgba(1, 50, 32, 0.1)');
+    drawLine(feesData, 'rgba(128, 0, 32, 0.8)', 'rgba(128, 0, 32, 0.1)');
+    drawLine(subsData, 'rgba(230, 99, 0, 0.8)', 'rgba(230, 99, 0, 0.1)');
+
     // Legend
     const legendItems = [
-      { label: 'Total Revenue', color: 'rgba(16, 185, 129, 0.8)' },
-      { label: 'Fees', color: 'rgba(99, 102, 241, 0.8)' },
-      { label: 'Subscriptions', color: 'rgba(245, 158, 11, 0.8)' }
+      { label: 'Total Revenue', color: 'rgba(1, 50, 32, 0.8)' },
+      { label: 'Fees', color: 'rgba(128, 0, 32, 0.8)' },
+      { label: 'Subscriptions', color: 'rgba(230, 99, 0, 0.8)' }
     ];
-    
+
     legendItems.forEach((item, i) => {
       const x = canvas.width - 180;
       const y = 20 + i * 20;
       ctx.fillStyle = item.color;
       ctx.fillRect(x, y, 12, 12);
-      ctx.fillStyle = '#333';
+      ctx.fillStyle = legendTextColor;
       ctx.font = '11px system-ui';
       ctx.textAlign = 'left';
       ctx.fillText(item.label, x + 18, y + 10);
     });
-  }, [analytics?.monthlyRevenueTrend, analyticsLoading]);
+  }, [analytics?.monthlyRevenueTrend, analyticsLoading, theme]);
 
   const approve = useMutation({
     mutationFn: (id: string) => api.put(`/admin/gyms/${id}/approve`),
@@ -409,11 +423,11 @@ const SuperAdminDashboard = () => {
     },
   });
 
-  const [faqForm, setFaqForm] = useState({ question: '', answer: '' });
+  const [faqForm, setFaqForm] = useState({ question: '', answer: '', category: '' });
   const [editingFaq, setEditingFaq] = useState<Faq | null>(null);
   const createFaq = useMutation({
     mutationFn: (data: typeof faqForm) => api.post('/admin/cms/faqs', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faqs'] }); setFaqForm({ question: '', answer: '' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-faqs'] }); setFaqForm({ question: '', answer: '', category: '' }); },
   });
   const updateFaq = useMutation({
     mutationFn: ({ id, ...data }: Faq) => api.put(`/admin/cms/faqs/${id}`, data),
@@ -424,11 +438,11 @@ const SuperAdminDashboard = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-faqs'] }),
   });
 
-  const [testiForm, setTestiForm] = useState({ name: '', role: '', content: '', rating: 5 });
+  const [testiForm, setTestiForm] = useState({ name: '', role: '', content: '', gymName: '', rating: 5, featured: false });
   const [editingTesti, setEditingTesti] = useState<Testimonial | null>(null);
   const createTesti = useMutation({
     mutationFn: (data: typeof testiForm) => api.post('/admin/cms/testimonials', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-testimonials'] }); setTestiForm({ name: '', role: '', content: '', rating: 5 }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-testimonials'] }); setTestiForm({ name: '', role: '', content: '', gymName: '', rating: 5, featured: false }); },
   });
   const updateTesti = useMutation({
     mutationFn: ({ id, ...data }: Testimonial) => api.put(`/admin/cms/testimonials/${id}`, data),
@@ -437,6 +451,21 @@ const SuperAdminDashboard = () => {
   const deleteTesti = useMutation({
     mutationFn: (id: string) => api.delete(`/admin/cms/testimonials/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-testimonials'] }),
+  });
+
+  const [siteContentForm, setSiteContentForm] = useState({ key: '', value: '', section: '', isActive: true });
+  const [editingSiteContent, setEditingSiteContent] = useState<SiteContent | null>(null);
+  const createSiteContent = useMutation({
+    mutationFn: (data: typeof siteContentForm) => api.post('/admin/cms/site-content', data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-site-content'] }); setSiteContentForm({ key: '', value: '', section: '', isActive: true }); },
+  });
+  const updateSiteContent = useMutation({
+    mutationFn: ({ id, ...data }: SiteContent) => api.put(`/admin/cms/site-content/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-site-content'] }); setEditingSiteContent(null); },
+  });
+  const deleteSiteContent = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/cms/site-content/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-site-content'] }),
   });
 
   const updateTicket = useMutation({
@@ -535,14 +564,14 @@ const SuperAdminDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-8">
           <h1 className="text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white">Platform Control</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Signed in as <strong>{user?.email}</strong></p>
         </div>
 
-        <div className="flex gap-2 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl w-fit flex-wrap" role="tablist" aria-label="Platform sections">
+        <div className="flex gap-2 mb-8 bg-[var(--color-surface)] border border-[var(--color-border)] p-1 rounded-xl w-fit flex-wrap" role="tablist" aria-label="Platform sections">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -849,7 +878,7 @@ const SuperAdminDashboard = () => {
 
         {/* ============ GYM EDITOR ============ */}
         {editingGymId && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 mt-6">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 mt-6">
             <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-4">Edit Gym Details</h3>
             <form
               className="grid sm:grid-cols-2 gap-4"
@@ -898,7 +927,7 @@ const SuperAdminDashboard = () => {
 
         {/* ============ DELETE GYM CONFIRMATION ============ */}
         {deletingGym && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border-2 border-red-200 dark:border-red-900/40 p-6 mt-6">
+          <div className="bg-[var(--color-surface)] rounded-2xl border-2 border-red-200 dark:border-red-900/40 p-6 mt-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5" />
@@ -978,7 +1007,7 @@ const SuperAdminDashboard = () => {
         {/* ============ REJECT BRANCH ============ */}
         {rejectingBranch && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejectingBranch(null)}>
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
               <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-1">Reject "{rejectingBranch.name}"?</h3>
               <p className="text-sm text-gray-500 mb-4">The gym owner will see this reason on their dashboard.</p>
               <label className="block text-sm mb-4">
@@ -1124,13 +1153,14 @@ const SuperAdminDashboard = () => {
         {activeTab === 'cms' && (
           <div className="space-y-8">
             <Panel title="FAQs" action={<span className="text-xs font-semibold text-gray-400">{faqs.length} items · shown on Help page</span>}>
-              <div className="p-6 border-b border-gray-100 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.03]">
+              <div className="p-6 border-b border-[var(--color-border)] bg-gray-50/60 dark:bg-white/[0.03]">
                 <form
-                  className="grid md:grid-cols-[1fr_1.4fr_auto] gap-3 items-start"
+                  className="grid md:grid-cols-[1fr_1.4fr_0.6fr_auto] gap-3 items-start"
                   onSubmit={(e) => { e.preventDefault(); createFaq.mutate(faqForm); }}
                 >
                   <input className="input-field" aria-label="FAQ question" placeholder="Question" value={faqForm.question} onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })} required />
                   <input className="input-field" aria-label="FAQ answer" placeholder="Answer" value={faqForm.answer} onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })} required />
+                  <input className="input-field" aria-label="FAQ category" placeholder="Category" value={faqForm.category} onChange={(e) => setFaqForm({ ...faqForm, category: e.target.value })} />
                   <button type="submit" className="btn-primary justify-center" disabled={createFaq.isPending}><Plus className="w-4 h-4" /> Add</button>
                 </form>
               </div>
@@ -1141,9 +1171,10 @@ const SuperAdminDashboard = () => {
                   {faqs.map((faq) => (
                     <div key={faq.id} className="px-6 py-4 flex items-start justify-between gap-4">
                       {editingFaq?.id === faq.id ? (
-                        <div className="flex-1 grid md:grid-cols-[1fr_1.4fr_auto] gap-3 items-start">
+                        <div className="flex-1 grid md:grid-cols-[1fr_1.4fr_0.6fr_auto] gap-3 items-start">
                           <input className="input-field text-sm" aria-label="FAQ question" defaultValue={faq.question} onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })} />
                           <input className="input-field text-sm" aria-label="FAQ answer" defaultValue={faq.answer} onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="FAQ category" placeholder="Category" defaultValue={faq.category ?? ''} onChange={(e) => setEditingFaq({ ...editingFaq, category: e.target.value })} />
                           <div className="flex gap-2">
                             <button onClick={() => updateFaq.mutate(editingFaq)} className="btn-primary text-sm px-4 py-2">Save</button>
                             <button onClick={() => setEditingFaq(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
@@ -1152,7 +1183,12 @@ const SuperAdminDashboard = () => {
                       ) : (
                         <>
                           <div>
-                            <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{faq.question}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{faq.question}</p>
+                              {faq.category && (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]"><Tag className="w-3 h-3" /> {faq.category}</span>
+                              )}
+                            </div>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{faq.answer}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -1174,7 +1210,7 @@ const SuperAdminDashboard = () => {
             </Panel>
 
             <Panel title="Testimonials" action={<span className="text-xs font-semibold text-gray-400">{testimonials.length} items</span>}>
-              <div className="p-6 border-b border-gray-100 dark:border-white/10 bg-gray-50/60 dark:bg-white/[0.03]">
+              <div className="p-6 border-b border-[var(--color-border)] bg-gray-50/60 dark:bg-white/[0.03]">
                 <form
                   className="grid md:grid-cols-2 gap-3"
                   onSubmit={(e) => { e.preventDefault(); createTesti.mutate(testiForm); }}
@@ -1182,6 +1218,11 @@ const SuperAdminDashboard = () => {
                   <input className="input-field" aria-label="Testimonial name" placeholder="Name" value={testiForm.name} onChange={(e) => setTestiForm({ ...testiForm, name: e.target.value })} required />
                   <input className="input-field" aria-label="Testimonial role" placeholder="Role (e.g. Gym Owner, Pro Trainer)" value={testiForm.role} onChange={(e) => setTestiForm({ ...testiForm, role: e.target.value })} required />
                   <textarea className="input-field md:col-span-2" rows={2} aria-label="Testimonial content" placeholder="Testimonial content" value={testiForm.content} onChange={(e) => setTestiForm({ ...testiForm, content: e.target.value })} required />
+                  <input className="input-field" aria-label="Testimonial gym name" placeholder="Gym name" value={testiForm.gymName} onChange={(e) => setTestiForm({ ...testiForm, gymName: e.target.value })} />
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300">
+                    <input type="checkbox" checked={testiForm.featured} onChange={(e) => setTestiForm({ ...testiForm, featured: e.target.checked })} />
+                    Featured
+                  </label>
                   <div className="flex items-center gap-4 md:col-span-2">
                     <label className="text-sm font-semibold text-gray-600 dark:text-gray-300">Rating:</label>
                     <div className="flex gap-1">
@@ -1200,12 +1241,17 @@ const SuperAdminDashboard = () => {
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
                   {testimonials.map((t) => (
-                    <div key={t.id} className="rounded-xl border border-gray-100 dark:border-white/10 p-4 bg-gray-50/50 dark:bg-white/[0.03]">
+                    <div key={t.id} className="rounded-2xl border border-[var(--color-border)] p-4 bg-gray-50/50 dark:bg-white/[0.03]">
                       {editingTesti?.id === t.id ? (
                         <div className="space-y-2">
                           <input className="input-field text-sm" aria-label="Testimonial name" defaultValue={t.name} onChange={(e) => setEditingTesti({ ...editingTesti, name: e.target.value })} />
                           <input className="input-field text-sm" aria-label="Testimonial role" defaultValue={t.role} onChange={(e) => setEditingTesti({ ...editingTesti, role: e.target.value })} />
                           <textarea className="input-field text-sm" rows={2} aria-label="Testimonial content" defaultValue={t.content} onChange={(e) => setEditingTesti({ ...editingTesti, content: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="Testimonial gym name" placeholder="Gym name" defaultValue={t.gymName ?? ''} onChange={(e) => setEditingTesti({ ...editingTesti, gymName: e.target.value })} />
+                          <label className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300">
+                            <input type="checkbox" checked={editingTesti.featured} onChange={(e) => setEditingTesti({ ...editingTesti, featured: e.target.checked })} />
+                            Featured
+                          </label>
                           <div className="flex gap-2">
                             <button onClick={() => updateTesti.mutate(editingTesti)} className="btn-primary text-sm px-4 py-2">Save</button>
                             <button onClick={() => setEditingTesti(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
@@ -1213,17 +1259,79 @@ const SuperAdminDashboard = () => {
                         </div>
                       ) : (
                         <>
-                          <div className="flex gap-1 mb-2">
-                            {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex gap-1">
+                              {[...Array(t.rating)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
+                            </div>
+                            {t.featured && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"><Pin className="w-3 h-3" /> Featured</span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-700 dark:text-gray-300 italic">"{t.content}"</p>
                           <div className="mt-3 flex items-center justify-between">
-                            <p className="text-sm font-bold text-[var(--color-deepgray)] dark:text-white">{t.name} <span className="font-medium text-xs text-gray-500">· {t.role}</span></p>
+                            <p className="text-sm font-bold text-[var(--color-deepgray)] dark:text-white">{t.name} <span className="font-medium text-xs text-gray-500">· {t.role}{t.gymName ? ` · ${t.gymName}` : ''}</span></p>
                             <div className="flex items-center gap-1">
                               <button onClick={() => updateTesti.mutate({ ...t, isActive: !t.isActive })} className={`text-xs font-bold px-2 py-1 rounded-full ${t.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}>{t.isActive ? 'Active' : 'Hidden'}</button>
                               <button onClick={() => setEditingTesti(t)} aria-label={`Edit testimonial by ${t.name}`} className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--color-primary)]"><Pencil className="w-3.5 h-3.5" /></button>
                               <button onClick={() => deleteTesti.mutate(t.id)} aria-label={`Delete testimonial by ${t.name}`} className="p-1.5 rounded-lg text-gray-500 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
+
+            <Panel title="Site Content" action={<span className="text-xs font-semibold text-gray-400">{siteContent.length} entries</span>}>
+              <div className="p-6 border-b border-[var(--color-border)] bg-gray-50/60 dark:bg-white/[0.03]">
+                <form
+                  className="grid md:grid-cols-[0.8fr_1.4fr_0.6fr_auto] gap-3 items-start"
+                  onSubmit={(e) => { e.preventDefault(); createSiteContent.mutate(siteContentForm); }}
+                >
+                  <input className="input-field" aria-label="Site content key" placeholder="Key" value={siteContentForm.key} onChange={(e) => setSiteContentForm({ ...siteContentForm, key: e.target.value })} required />
+                  <textarea className="input-field" rows={1} aria-label="Site content value" placeholder="Value" value={siteContentForm.value} onChange={(e) => setSiteContentForm({ ...siteContentForm, value: e.target.value })} required />
+                  <input className="input-field" aria-label="Site content section" placeholder="Section" value={siteContentForm.section} onChange={(e) => setSiteContentForm({ ...siteContentForm, section: e.target.value })} />
+                  <button type="submit" className="btn-primary justify-center" disabled={createSiteContent.isPending}><Plus className="w-4 h-4" /> Add</button>
+                </form>
+              </div>
+              {siteContentLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : siteContent.length === 0 ? (
+                <EmptyState text="No site content entries yet. Add your first one above." />
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-white/5">
+                  {siteContent.map((c) => (
+                    <div key={c.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                      {editingSiteContent?.id === c.id ? (
+                        <div className="flex-1 grid md:grid-cols-[0.8fr_1.4fr_0.6fr_auto] gap-3 items-start">
+                          <input className="input-field text-sm" aria-label="Site content key" defaultValue={c.key} onChange={(e) => setEditingSiteContent({ ...editingSiteContent, key: e.target.value })} />
+                          <textarea className="input-field text-sm" rows={1} aria-label="Site content value" defaultValue={c.value} onChange={(e) => setEditingSiteContent({ ...editingSiteContent, value: e.target.value })} />
+                          <input className="input-field text-sm" aria-label="Site content section" defaultValue={c.section ?? ''} onChange={(e) => setEditingSiteContent({ ...editingSiteContent, section: e.target.value })} />
+                          <div className="flex gap-2">
+                            <button onClick={() => updateSiteContent.mutate(editingSiteContent)} className="btn-primary text-sm px-4 py-2">Save</button>
+                            <button onClick={() => setEditingSiteContent(null)} className="btn-outline text-sm px-4 py-2">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-mono text-sm font-semibold text-[var(--color-deepgray)] dark:text-white">{c.key}</p>
+                              {c.section && (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]"><FileCode className="w-3 h-3" /> {c.section}</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 break-words">{c.value}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => updateSiteContent.mutate({ ...c, isActive: !c.isActive })}
+                              className={`text-xs font-bold px-2.5 py-1 rounded-full ${c.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}
+                            >
+                              {c.isActive ? 'Active' : 'Hidden'}
+                            </button>
+                            <button onClick={() => setEditingSiteContent(c)} aria-label={`Edit site content: ${c.key}`} className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><Pencil className="w-4 h-4" /></button>
+                            <button onClick={() => deleteSiteContent.mutate(c.id)} aria-label={`Delete site content: ${c.key}`} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         </>
                       )}
@@ -1274,7 +1382,7 @@ const SuperAdminDashboard = () => {
                                 className={`text-xs font-semibold px-2 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
                                   t.status === s
                                     ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                                    : 'border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]'
+                                    : 'border-[var(--color-border)] text-gray-600 dark:text-gray-300 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]'
                                 }`}
                               >
                                 {s.replace('_', ' ')}

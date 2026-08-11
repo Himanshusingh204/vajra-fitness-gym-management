@@ -604,13 +604,16 @@ model Notice {
 // =====================================================================
 
 model FAQ {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   question  String
   answer    String
-  isActive  Boolean  @default(true)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  category  String?   // GENERAL, BILLING, MEMBERSHIP, BOOKING, TECH, etc.
+  isActive  Boolean   @default(true)
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([isActive, order])
 }
 
 model Testimonial {
@@ -619,10 +622,30 @@ model Testimonial {
   role      String
   content   String
   imageUrl  String?
+  gymName   String?  // originating gym for credibility context
   rating    Int      @default(5)
+  featured  Boolean  @default(false) // pinned to the public homepage
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([isActive, featured])
+}
+
+// Keyed site content rendered on the public website (hero, features, pricing,
+// announcement banners, etc.). `value` holds plain text or a JSON string;
+// `section` groups entries for the UI. Managed by Super Admins in the CMS tab.
+model SiteContent {
+  id        String   @id @default(uuid())
+  key       String   @unique // e.g. hero_title, hero_subtitle, announcement, pricing_banner
+  value     String   @default("")
+  section   String?  // HERO, FEATURES, PRICING, ABOUT, FOOTER, ANNOUNCEMENT, etc.
+  isActive  Boolean  @default(true)
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 // =====================================================================

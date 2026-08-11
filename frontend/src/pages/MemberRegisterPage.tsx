@@ -78,7 +78,7 @@ const MemberRegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen pt-28 pb-20 bg-[var(--color-base)] dark:bg-[#0d0d0d] px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen pt-28 pb-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
         <div className="max-w-2xl mb-10">
           <span className="eyebrow bg-[var(--color-primary)]/10! text-[var(--color-primary)]! border-[var(--color-primary)]/20!">
