@@ -2,6 +2,10 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# argon2 compiles a native addon via node-gyp at install time; alpine needs these.
+# openssl silences Prisma's engine-detection warning during `prisma generate`.
+RUN apk add --no-cache python3 make g++ openssl
+
 COPY package*.json ./
 RUN npm ci
 
@@ -15,13 +19,18 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# argon2 recompiles its native addon here too since this is a fresh `npm ci`.
+# openssl is required at runtime for Prisma's query engine on alpine/musl.
+RUN apk add --no-cache python3 make g++ openssl
+
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/prisma ./prisma
 # Production dependencies only (keeps the image small and the attack surface low),
-# then regenerate the Prisma engine for this platform.
+# then regenerate the Prisma engine for this platform. Needs prisma/schema.prisma
+# already in place (copied above), and must run before dev deps are dropped.
 RUN npm ci --omit=dev && npx prisma generate
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
 
 # Run as an unprivileged user (no root in the container).
 USER node
