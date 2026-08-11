@@ -76,35 +76,18 @@ const STEPS = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    name: 'Rajesh Kumar',
-    role: 'Owner, Fitness First Jodhpur',
-    initials: 'RK',
-    content: 'Vajra Fitness transformed how we run our gym. The automated fee reminders alone increased our monthly revenue by 15%.',
-    rating: 5,
-  },
-  {
-    name: 'Priya Sharma',
-    role: 'Pro Trainer',
-    initials: 'PS',
-    content: 'Assigning workout slips to my clients through the app saves me hours every week. My clients love the professional experience.',
-    rating: 5,
-  },
-  {
-    name: 'Amit Singh',
-    role: 'Owner, Iron Core Jaipur',
-    initials: 'AS',
-    content: 'The Super Admin dashboard gives me a bird\'s-eye view of all my 3 branches simultaneously. Highly recommended for scaling businesses.',
-    rating: 5,
-  },
-];
-
-type HomeTestimonial = (typeof TESTIMONIALS)[number] & { imageUrl?: string | null };
+type HomeTestimonial = {
+  name: string;
+  role: string;
+  initials: string;
+  content: string;
+  rating: number;
+  imageUrl?: string | null;
+};
 
 const HomePage = () => {
   usePageMeta(undefined, undefined, '/');
-  const [testimonials, setTestimonials] = useState<HomeTestimonial[]>(TESTIMONIALS);
+  const [testimonials, setTestimonials] = useState<HomeTestimonial[]>([]);
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [plans, setPlans] = useState<SaaSPlan[]>([]);
@@ -174,21 +157,21 @@ const HomePage = () => {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--color-primary)] opacity-75 animate-ping" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-primary)]" />
               </span>
-              Vajra Fitness Platform 2.0 is Live
+              Now onboarding gyms across India
             </span>
           </Reveal>
 
           <Reveal delay={100}>
             <h1 className="display mt-8 text-5xl sm:text-6xl md:text-8xl leading-[0.95]">
-              The Ultimate OS for<br />
-              <span className="text-gradient animate-gradient-x">Modern Gyms</span>
+              Run Your Gym.<br />
+              <span className="text-gradient animate-gradient-x">Skip the Spreadsheets.</span>
             </h1>
           </Reveal>
 
           <Reveal delay={220}>
             <p className="mt-7 text-lg md:text-2xl text-[var(--color-muted)] max-w-3xl mx-auto leading-relaxed">
-              Manage members, automate payments, assign workout slips, and scale your fitness
-              business with enterprise-grade tools built for India.
+              Manage members, automate fee reminders, assign workout slips, and track attendance
+              from one dashboard — built for gyms in India.
             </p>
           </Reveal>
 
@@ -298,7 +281,7 @@ const HomePage = () => {
           <div className="flex flex-col lg:flex-row items-center gap-16">
             <Reveal variant="left" className="flex-1 w-full">
               <span className="eyebrow">How it works</span>
-              <h2 className="section-title mt-4">Seamless Onboarding Experience</h2>
+              <h2 className="section-title mt-4">How Gyms Get Started</h2>
 
               <div className="mt-10 space-y-0">
                 {STEPS.map((step, i) => (
@@ -334,8 +317,8 @@ const HomePage = () => {
                   <TrendingUp className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="font-extrabold text-lg text-[var(--color-deepgray)] dark:text-white leading-tight">+15% revenue</p>
-                  <p className="text-xs font-semibold text-[var(--color-muted)]">Average after automation</p>
+                  <p className="font-extrabold text-lg text-[var(--color-deepgray)] dark:text-white leading-tight">Automated fee reminders</p>
+                  <p className="text-xs font-semibold text-[var(--color-muted)]">Fewer overdue payments to chase</p>
                 </div>
               </div>
             </Reveal>
@@ -427,12 +410,13 @@ const HomePage = () => {
       {/* ============================================================
           7. TESTIMONIALS
           ============================================================ */}
+      {testimonials.length > 0 && (
       <section className="section-pad bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="max-w-3xl mx-auto text-center mb-16">
             <span className="eyebrow">Testimonials</span>
             <h2 className="section-title mt-4">
-              {!statsLoading && stats && stats.gyms > 0 ? `Trusted by ${stats.gyms}+ Gyms` : 'Trusted by Gyms Across India'}
+              {!statsLoading && stats && stats.gyms > 0 ? `Trusted by ${stats.gyms}+ Gyms` : 'What Gym Owners Say'}
             </h2>
             <p className="section-lead">See what fitness business owners are saying about Vajra Fitness.</p>
           </Reveal>
@@ -468,6 +452,7 @@ const HomePage = () => {
           </div>
         </div>
       </section>
+      )}
 
       {/* ============================================================
           8. CALL TO ACTION
@@ -483,8 +468,7 @@ const HomePage = () => {
               Ready to upgrade your Gym?
             </h2>
             <p className="text-xl text-gray-300 mb-10 max-w-2xl mx-auto">
-              Join the fastest growing network of digital gyms in India. Start your 14-day free
-              trial today, no credit card required.
+              Start your 14-day free trial today — no credit card required.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Link to="/register" className="btn-accent px-10! py-4! text-lg">

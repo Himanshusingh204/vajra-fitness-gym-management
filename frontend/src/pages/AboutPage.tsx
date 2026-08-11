@@ -10,9 +10,9 @@ import { getPublicStats } from '../api/content.api';
 
 const VALUES = [
   { title: 'Member First', text: 'Every decision starts with what makes gym owners and members more successful.', icon: HeartHandshake },
-  { title: 'Relentless Execution', text: 'We ship fast, measure everything, and improve continuously.', icon: Rocket },
-  { title: 'Trust & Security', text: 'Bank-grade encryption, Indian data residency, and zero compromise.', icon: ShieldCheck },
-  { title: 'Data Driven', text: 'Analytics and insights power every workflow in the platform.', icon: TrendingUp },
+  { title: 'Ship & Iterate', text: 'We release improvements regularly based on what gym owners actually ask for.', icon: Rocket },
+  { title: 'Trust & Security', text: 'Passwords hashed with argon2, data encrypted in transit, no data sold to third parties.', icon: ShieldCheck },
+  { title: 'Data Driven', text: 'Attendance, revenue, and retention reports built into every gym\'s dashboard.', icon: TrendingUp },
 ];
 
 const FAQS = [
@@ -98,7 +98,7 @@ const AboutPage = () => {
     return () => { active = false; };
   }, []);
 
-  const gymCountLabel = gymCount && gymCount > 0 ? `${gymCount}+` : 'growing numbers of';
+  const gymCountLabel = gymCount && gymCount > 0 ? `${gymCount}+` : 'a growing number of';
 
   return (
     <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
@@ -119,9 +119,9 @@ const AboutPage = () => {
           </Reveal>
           <Reveal delay={200}>
             <p className="section-lead mt-6 text-lg md:text-xl text-[var(--color-muted)]!">
-              India's leading SaaS platform built exclusively for gym owners and fitness professionals.
-              We power {gymCountLabel} gyms with automated payments, smart attendance, and digital workout tracking —
-              so you can focus on your clients' health, not spreadsheets.
+              A SaaS platform built for gym owners and fitness professionals in India.
+              We power {gymCountLabel} gyms with automated payments, attendance tracking, and digital
+              workout plans — so you can focus on your members, not spreadsheets.
             </p>
           </Reveal>
           <Reveal delay={300} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -151,7 +151,7 @@ const AboutPage = () => {
               </p>
               <ul className="mt-8 space-y-3">
                 {[
-                  'Enterprise-grade security with Indian data residency',
+                  'Passwords hashed with argon2, data encrypted in transit (TLS 1.3)',
                   'Purpose-built for the Indian fitness market',
                   'Multi-branch management with role-based access',
                 ].map((item) => (
@@ -192,8 +192,8 @@ const AboutPage = () => {
                 </div>
                 <h3 className="text-2xl font-extrabold mb-3">Our Mission</h3>
                 <p className="text-[var(--color-muted)] leading-relaxed">
-                  To democratize enterprise-grade gym management technology for fitness centers of
-                  all sizes across India.
+                  To give gyms of any size — from a single studio to a multi-branch chain — the same
+                  membership, payment, and attendance tools without the enterprise price tag.
                 </p>
               </div>
             </Reveal>
@@ -204,8 +204,8 @@ const AboutPage = () => {
                 </div>
                 <h3 className="text-2xl font-extrabold mb-3">Our Vision</h3>
                 <p className="text-[var(--color-muted)] leading-relaxed">
-                  A connected fitness ecosystem where every gym operates efficiently and every member
-                  achieves their goals through data-driven insights.
+                  A single dashboard where gym owners can see every branch's members, revenue, and
+                  attendance at a glance, instead of piecing it together from registers and Excel.
                 </p>
               </div>
             </Reveal>
@@ -240,7 +240,7 @@ const AboutPage = () => {
                 {[
                   { icon: Briefcase, label: 'Remote-first', text: 'Work from anywhere in India' },
                   { icon: Users, label: 'Great team', text: 'Learn from the best operators' },
-                  { icon: Rocket, label: 'Fast growth', text: 'Own real product impact' },
+                  { icon: Rocket, label: 'Real ownership', text: 'Ship features gym owners actually use' },
                   { icon: HeartHandshake, label: 'Wellbeing', text: 'Free gym + health benefits' },
                 ].map((p) => (
                   <div key={p.label} className="card-hover p-5!">
