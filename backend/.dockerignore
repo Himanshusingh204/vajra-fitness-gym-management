@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log*
+
+.env
+.env.*
+!.env.example
+
+dist
+generated/prisma
+
+.git
+.gitignore
+
+*.md
+tests
+coverage
