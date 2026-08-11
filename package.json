@@ -1,0 +1,12 @@
+{
+  "name": "vajra-fitness-root",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=frontend && npm run build --workspace=backend && cp -r frontend/dist dist",
+    "vercel-build": "npm run build"
+  }
+}
