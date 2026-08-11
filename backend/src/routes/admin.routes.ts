@@ -3,6 +3,7 @@ import {
   getGyms,
   approveGym,
   suspendGym,
+  deleteGym,
   getPlatformAnalytics,
   getUsers,
   getFaqs,
@@ -19,10 +20,12 @@ import {
   setUserActive,
   updateGymProfile,
   getAllFees,
+  getPlatformMessages,
+  updatePlatformMessage,
 } from '../controllers/admin.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { userStatusSchema, faqSchema, updateFaqSchema, testimonialSchema, updateTestimonialSchema, ticketAdminSchema } from '../utils/validators';
+import { userStatusSchema, faqSchema, updateFaqSchema, testimonialSchema, updateTestimonialSchema, ticketAdminSchema, gymIdParams, userIdParams, idParams, faqIdParams, testimonialIdParams } from '../utils/validators';
 
 const router = Router();
 
@@ -34,25 +37,28 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 router.use(authenticate, authorize(['SUPER_ADMIN']));
 
 router.get('/gyms', asyncHandler(getGyms));
-router.put('/gyms/:gymId/approve', asyncHandler(approveGym));
-router.put('/gyms/:gymId/suspend', asyncHandler(suspendGym));
-router.put('/gyms/:gymId', asyncHandler(updateGymProfile));
+router.put('/gyms/:gymId/approve', validate(gymIdParams, ['params']), asyncHandler(approveGym));
+router.put('/gyms/:gymId/suspend', validate(gymIdParams, ['params']), asyncHandler(suspendGym));
+router.put('/gyms/:gymId', validate(gymIdParams, ['params']), asyncHandler(updateGymProfile));
+router.delete('/gyms/:gymId', validate(gymIdParams, ['params']), asyncHandler(deleteGym));
 router.get('/fees', asyncHandler(getAllFees));
+router.get('/messages', asyncHandler(getPlatformMessages));
+router.put('/messages/:id', validate(idParams, ['params']), asyncHandler(updatePlatformMessage));
 router.get('/analytics', asyncHandler(getPlatformAnalytics));
 router.get('/users', asyncHandler(getUsers));
-router.put('/users/:id/status', validate(userStatusSchema), asyncHandler(setUserActive));
+router.put('/users/:id/status', validate(userIdParams, ['params']), validate(userStatusSchema), asyncHandler(setUserActive));
 router.get('/support/tickets', asyncHandler(getSupportTickets));
-router.put('/support/tickets/:id', validate(ticketAdminSchema), asyncHandler(updateSupportTicket));
+router.put('/support/tickets/:id', validate(idParams, ['params']), validate(ticketAdminSchema), asyncHandler(updateSupportTicket));
 router.get('/audit-logs', asyncHandler(getAuditLogs));
 
 router.get('/cms/faqs', asyncHandler(getFaqs));
 router.post('/cms/faqs', validate(faqSchema), asyncHandler(createFaq));
-router.put('/cms/faqs/:id', validate(updateFaqSchema), asyncHandler(updateFaq));
-router.delete('/cms/faqs/:id', asyncHandler(deleteFaq));
+router.put('/cms/faqs/:id', validate(faqIdParams, ['params']), validate(updateFaqSchema), asyncHandler(updateFaq));
+router.delete('/cms/faqs/:id', validate(faqIdParams, ['params']), asyncHandler(deleteFaq));
 
 router.get('/cms/testimonials', asyncHandler(getTestimonials));
 router.post('/cms/testimonials', validate(testimonialSchema), asyncHandler(createTestimonial));
-router.put('/cms/testimonials/:id', validate(updateTestimonialSchema), asyncHandler(updateTestimonial));
-router.delete('/cms/testimonials/:id', asyncHandler(deleteTestimonial));
+router.put('/cms/testimonials/:id', validate(testimonialIdParams, ['params']), validate(updateTestimonialSchema), asyncHandler(updateTestimonial));
+router.delete('/cms/testimonials/:id', validate(testimonialIdParams, ['params']), asyncHandler(deleteTestimonial));
 
 export default router;

@@ -36,7 +36,7 @@ export const getGymBranding = async (req: Request, res: Response) => {
   try {
     const sub = String(req.query.subdomain || '').trim().toLowerCase();
     const domain = String(req.query.domain || '').trim().toLowerCase();
-    const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+    const host = String(req.headers.host || '').split(':')[0]!.toLowerCase();
 
     const base = (() => {
       try { return new URL(FRONTEND_URL).hostname.toLowerCase(); } catch { return ''; }

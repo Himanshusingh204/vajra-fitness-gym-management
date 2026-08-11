@@ -34,6 +34,20 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Verify a category/supplier belongs to the gym before linking it to a product,
+// otherwise a GYM_ADMIN could create cross-tenant FK references.
+const assertLinkedToGym = async (gymId: string, categoryId?: string | null, supplierId?: string | null): Promise<string | null> => {
+  if (categoryId) {
+    const cat = await prisma.productCategory.findFirst({ where: { id: categoryId, gymId }, select: { id: true } });
+    if (!cat) return 'Category does not belong to this gym';
+  }
+  if (supplierId) {
+    const sup = await prisma.supplier.findFirst({ where: { id: supplierId, gymId }, select: { id: true } });
+    if (!sup) return 'Supplier does not belong to this gym';
+  }
+  return null;
+};
+
 // Create a product
 export const createProduct = async (req: AuthRequest, res: Response) => {
   try {
@@ -45,6 +59,9 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
     if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
       return res.status(403).json({ error: 'Unauthorized' });
     }
+
+    const linkError = await assertLinkedToGym(gymId, categoryId, supplierId);
+    if (linkError) return res.status(400).json({ error: linkError });
 
     const product = await prisma.product.create({
       data: {
@@ -92,6 +109,9 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
     }
 
     const { name, sku, description, purchasePrice, sellingPrice, stock, minimumStock, expiryDate, batchNumber, categoryId, supplierId } = req.body;
+
+    const linkError = await assertLinkedToGym(product.gymId, categoryId, supplierId);
+    if (linkError) return res.status(400).json({ error: linkError });
 
     const updated = await prisma.product.update({
       where: { id },

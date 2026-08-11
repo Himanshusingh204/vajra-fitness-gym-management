@@ -30,3 +30,8 @@ export const createProgressLog = async (data: {
   const response = await api.post<ProgressLog>('/progress', data);
   return response.data;
 };
+
+export const getMemberProgress = async (memberId: string) => {
+  const response = await api.get<ProgressSummary>(`/progress/member/${memberId}`);
+  return response.data;
+};

@@ -3,12 +3,19 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
 
-// Public: list all active trainers (with their gym) so a member can pick one
-export const listTrainers = async (_req: AuthRequest, res: Response) => {
+// Public: list active trainers at a specific approved gym so a member can pick one.
+// The gymId is required — an anonymous caller must never see trainers from every
+// tenant at once.
+export const listTrainers = async (req: AuthRequest, res: Response) => {
   try {
-    const { gymId } = _req.query as { gymId?: string };
+    const { gymId } = req.query as { gymId?: string };
+    if (!gymId) return res.status(400).json({ error: 'gymId query parameter is required' });
+
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { isApproved: true } });
+    if (!gym || !gym.isApproved) return res.status(404).json({ error: 'Gym not found' });
+
     const trainers = await prisma.trainerDetails.findMany({
-      where: { ...(gymId ? { gymId, gym: { isApproved: true } } : { gym: { isApproved: true } }) },
+      where: { gymId, gym: { isApproved: true } },
       include: {
         user: { select: { id: true, username: true } },
         gym: { select: { id: true, name: true, city: true } },

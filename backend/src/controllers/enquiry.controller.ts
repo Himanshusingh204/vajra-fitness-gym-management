@@ -90,21 +90,17 @@ export const handleContactForm = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name, email and message are required.' });
     }
 
-    // Store as a general enquiry under the system — gymId left as a sentinel
-    const firstGym = await prisma.gym.findFirst();
-    if (!firstGym) {
-      return res.status(201).json({ message: 'Message received. We will get back to you soon.' });
-    }
-
-    await prisma.enquiry.create({
+    // Contact-form messages are addressed to the platform, NOT to a specific
+    // gym. Store them in the dedicated non-tenant PlatformMessage model so an
+    // anonymous submission can never pollute a tenant's enquiry pipeline.
+    await prisma.platformMessage.create({
       data: {
-        gymId: firstGym.id,
         name,
-        phone: phone || 'N/A',
+        phone: phone || null,
         email,
-        notes: `Subject: ${subject || 'General'} — ${message}`,
-        status: 'PENDING',
-        date: new Date(),
+        subject: subject || null,
+        message,
+        status: 'NEW',
       },
     });
     res.status(201).json({ message: 'Message received. We will get back to you soon.' });

@@ -5,6 +5,7 @@ import {
 } from '../controllers/class.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { gymIdParams, idParams, classIdParams } from '../utils/validators';
 import { z } from 'zod';
 
 const router = Router();
@@ -27,18 +28,18 @@ const classSchema = z.object({
 });
 
 // Public: list classes for a gym
-router.get('/gym/:gymId', asyncHandler(getClasses));
+router.get('/gym/:gymId', validate(gymIdParams, ['params']), asyncHandler(getClasses));
 
 // Gym Admin: manage classes
-router.post('/gym/:gymId', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(classSchema), asyncHandler(createClass));
-router.put('/:id', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(classSchema.partial()), asyncHandler(updateClass));
-router.delete('/:id', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), asyncHandler(deleteClass));
+router.post('/gym/:gymId', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(gymIdParams, ['params']), validate(classSchema), asyncHandler(createClass));
+router.put('/:id', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(idParams, ['params']), validate(classSchema.partial()), asyncHandler(updateClass));
+router.delete('/:id', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(deleteClass));
 
 // Gym Admin: view bookings for a class
-router.get('/:classId/bookings', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), asyncHandler(getClassBookings));
+router.get('/:classId/bookings', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(classIdParams, ['params']), asyncHandler(getClassBookings));
 
 // Member: book/cancel class
-router.post('/:classId/book', authenticate, authorize(['MEMBER']), asyncHandler(bookClass));
-router.delete('/bookings/:id', authenticate, authorize(['MEMBER', 'GYM_ADMIN', 'SUPER_ADMIN']), asyncHandler(cancelClassBooking));
+router.post('/:classId/book', authenticate, authorize(['MEMBER']), validate(classIdParams, ['params']), asyncHandler(bookClass));
+router.delete('/bookings/:id', authenticate, authorize(['MEMBER', 'GYM_ADMIN', 'SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(cancelClassBooking));
 
 export default router;

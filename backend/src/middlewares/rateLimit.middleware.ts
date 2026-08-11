@@ -37,3 +37,25 @@ export const publicWriteLimiter = isTest ? bypass : rateLimit({
   store: new RedisRateLimitStore('publicWrite'),
   message: { error: 'Too many submissions, please try again later.' },
 });
+
+// Authenticated user mutations (booking status changes, enquiry updates, etc.).
+// 60 writes / 15 min is generous for a human while still throttling scripts.
+export const userWriteLimiter = isTest ? bypass : rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisRateLimitStore('userWrite'),
+  message: { error: 'Too many requests, please slow down.' },
+});
+
+// Logout — prevents cookie-flooding / token-revocation spam. Light touch since
+// logout must remain cheap and idempotent.
+export const logoutLimiter = isTest ? bypass : rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisRateLimitStore('logout'),
+  message: { error: 'Too many requests, please try again later.' },
+});
