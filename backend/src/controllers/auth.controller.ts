@@ -236,7 +236,8 @@ export const refresh = async (req: Request, res: Response) => {
     const result = await rotateRefreshToken(refreshToken);
     if (!result.ok) {
       res.clearCookie('refreshToken');
-      return res.status(401).json({ error: result.reason === 'reuse' ? 'Session reuse detected. Please log in again.' : 'Session expired. Please log in again.' });
+      const reason = (result as any).reason;
+      return res.status(401).json({ error: reason === 'reuse' ? 'Session reuse detected. Please log in again.' : 'Session expired. Please log in again.' });
     }
 
     const user = await prisma.user.findUnique({ where: { id: result.userId } });
