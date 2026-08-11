@@ -13,7 +13,7 @@ import {
 } from '../controllers/auth.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { authLimiter, loginLimiter } from '../middlewares/rateLimit.middleware';
+import { authLimiter, loginLimiter, logoutLimiter } from '../middlewares/rateLimit.middleware';
 import {
   registerVendorSchema,
   registerMemberSchema,
@@ -34,7 +34,7 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 router.post('/register/vendor', authLimiter, validate(registerVendorSchema), asyncHandler(registerVendor));
 router.post('/register/member', authLimiter, validate(registerMemberSchema), asyncHandler(registerMember));
 router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(login));
-router.post('/logout', asyncHandler(logout));
+router.post('/logout', logoutLimiter, asyncHandler(logout));
 router.post('/refresh', authLimiter, asyncHandler(refresh));
 router.put('/password', authenticate, validate(changePasswordSchema), asyncHandler(changePassword));
 router.get('/me', authenticate, asyncHandler(me));

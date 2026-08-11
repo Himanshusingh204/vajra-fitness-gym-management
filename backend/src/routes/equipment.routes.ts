@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getEquipment, addEquipment, updateEquipment, recordMaintenance, deleteEquipment } from '../controllers/equipment.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { gymIdParams, idParams } from '../utils/validators';
 import { z } from 'zod';
 
 const router = Router();
@@ -30,10 +31,10 @@ const maintenanceSchema = z.object({
 
 router.use(authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']));
 
-router.get('/gym/:gymId', asyncHandler(getEquipment));
-router.post('/gym/:gymId', validate(equipmentSchema), asyncHandler(addEquipment));
-router.put('/:id', validate(equipmentSchema.partial()), asyncHandler(updateEquipment));
-router.post('/:id/maintenance', validate(maintenanceSchema), asyncHandler(recordMaintenance));
-router.delete('/:id', asyncHandler(deleteEquipment));
+router.get('/gym/:gymId', validate(gymIdParams, ['params']), asyncHandler(getEquipment));
+router.post('/gym/:gymId', validate(gymIdParams, ['params']), validate(equipmentSchema), asyncHandler(addEquipment));
+router.put('/:id', validate(idParams, ['params']), validate(equipmentSchema.partial()), asyncHandler(updateEquipment));
+router.post('/:id/maintenance', validate(idParams, ['params']), validate(maintenanceSchema), asyncHandler(recordMaintenance));
+router.delete('/:id', validate(idParams, ['params']), asyncHandler(deleteEquipment));
 
 export default router;

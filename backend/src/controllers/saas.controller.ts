@@ -23,6 +23,17 @@ import { clearSubscriptionCache } from '../middlewares/subscription.middleware';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Defense-in-depth: every cross-tenant handler must verify the caller is a
+// Super Admin inside the controller, even when the route guard already enforces
+// it. This keeps tenant data safe if a handler is ever re-mounted elsewhere.
+const requireSuperAdmin = (req: AuthRequest, res: Response): boolean => {
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden: Super Admin access required' });
+    return false;
+  }
+  return true;
+};
+
 // ========================================
 // PUBLIC & SUPER ADMIN: PLAN MANAGEMENT
 // ========================================
@@ -46,6 +57,7 @@ export const getSaaSPlans = async (req: Request, res: Response) => {
 };
 
 export const createSaaSPlan = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const { name, code, description, monthlyPrice, quarterlyPrice, halfYearlyPrice, yearlyPrice, currency, maxGyms, maxMembers, maxTrainers, maxStaff, maxBranches, maxClasses, maxStorageMB, advancedReports, features, isActive, sortOrder } = req.body;
 
@@ -91,6 +103,7 @@ export const createSaaSPlan = async (req: AuthRequest, res: Response) => {
 };
 
 export const updateSaaSPlan = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const id = req.params.id as string;
     const plan = await prisma.saaSPlan.findUnique({ where: { id } });
@@ -120,6 +133,7 @@ export const updateSaaSPlan = async (req: AuthRequest, res: Response) => {
 };
 
 export const deleteSaaSPlan = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const id = req.params.id as string;
     const plan = await prisma.saaSPlan.findUnique({ where: { id } });
@@ -136,6 +150,7 @@ export const deleteSaaSPlan = async (req: AuthRequest, res: Response) => {
 // ========================================
 
 export const getSubscriptions = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const { status, gymId } = req.query as { status?: string; gymId?: string };
     const subscriptions = await prisma.gymSubscription.findMany({
@@ -156,6 +171,7 @@ export const getSubscriptions = async (req: AuthRequest, res: Response) => {
 };
 
 export const createSubscription = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const { gymId, planId, startDate } = req.body;
 
@@ -209,6 +225,7 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
 };
 
 export const updateSubscriptionStatus = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const id = req.params.id as string;
     const { status } = req.body as { status: string };
@@ -438,6 +455,7 @@ export const startTrialHandler = async (req: AuthRequest, res: Response) => {
 // ========================================
 
 export const extendSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const id = req.params.id as string;
     const { days } = req.body;
@@ -450,6 +468,7 @@ export const extendSubscriptionHandler = async (req: AuthRequest, res: Response)
 };
 
 export const cancelSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const id = req.params.id as string;
     const { reason } = req.body;
@@ -531,6 +550,7 @@ export const getInvoices = async (req: AuthRequest, res: Response) => {
 };
 
 export const generateInvoiceHandler = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const { subscriptionId } = req.body;
     const invoice = await generateSaaSInvoice(subscriptionId);

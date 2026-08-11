@@ -37,10 +37,24 @@ export interface SubscriptionRequest extends AuthRequest {
 }
 
 // Resolves the gym ID from the request (params, body, or user's owned gym).
+// Only SUPER_ADMIN may pass an arbitrary gymId in params; everyone else is
+// pinned to their own gym so a tenant can never gate/inspect another tenant.
 const resolveGymId = async (req: SubscriptionRequest): Promise<string | null> => {
-  // Explicit gymId in params (most routes)
-  if (req.params.gymId) return req.params.gymId as string;
+  // Explicit gymId in params (most routes) — only trusted for SUPER_ADMIN.
+  if (req.params.gymId) {
+    if (req.user?.role === 'SUPER_ADMIN') return req.params.gymId as string;
 
+    // Non-super-admins must match the passed gymId against their own gym.
+    const ownGymId = await resolveOwnGymId(req);
+    if (ownGymId && ownGymId === req.params.gymId) return ownGymId;
+    return null;
+  }
+
+  return resolveOwnGymId(req);
+};
+
+// Resolves the caller's own gym from their role binding.
+const resolveOwnGymId = async (req: SubscriptionRequest): Promise<string | null> => {
   // Gym admin: find their owned gym
   if (req.user?.role === 'GYM_ADMIN') {
     const gym = await prisma.gym.findFirst({

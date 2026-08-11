@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export { z };
 
 // ---- Indian mobile number validation ----
 // Accepts "XXXXXXXXXX" (10 digits) or "+91XXXXXXXXXX". Rejects:
@@ -49,10 +50,36 @@ const password = z
   .refine((p) => /[a-zA-Z]/.test(p) && /[0-9]/.test(p), {
     message: 'Password must contain at least one letter and one number',
   });
+// ---- Date validators ----
+// Basic validity: must parse to a real date.
 const dateStr = z
   .string()
   .trim()
   .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Invalid date' });
+
+// Past-or-today date (for paymentDate, startDate, DOB, etc.) — rejects future dates.
+const pastOrTodayDate = z
+  .string()
+  .trim()
+  .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Invalid date' })
+  .refine((s) => {
+    const d = new Date(s);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return d <= today;
+  }, { message: 'Date cannot be in the future' });
+
+// Future date (for dueDate, membership end dates, expiry, etc.).
+const futureDate = z
+  .string()
+  .trim()
+  .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Invalid date' })
+  .refine((s) => {
+    const d = new Date(s);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return d >= now;
+  }, { message: 'Date must be today or in the future' });
 const uuid = z.string().uuid('A valid id is required');
 
 // Pincode: exactly 6 digits, numeric only (India).
@@ -81,6 +108,27 @@ export const optionalPhoneSchema = optionalIndianPhone();
 export const idParams = z.object({ id: uuid });
 export const gymIdParams = z.object({ gymId: uuid });
 export const memberIdParams = z.object({ memberId: uuid });
+export const classIdParams = z.object({ classId: uuid });
+export const trainerIdParams = z.object({ trainerId: uuid });
+export const productIdParams = z.object({ id: uuid });
+export const subscriptionIdParams = z.object({ id: uuid });
+export const userIdParams = z.object({ id: uuid });
+export const faqIdParams = z.object({ id: uuid });
+export const testimonialIdParams = z.object({ id: uuid });
+export const branchIdParams = z.object({ id: uuid });
+export const saleIdParams = z.object({ id: uuid });
+
+// ---- Query string validators ----
+export const dateRangeQuery = z
+  .object({
+    from: dateStr.optional(),
+    to: dateStr.optional(),
+  })
+  .refine((v) => !v.from || !v.to || v.from <= v.to, { message: 'from must be on or before to' });
+
+export const statusQuery = z.object({
+  status: z.enum(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE', 'EXPIRED', 'SUSPENDED', 'PAID', 'OVERDUE', 'PARTIAL']).optional(),
+});
 
 export const registerVendorSchema = z.object({
   username,
@@ -196,8 +244,8 @@ const paymentMethod = z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).
 export const recordFeeSchema = z.object({
   memberId: uuid,
   amount: z.number().positive().max(1e8),
-  paymentDate: dateStr.optional(),
-  dueDate: dateStr,
+  paymentDate: pastOrTodayDate.optional(),
+  dueDate: futureDate,
   status: z.enum(['PAID', 'PENDING', 'OVERDUE', 'PARTIAL']).optional(),
   paymentMethod,
   transactionId: z.string().trim().max(120).optional().nullable(),
@@ -228,7 +276,7 @@ export const verifyPaymentSchema = z.object({
 export const createMembershipSchema = z.object({
   memberId: uuid,
   planId: uuid.optional().nullable(),
-  startDate: dateStr.optional(),
+  startDate: pastOrTodayDate.optional(),
   discount: z.number().min(0).max(1e7).optional(),
   paymentStatus: z.enum(['PENDING', 'PAID', 'PARTIAL']).optional(),
   paymentMethod,
@@ -258,7 +306,7 @@ export const staffAddSchema = z.object({
 export const workoutSlipSchema = z.object({
   title: z.string().trim().max(120).optional().nullable(),
   exercises: z.string().trim().min(1).max(5000),
-  validUntil: dateStr.optional().nullable(),
+  validUntil: futureDate.optional().nullable(),
   trainerId: uuid.optional().nullable(),
 });
 
@@ -356,6 +404,10 @@ export const branchUpdateSchema = z.object({
   state: sanitize(80).pipe(z.string().min(2, 'State must be at least 2 characters')).optional(),
   phone: optionalIndianPhone(),
   isActive: z.boolean().optional(),
+});
+
+export const branchRejectSchema = z.object({
+  reason: sanitize(500).pipe(z.string().min(3, 'Please provide a reason')).optional(),
 });
 
 export const faqSchema = z.object({
@@ -464,7 +516,7 @@ export const saasPlanUpdateSchema = saasPlanSchema.partial();
 export const subscriptionSchema = z.object({
   gymId: uuid,
   planId: uuid,
-  startDate: dateStr.optional(),
+  startDate: pastOrTodayDate.optional(),
 });
 
 export const subscriptionStatusSchema = z.object({

@@ -11,6 +11,7 @@ import { changePassword } from '../api/auth.api';
 import { getMyProgress, createProgressLog } from '../api/progress.api';
 import { getMyNutritionPlans, createNutritionPlan, deleteNutritionPlan, parseNutritionMeals } from '../api/nutrition.api';
 import { getClasses, bookClass } from '../api/class.api';
+import { ExercisePlanView } from '../components/ExercisePlan';
 import { CreditCard, Dumbbell, Calendar, Activity, ChevronRight, MapPin, Building2, BadgeCheck, Download, Users, XCircle, Clock, Bell, CalendarDays, KeyRound, UserCircle, Megaphone, ExternalLink, Loader2, TrendingUp, Salad, Trash2, Dumbbell as DumbbellIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { formatPrice } from '../utils/format';
@@ -759,7 +760,7 @@ const MemberDashboard = () => {
                       </div>
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">{slip.exercises}</p>
+                      <ExercisePlanView exercises={slip.exercises} />
                     </div>
                   </div>
                 ))}

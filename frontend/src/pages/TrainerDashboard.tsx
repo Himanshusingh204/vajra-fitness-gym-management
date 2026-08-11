@@ -5,13 +5,17 @@ import { getTrainerBookings, updateBookingStatus } from '../api/booking.api';
 import { getGymMembers } from '../api/member.api';
 import { getGymWorkoutSlips, createWorkoutSlip } from '../api/workout.api';
 import { getMe } from '../api/auth.api';
-import { Calendar, Users, Dumbbell, Clock, ClipboardList, CheckCircle, XCircle, Plus, Download } from 'lucide-react';
+import { getMemberProgress } from '../api/progress.api';
+import { Calendar, Users, Dumbbell, Clock, ClipboardList, CheckCircle, XCircle, Plus, Download, TrendingUp } from 'lucide-react';
 import { downloadFile } from '../services/api';
+import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
+import { LineChart } from '../components/charts';
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: ClipboardList },
   { id: 'clients', label: 'My Clients', icon: Users },
   { id: 'workouts', label: 'Workout Slips', icon: Dumbbell },
+  { id: 'progress', label: 'Member Progress', icon: TrendingUp },
   { id: 'bookings', label: 'Session Bookings', icon: Calendar },
 ];
 
@@ -47,6 +51,13 @@ const TrainerDashboard = () => {
     queryKey: ['gymSlips', gymId],
     queryFn: () => getGymWorkoutSlips(gymId),
     enabled: !!gymId && (activeTab === 'workouts' || activeTab === 'overview'),
+  });
+
+  const [progressMemberId, setProgressMemberId] = useState('');
+  const { data: progress, isLoading: progressLoading } = useQuery({
+    queryKey: ['memberProgress', progressMemberId],
+    queryFn: () => getMemberProgress(progressMemberId),
+    enabled: !!progressMemberId,
   });
 
   const updateStatusMutation = useMutation({
@@ -177,17 +188,22 @@ const TrainerDashboard = () => {
               ) : (
                 <div className="divide-y divide-gray-100 dark:divide-white/5">
                   {slips?.map((s: any) => (
-                    <div key={s.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <p className="font-bold dark:text-white">{s.title || 'Workout Plan'}</p>
-                        <p className="text-xs text-gray-500">
-                          Member: {s.member?.user?.username} · {new Date(s.assignedDate).toLocaleDateString('en-IN')}
-                          {s.trainer && <span> · by {s.trainer.user.username}</span>}
-                        </p>
+                    <div key={s.id} className="px-6 py-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                        <div>
+                          <p className="font-bold dark:text-white">{s.title || 'Workout Plan'}</p>
+                          <p className="text-xs text-gray-500">
+                            Member: {s.member?.user?.username} · {new Date(s.assignedDate).toLocaleDateString('en-IN')}
+                            {s.trainer && <span> · by {s.trainer.user.username}</span>}
+                          </p>
+                        </div>
+                        <button onClick={() => downloadFile(`/workouts/${s.id}/pdf`, `workout-${s.id.slice(0, 8)}.pdf`)} className="inline-flex items-center gap-1 text-xs font-bold text-[var(--color-primary)] hover:underline self-start sm:self-auto shrink-0">
+                          <Download className="w-3.5 h-3.5" /> PDF
+                        </button>
                       </div>
-                      <button onClick={() => downloadFile(`/workouts/${s.id}/pdf`, `workout-${s.id.slice(0, 8)}.pdf`)} className="inline-flex items-center gap-1 text-xs font-bold text-[var(--color-primary)] hover:underline self-start sm:self-auto">
-                        <Download className="w-3.5 h-3.5" /> PDF
-                      </button>
+                      <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4">
+                        <ExercisePlanView exercises={s.exercises} />
+                      </div>
                     </div>
                   ))}
                   {(!slips || slips.length === 0) && (
@@ -196,6 +212,104 @@ const TrainerDashboard = () => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'progress' && (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Select a member</label>
+              <select
+                className="input-field bg-white! dark:bg-[#1a1a1a]! max-w-sm"
+                value={progressMemberId}
+                onChange={(e) => setProgressMemberId(e.target.value)}
+              >
+                <option value="">Choose a client…</option>
+                {(members || []).map((m: any) => (
+                  <option key={m.id} value={m.id}>{m.user?.username}</option>
+                ))}
+              </select>
+            </div>
+
+            {!progressMemberId ? (
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-10 text-center text-gray-400">
+                Pick a member above to see their weight trend and measurement history.
+              </div>
+            ) : progressLoading ? (
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-10 text-center text-gray-400">Loading…</div>
+            ) : !progress || progress.entries === 0 ? (
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-10 text-center text-gray-400">
+                This member hasn't logged any progress entries yet.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Current Weight</p>
+                    <p className="text-2xl font-extrabold dark:text-white">{progress.latest?.weight ?? '—'} kg</p>
+                  </div>
+                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">BMI</p>
+                    <p className="text-2xl font-extrabold dark:text-white">{progress.bmi ?? '—'}</p>
+                  </div>
+                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Change Since Start</p>
+                    <p className={`text-2xl font-extrabold ${(progress.weightChange ?? 0) <= 0 ? 'text-green-600' : 'text-amber-500'}`}>
+                      {progress.weightChange != null ? `${progress.weightChange > 0 ? '+' : ''}${progress.weightChange} kg` : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Entries Logged</p>
+                    <p className="text-2xl font-extrabold dark:text-white">{progress.entries}</p>
+                  </div>
+                </div>
+
+                {progress.logs.length >= 2 && (
+                  <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                    <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4">Weight Trend</h3>
+                    <div className="h-64">
+                      <LineChart
+                        series={[{
+                          name: 'Weight (kg)',
+                          data: [...progress.logs].reverse().map((l) => ({
+                            label: new Date(l.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+                            value: l.weight,
+                          })),
+                        }]}
+                        config={{ height: 240, showArea: true }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+                    <h2 className="font-bold text-lg dark:text-white">Measurement History</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-white/5">
+                        <tr>
+                          {['Date', 'Weight', 'Height', 'Body Fat'].map((h) => (
+                            <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                        {progress.logs.map((l) => (
+                          <tr key={l.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                            <td className="px-6 py-3 text-gray-500">{new Date(l.date).toLocaleDateString('en-IN')}</td>
+                            <td className="px-6 py-3 font-semibold dark:text-white">{l.weight} kg</td>
+                            <td className="px-6 py-3 text-gray-500">{l.height ? `${l.height} cm` : '—'}</td>
+                            <td className="px-6 py-3 text-gray-500">{l.bodyFat ? `${l.bodyFat}%` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -266,18 +380,25 @@ const TrainerDashboard = () => {
 };
 
 const CreateSlipForm = ({ members, gymId, onSuccess }: { members: any[], gymId?: string, onSuccess: () => void }) => {
-  const [form, setForm] = useState({ memberId: '', title: '', exercises: '', validUntil: '' });
+  const [form, setForm] = useState({ memberId: '', title: '', validUntil: '' });
+  const [items, setItems] = useState<ExerciseItem[]>([{ exercise: '', sets: '', reps: '', notes: '' }]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); setSuccess(''); setLoading(true);
+    setError(''); setSuccess('');
+    if (!items.some((item) => item.exercise.trim())) {
+      setError('Add at least one exercise.');
+      return;
+    }
+    setLoading(true);
     try {
-      await createWorkoutSlip(form.memberId, { title: form.title || undefined, exercises: form.exercises, validUntil: form.validUntil || undefined });
+      await createWorkoutSlip(form.memberId, { title: form.title || undefined, exercises: serializeExercisePlan(items), validUntil: form.validUntil || undefined });
       setSuccess('Workout slip created successfully!');
-      setForm({ memberId: '', title: '', exercises: '', validUntil: '' });
+      setForm({ memberId: '', title: '', validUntil: '' });
+      setItems([{ exercise: '', sets: '', reps: '', notes: '' }]);
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create slip.');
@@ -287,31 +408,33 @@ const CreateSlipForm = ({ members, gymId, onSuccess }: { members: any[], gymId?:
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {error && <div className="md:col-span-2 text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
-      {success && <div className="md:col-span-2 text-green-500 bg-green-50 dark:bg-green-900/20 p-3 rounded text-sm">{success}</div>}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Member *</label>
-        <select required className="input-field" value={form.memberId} onChange={(e) => setForm({...form, memberId: e.target.value})}>
-          <option value="">-- Select Member --</option>
-          {members.map((m: any) => (
-            <option key={m.id} value={m.id}>{m.user?.username}</option>
-          ))}
-        </select>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error && <div className="text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
+      {success && <div className="text-green-500 bg-green-50 dark:bg-green-900/20 p-3 rounded text-sm">{success}</div>}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Member *</label>
+          <select required className="input-field" value={form.memberId} onChange={(e) => setForm({...form, memberId: e.target.value})}>
+            <option value="">-- Select Member --</option>
+            {members.map((m: any) => (
+              <option key={m.id} value={m.id}>{m.user?.username}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+          <input className="input-field" value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} placeholder="e.g. Strength Week 1" />
+        </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
-        <input className="input-field" value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} placeholder="e.g. Strength Week 1" />
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Exercises *</label>
+        <ExercisePlanEditor value={items} onChange={setItems} />
       </div>
-      <div className="md:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Exercises *</label>
-        <textarea required className="input-field" rows={4} value={form.exercises} onChange={(e) => setForm({...form, exercises: e.target.value})} placeholder="One exercise per line, or a JSON array of { exercise, sets, reps }" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valid Until</label>
-        <input type="date" className="input-field" value={form.validUntil} onChange={(e) => setForm({...form, validUntil: e.target.value})} />
-      </div>
-      <div className="flex items-end">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valid Until</label>
+          <input type="date" className="input-field" value={form.validUntil} onChange={(e) => setForm({...form, validUntil: e.target.value})} />
+        </div>
         <button type="submit" disabled={loading || !gymId} className="btn-primary w-full flex items-center justify-center gap-2">
           <Plus className="w-4 h-4" /> {loading ? 'Creating...' : 'Create Slip'}
         </button>

@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, Users, Settings, BarChart3, CheckCircle, Clock,
   Plus, Pencil, Trash2, Search, Mail, FileText, Star, XCircle, Diamond, CreditCard,
-  DollarSign
+  DollarSign, AlertTriangle, MessageSquare, Archive, MapPinned
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api, { downloadFile } from '../services/api';
+import { getPendingBranches, approveBranch, rejectBranch, type PendingBranch } from '../api/branch.api';
 
 type AnalyticsData = {
   // Basic metrics
@@ -112,6 +113,17 @@ type Subscription = {
   plan: { id: string; name: string; code: string; monthlyPrice: number };
 };
 
+type PlatformMessage = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string;
+  subject: string | null;
+  message: string;
+  status: string;
+  createdAt: string;
+};
+
 type PlatformFee = {
   id: string;
   amount: number;
@@ -198,6 +210,18 @@ const SuperAdminDashboard = () => {
     queryKey: ['admin-tickets'],
     queryFn: () => api.get('/admin/support/tickets').then((r) => r.data),
     refetchInterval: 60000,
+  });
+
+  const { data: platformMessages = [], isLoading: messagesLoading } = useQuery<PlatformMessage[]>({
+    queryKey: ['admin-messages'],
+    queryFn: () => api.get('/admin/messages').then((r) => r.data),
+    refetchInterval: 60000,
+  });
+
+  const { data: pendingBranches = [], isLoading: pendingBranchesLoading } = useQuery<PendingBranch[]>({
+    queryKey: ['pending-branches'],
+    queryFn: getPendingBranches,
+    refetchInterval: 30000,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery<AuditLog[]>({
@@ -334,6 +358,19 @@ const SuperAdminDashboard = () => {
     },
   });
 
+  const [deletingGym, setDeletingGym] = useState<Gym | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const deleteGym = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/gyms/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-gyms'] });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+      setDeletingGym(null);
+      setDeleteConfirmText('');
+    },
+  });
+
   const [gymForm, setGymForm] = useState<{ name: string; address: string; city: string; state: string; gstNumber: string; logoUrl: string; imageUrl: string }>({ name: '', address: '', city: '', state: '', gstNumber: '', logoUrl: '', imageUrl: '' });
   const [editingGymId, setEditingGymId] = useState<string | null>(null);
   const updateGymProfile = useMutation({
@@ -407,6 +444,27 @@ const SuperAdminDashboard = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-tickets'] }),
   });
 
+  const updateMessage = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => api.put(`/admin/messages/${id}`, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-messages'] }),
+  });
+
+  const approveBranchMut = useMutation({
+    mutationFn: (id: string) => approveBranch(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pending-branches'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); },
+  });
+  const [rejectingBranch, setRejectingBranch] = useState<PendingBranch | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const rejectBranchMut = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => rejectBranch(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pending-branches'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+      setRejectingBranch(null);
+      setRejectReason('');
+    },
+  });
+
   const { data: saasPlans = [], isLoading: saasPlansLoading } = useQuery<SaaSPlan[]>({
     queryKey: ['saas-plans'],
     queryFn: () => api.get('/saas/plans', { params: { all: 'true' } }).then((r) => r.data),
@@ -466,11 +524,13 @@ const SuperAdminDashboard = () => {
   const tabs = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'gyms', label: 'Gyms', icon: Building2 },
+    { id: 'branches', label: 'Branch Approvals', icon: MapPinned },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'saas', label: 'SaaS & Subscriptions', icon: Diamond },
     { id: 'cms', label: 'Content (CMS)', icon: LayoutDashboard },
     { id: 'support', label: 'Support', icon: Clock },
+    { id: 'messages', label: 'Contact Messages', icon: MessageSquare },
     { id: 'audit', label: 'Audit Logs', icon: Settings },
   ];
 
@@ -497,6 +557,9 @@ const SuperAdminDashboard = () => {
             >
               <Icon className="w-4 h-4" />
               {label}
+              {id === 'branches' && pendingBranches.length > 0 && (
+                <span className="bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 rounded-full">{pendingBranches.length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -772,6 +835,7 @@ const SuperAdminDashboard = () => {
                             ) : (
                               <button onClick={() => suspend.mutate(gym.id)} disabled={suspend.isPending} className="text-red-600 hover:text-red-700 font-semibold text-sm hover:underline disabled:opacity-50">Suspend</button>
                             )}
+                            <button onClick={() => { setDeletingGym(gym); setDeleteConfirmText(''); }} className="inline-flex items-center gap-1 text-gray-400 hover:text-red-600 font-semibold text-sm"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -829,6 +893,109 @@ const SuperAdminDashboard = () => {
                 <button type="button" onClick={() => setEditingGymId(null)} className="btn-outline px-5">Cancel</button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* ============ DELETE GYM CONFIRMATION ============ */}
+        {deletingGym && (
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border-2 border-red-200 dark:border-red-900/40 p-6 mt-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white">Permanently delete "{deletingGym.name}"?</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  This deletes the gym and every record tied to it — members, trainers, staff, fees, bookings, subscriptions, classes and more. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <label className="block text-sm mb-4">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Type the gym name to confirm</span>
+              <input
+                className="input-field mt-1"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={deletingGym.name}
+                autoFocus
+              />
+            </label>
+            {deleteGym.isError && <p className="text-red-500 text-sm mb-4">Failed to delete gym. Please try again.</p>}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => deleteGym.mutate(deletingGym.id)}
+                disabled={deleteConfirmText !== deletingGym.name || deleteGym.isPending}
+                className="inline-flex items-center gap-2 bg-red-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4" /> {deleteGym.isPending ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+              <button type="button" onClick={() => { setDeletingGym(null); setDeleteConfirmText(''); }} className="btn-outline px-5">Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* ============ BRANCH APPROVALS ============ */}
+        {activeTab === 'branches' && (
+          <Panel title={`Pending Branch Requests (${pendingBranches.length})`}>
+            {pendingBranchesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : pendingBranches.length === 0 ? (
+              <EmptyState text="No branch requests waiting for review." />
+            ) : (
+              <div className="divide-y divide-gray-100 dark:divide-white/5">
+                {pendingBranches.map((b) => (
+                  <div key={b.id} className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <p className="font-bold text-[var(--color-deepgray)] dark:text-white">{b.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{b.address} · {b.city}, {b.state}{b.phone ? ` · +91 ${b.phone}` : ''}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Requested by <span className="font-semibold">{b.gym.owner.username}</span> ({b.gym.owner.email}) for <span className="font-semibold">{b.gym.name}</span>, {b.gym.city}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => approveBranchMut.mutate(b.id)}
+                        disabled={approveBranchMut.isPending}
+                        className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-semibold text-sm hover:underline disabled:opacity-50"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" /> Approve
+                      </button>
+                      <button
+                        onClick={() => { setRejectingBranch(b); setRejectReason(''); }}
+                        className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-sm hover:underline"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {approveBranchMut.isError && (
+              <p className="px-6 pb-4 text-sm text-red-600">{(approveBranchMut.error as any)?.response?.data?.error || 'Failed to approve branch.'}</p>
+            )}
+          </Panel>
+        )}
+
+        {/* ============ REJECT BRANCH ============ */}
+        {rejectingBranch && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejectingBranch(null)}>
+            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-1">Reject "{rejectingBranch.name}"?</h3>
+              <p className="text-sm text-gray-500 mb-4">The gym owner will see this reason on their dashboard.</p>
+              <label className="block text-sm mb-4">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Reason (optional)</span>
+                <textarea className="input-field mt-1" rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="e.g. Address could not be verified" />
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => rejectBranchMut.mutate({ id: rejectingBranch.id, reason: rejectReason || undefined })}
+                  disabled={rejectBranchMut.isPending}
+                  className="inline-flex items-center gap-2 bg-red-600 text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  <XCircle className="w-4 h-4" /> {rejectBranchMut.isPending ? 'Rejecting…' : 'Reject Branch'}
+                </button>
+                <button type="button" onClick={() => setRejectingBranch(null)} className="btn-outline px-5">Cancel</button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1119,6 +1286,47 @@ const SuperAdminDashboard = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {/* ============ CONTACT MESSAGES ============ */}
+        {activeTab === 'messages' && (
+          <Panel
+            title={`Contact Form Messages (${platformMessages.length})`}
+            action={<span className="text-xs font-semibold text-gray-500">{platformMessages.filter((m) => m.status === 'NEW').length} new</span>}
+          >
+            {messagesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : platformMessages.length === 0 ? (
+              <EmptyState text="No messages submitted through the contact form yet." />
+            ) : (
+              <div className="divide-y divide-gray-100 dark:divide-white/5">
+                {platformMessages.map((m) => (
+                  <div key={m.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{m.name}</p>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          m.status === 'NEW' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                          m.status === 'READ' ? 'bg-gray-100 dark:bg-white/10 text-gray-500' :
+                          'bg-gray-100 dark:bg-white/10 text-gray-400'
+                        }`}>{m.status}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Mail className="w-3 h-3" /> {m.email} {m.phone && `· ${m.phone}`}</p>
+                      {m.subject && <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-2">{m.subject}</p>}
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 whitespace-pre-wrap">{m.message}</p>
+                      <p className="text-xs text-gray-400 mt-2">{new Date(m.createdAt).toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {m.status !== 'READ' && (
+                        <button onClick={() => updateMessage.mutate({ id: m.id, status: 'READ' })} aria-label="Mark as read" className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><CheckCircle className="w-4 h-4" /></button>
+                      )}
+                      {m.status !== 'ARCHIVED' && (
+                        <button onClick={() => updateMessage.mutate({ id: m.id, status: 'ARCHIVED' })} aria-label="Archive message" className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Archive className="w-4 h-4" /></button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </Panel>

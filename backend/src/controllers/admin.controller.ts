@@ -4,6 +4,17 @@ import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
 
+// Defense-in-depth: every cross-tenant handler must verify the caller is a
+// Super Admin inside the controller, even when the route guard already enforces
+// it. This keeps tenant data safe if a handler is ever re-mounted elsewhere.
+const requireSuperAdmin = (req: AuthRequest, res: Response): boolean => {
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden: Super Admin access required' });
+    return false;
+  }
+  return true;
+};
+
 // Helper function to calculate monthly revenue
 async function calculateMonthlyRevenue() {
   const now = new Date();
@@ -50,6 +61,7 @@ async function calculateChurnRate() {
 
 // Get all gym registrations (pending/approved)
 export const getGyms = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const gyms = await prisma.gym.findMany({
       include: {
@@ -65,6 +77,7 @@ export const getGyms = async (req: AuthRequest, res: Response) => {
 
 // Approve a gym registration
 export const approveGym = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const gymId = req.params.gymId as string;
 
@@ -101,6 +114,7 @@ export const approveGym = async (req: AuthRequest, res: Response) => {
 
 // Suspend a gym
 export const suspendGym = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const gymId = req.params.gymId as string;
 
@@ -140,6 +154,7 @@ export const suspendGym = async (req: AuthRequest, res: Response) => {
 };
 
 export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -351,6 +366,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
 
 // List all platform users
 export const getUsers = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -375,6 +391,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
 
 // Suspend or activate a user account (Super Admin only)
 export const setUserActive = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const id = req.params.id as string;
     const { isActive } = req.body;
@@ -544,7 +561,8 @@ export const updateSupportTicket = async (req: Request, res: Response) => {
 };
 
 // ---------------- Audit logs ----------------
-export const getAuditLogs = async (_req: Request, res: Response) => {
+export const getAuditLogs = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const logs = await prisma.auditLog.findMany({
       include: { user: { select: { username: true, email: true } } },
@@ -560,7 +578,57 @@ export const getAuditLogs = async (_req: Request, res: Response) => {
 // ---------------- Super Admin: gym profile editing ----------------
 // Lets a Super Admin correct a gym's details (address, GST, images, facilities)
 // directly, without needing the gym owner.
+// Permanently delete a gym and all of its tenant-scoped data (members, staff,
+// trainers, fees, bookings, subscriptions, etc. all cascade at the DB level).
+// The owner's account is preserved unless this was their only gym, in which
+// case it is deactivated the same way suspendGym does.
+export const deleteGym = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const gymId = req.params.gymId as string;
+
+    const gym = await prisma.gym.findUnique({
+      where: { id: gymId },
+      include: {
+        owner: { select: { id: true, username: true, email: true } },
+        _count: { select: { members: true, staff: true, trainers: true, subscriptions: true } },
+      },
+    });
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+
+    await prisma.gym.delete({ where: { id: gymId } });
+
+    const remainingGyms = await prisma.gym.count({ where: { ownerId: gym.owner.id } });
+    if (remainingGyms === 0) {
+      await prisma.user.update({
+        where: { id: gym.owner.id },
+        data: { isActive: false, tokenVersion: { increment: 1 } },
+      });
+    }
+
+    await logAudit({
+      action: 'GYM_DELETED',
+      entity: 'Gym',
+      entityId: gymId,
+      details: JSON.stringify({
+        name: gym.name,
+        city: gym.city,
+        ownerEmail: gym.owner.email,
+        memberCount: gym._count.members,
+        staffCount: gym._count.staff,
+        trainerCount: gym._count.trainers,
+      }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json({ message: 'Gym and all associated data deleted permanently' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete gym' });
+  }
+};
+
 export const updateGymProfile = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const gymId = req.params.gymId as string;
     const { name, address, city, state, location, gstNumber, logoUrl, imageUrl, facilities } = req.body;
@@ -601,6 +669,7 @@ export const updateGymProfile = async (req: AuthRequest, res: Response) => {
 // Global fee ledger so the platform can see (and issue receipts for) every
 // payment on the system.
 export const getAllFees = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
     const { status, gymId } = req.query as { status?: string; gymId?: string };
     const fees = await prisma.fee.findMany({
@@ -618,5 +687,39 @@ export const getAllFees = async (req: AuthRequest, res: Response) => {
     res.json(fees);
   } catch {
     res.status(500).json({ error: 'Failed to fetch fees' });
+  }
+};
+
+// Super Admin: view platform contact-form messages.
+export const getPlatformMessages = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const messages = await prisma.platformMessage.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    res.json(messages);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+};
+
+// Super Admin: mark a platform message as read / archived.
+export const updatePlatformMessage = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const id = req.params.id as string;
+    const { status } = req.body as { status?: string };
+    if (!status || !['NEW', 'READ', 'ARCHIVED'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid message status' });
+    }
+
+    const message = await prisma.platformMessage.findUnique({ where: { id } });
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+
+    const updated = await prisma.platformMessage.update({ where: { id }, data: { status } });
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Failed to update message' });
   }
 };

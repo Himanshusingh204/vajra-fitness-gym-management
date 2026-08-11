@@ -6,6 +6,7 @@ import {
 } from '../controllers/inventory.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { gymIdParams, productIdParams } from '../utils/validators';
 import { z } from 'zod';
 
 const router = Router();
@@ -47,17 +48,17 @@ const saleSchema = z.object({
 router.use(authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']));
 
 // Products
-router.get('/gym/:gymId/products', asyncHandler(getProducts));
-router.post('/gym/:gymId/products', validate(productSchema), asyncHandler(createProduct));
-router.put('/products/:id', validate(productSchema.partial()), asyncHandler(updateProduct));
-router.delete('/products/:id', asyncHandler(deleteProduct));
+router.get('/gym/:gymId/products', validate(gymIdParams, ['params']), asyncHandler(getProducts));
+router.post('/gym/:gymId/products', validate(gymIdParams, ['params']), validate(productSchema), asyncHandler(createProduct));
+router.put('/products/:id', validate(productIdParams, ['params']), validate(productSchema.partial()), asyncHandler(updateProduct));
+router.delete('/products/:id', validate(productIdParams, ['params']), asyncHandler(deleteProduct));
 
 // Categories
-router.get('/gym/:gymId/categories', asyncHandler(getCategories));
-router.post('/gym/:gymId/categories', validate(categorySchema), asyncHandler(createCategory));
+router.get('/gym/:gymId/categories', validate(gymIdParams, ['params']), asyncHandler(getCategories));
+router.post('/gym/:gymId/categories', validate(gymIdParams, ['params']), validate(categorySchema), asyncHandler(createCategory));
 
 // POS: Sales
-router.get('/gym/:gymId/sales', asyncHandler(getSales));
-router.post('/gym/:gymId/sales', validate(saleSchema), asyncHandler(createSale));
+router.get('/gym/:gymId/sales', validate(gymIdParams, ['params']), asyncHandler(getSales));
+router.post('/gym/:gymId/sales', validate(gymIdParams, ['params']), validate(saleSchema), asyncHandler(createSale));
 
 export default router;

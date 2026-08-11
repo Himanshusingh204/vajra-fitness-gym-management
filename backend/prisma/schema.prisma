@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 // =====================================================================
@@ -103,6 +104,14 @@ model Branch {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Approval workflow: new branches start PENDING and are not usable until a
+  // Super Admin approves them. Existing branches default to APPROVED so this
+  // migration doesn't disrupt gyms already operating multiple locations.
+  status          String    @default("APPROVED") // PENDING, APPROVED, REJECTED
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedBy      String?
 
   gymId String
   gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
@@ -987,4 +996,24 @@ model FeatureFlag {
   planRestriction String? // JSON array of plan codes that get this feature
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// =====================================================================
+// PLATFORM MESSAGES (contact form — NOT tenant-scoped)
+// =====================================================================
+// Public contact-form submissions are stored here so they never pollute a
+// tenant's enquiry pipeline (they are addressed to the platform, not a gym).
+// Super Admins can view these in the admin console.
+
+model PlatformMessage {
+  id        String    @id @default(uuid())
+  name      String
+  phone     String?
+  email     String
+  subject   String?
+  message   String
+  status    String    @default("NEW") // NEW, READ, ARCHIVED
+  createdAt DateTime  @default(now())
+
+  @@index([status, createdAt])
 }

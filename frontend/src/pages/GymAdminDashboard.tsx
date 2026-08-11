@@ -1,43 +1,53 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, Bell, Megaphone, Receipt, Package, Wrench, Dumbbell as DumbbellIcon, Users as UsersIcon, Gift, TrendingUp, Activity, ArrowUpRight, ArrowDownRight, PieChart } from 'lucide-react';
+import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, Bell, Megaphone, Wrench, Gift, TrendingUp, Activity, ArrowUpRight, ArrowDownRight, PieChart, Menu, X, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api, { downloadFile } from '../services/api';
 import { getGymBookings, updateBookingStatus, getGymMemberships, createMembership, renewMembership } from '../api/booking.api';
 import { getMyNotifications, markAllNotificationsRead, markNotificationRead } from '../api/notification.api';
 import { getGymNotices, createNotice, updateNotice, deleteNotice } from '../api/notice.api';
-import { getExpenses, recordExpense, deleteExpense, getExpenseSummary } from '../api/expense.api';
-import { getProducts, createProduct, deleteProduct, getCategories, getSales } from '../api/inventory.api';
 import { getEquipment, addEquipment, deleteEquipment } from '../api/equipment.api';
-import { getClasses, createClass, deleteClass } from '../api/class.api';
 import { getBranches, createBranch, deleteBranch, type GymBranch } from '../api/branch.api';
-import { getPayslips, createPayslip, updatePayslipStatus, deletePayslip, getPayslipSummary } from '../api/payslip.api';
 import { getReferrals, createReferral, updateReferralStatus, getReferralStats } from '../api/referral.api';
 import { getGymAnalytics } from '../api/reports.api';
+import { getMyGymSubscription, getInvoices } from '../api/saas.api';
 import { LineChart, BarChart, AreaChart, DonutChart, HeatmapChart } from '../components/charts';
+import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
 
-const tabs = [
-  { id: 'overview', label: 'Overview', icon: Building2 },
-  { id: 'analytics', label: 'Analytics', icon: PieChart },
-  { id: 'members', label: 'Members', icon: Users },
-  { id: 'plans', label: 'Membership Plans', icon: Diamond },
-  { id: 'memberships', label: 'Memberships', icon: ClipboardCheck },
-  { id: 'fees', label: 'Fees', icon: CreditCard },
-  { id: 'bookings', label: 'PT Bookings', icon: Calendar },
-  { id: 'workouts', label: 'Workouts', icon: Dumbbell },
-  { id: 'attendance', label: 'Attendance', icon: ClipboardList },
-  { id: 'staff', label: 'Staff & Trainers', icon: Shield },
-  { id: 'enquiries', label: 'Enquiries', icon: ClipboardList },
-  { id: 'notices', label: 'Notices', icon: Megaphone },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'expenses', label: 'Expenses', icon: Receipt },
-  { id: 'inventory', label: 'Inventory', icon: Package },
-  { id: 'equipment', label: 'Equipment', icon: Wrench },
-  { id: 'classes', label: 'Classes', icon: DumbbellIcon },
-  { id: 'payslips', label: 'Payroll', icon: UsersIcon },
-  { id: 'referrals', label: 'Referrals', icon: Gift },
-  { id: 'branch', label: 'Branch', icon: Settings },
+type NavGroup = { label: string; items: { id: string; label: string; icon: any }[] };
+
+const navGroups: NavGroup[] = [
+  { label: 'Overview', items: [
+    { id: 'overview', label: 'Overview', icon: Building2 },
+    { id: 'analytics', label: 'Analytics', icon: PieChart },
+  ] },
+  { label: 'People', items: [
+    { id: 'members', label: 'Members', icon: Users },
+    { id: 'staff', label: 'Staff & Trainers', icon: Shield },
+    { id: 'enquiries', label: 'Enquiries', icon: ClipboardList },
+  ] },
+  { label: 'Memberships & Billing', items: [
+    { id: 'plans', label: 'Membership Plans', icon: Diamond },
+    { id: 'memberships', label: 'Memberships', icon: ClipboardCheck },
+    { id: 'fees', label: 'Fees', icon: CreditCard },
+    { id: 'subscription', label: 'My Subscription', icon: Sparkles },
+  ] },
+  { label: 'Training', items: [
+    { id: 'bookings', label: 'PT Bookings', icon: Calendar },
+    { id: 'workouts', label: 'Workouts', icon: Dumbbell },
+    { id: 'attendance', label: 'Attendance', icon: ClipboardList },
+  ] },
+  { label: 'Engagement', items: [
+    { id: 'notices', label: 'Notices', icon: Megaphone },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'referrals', label: 'Referrals', icon: Gift },
+  ] },
+  { label: 'Facility', items: [
+    { id: 'equipment', label: 'Equipment', icon: Wrench },
+    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    { id: 'branch', label: 'Branch', icon: Settings },
+  ] },
 ];
 
 type Plan = { id: string; name: string; description: string | null; duration: number; price: number; isActive: boolean };
@@ -58,6 +68,7 @@ const statusBadge = (status: string) => {
 
 const GymAdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -75,6 +86,7 @@ const GymAdminDashboard = () => {
     refetchInterval: 60000,
   });
   const [branchFilter, setBranchFilter] = useState('');
+  const approvedBranches = branches.filter((b) => b.status === 'APPROVED' && b.isActive);
 
   const { data: stats, isLoading: statsLoading } = useQuery<GymStats>({
     queryKey: ['gym-stats', branch?.id],
@@ -167,6 +179,18 @@ const GymAdminDashboard = () => {
     queryFn: () => getGymAnalytics(branch?.id),
     enabled: !!branch?.id && activeTab === 'analytics',
     refetchInterval: 60000,
+  });
+
+  // ---------- My SaaS Subscription ----------
+  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
+    queryKey: ['my-gym-subscription'],
+    queryFn: getMyGymSubscription,
+    enabled: activeTab === 'subscription',
+  });
+  const { data: subscriptionInvoices = [], isLoading: invoicesLoading } = useQuery({
+    queryKey: ['my-saas-invoices'],
+    queryFn: getInvoices,
+    enabled: activeTab === 'subscription',
   });
 
   const [noticeForm, setNoticeForm] = useState({ title: '', content: '' });
@@ -335,6 +359,9 @@ const GymAdminDashboard = () => {
 
   // ---------- Fees ----------
   const [feeForm, setFeeForm] = useState({ memberId: '', amount: 999, dueDate: '', status: 'PENDING', notes: '' });
+  const [feeStatusFilter, setFeeStatusFilter] = useState('ALL');
+  const [markPaidTarget, setMarkPaidTarget] = useState<any>(null);
+  const [markPaidForm, setMarkPaidForm] = useState({ paymentMethod: 'CASH', transactionId: '', notes: '' });
   const recordFee = useMutation({
     mutationFn: (data: typeof feeForm) => api.post(`/fees/gym/${branch?.id}`, { ...data, amount: Number(data.amount) }),
     onSuccess: () => {
@@ -350,19 +377,26 @@ const GymAdminDashboard = () => {
       qc.invalidateQueries({ queryKey: ['fees', branch?.id] });
       qc.invalidateQueries({ queryKey: ['gym-stats', branch?.id] });
       qc.invalidateQueries({ queryKey: ['gymMemberships', branch?.id] });
+      setMarkPaidTarget(null);
+      setMarkPaidForm({ paymentMethod: 'CASH', transactionId: '', notes: '' });
     },
   });
 
   // ---------- Workouts ----------
-  const [slipForm, setSlipForm] = useState({ memberId: '', title: '', exercises: '', validUntil: '', trainerId: '' });
+  const [slipForm, setSlipForm] = useState({ memberId: '', title: '', validUntil: '', trainerId: '' });
+  const [slipExercises, setSlipExercises] = useState<ExerciseItem[]>([{ exercise: '', sets: '', reps: '', notes: '' }]);
   const createSlip = useMutation({
-    mutationFn: (data: typeof slipForm) => api.post(`/workouts/member/${data.memberId}`, {
+    mutationFn: (data: typeof slipForm & { exercises: string }) => api.post(`/workouts/member/${data.memberId}`, {
       title: data.title,
       exercises: data.exercises,
       validUntil: data.validUntil || null,
       trainerId: data.trainerId || null,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['workouts', branch?.id] }); setSlipForm({ memberId: '', title: '', exercises: '', validUntil: '', trainerId: '' }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workouts', branch?.id] });
+      setSlipForm({ memberId: '', title: '', validUntil: '', trainerId: '' });
+      setSlipExercises([{ exercise: '', sets: '', reps: '', notes: '' }]);
+    },
   });
 
   // ---------- Attendance ----------
@@ -403,53 +437,6 @@ const GymAdminDashboard = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['enquiries', branch?.id] }),
   });
 
-  // ---------- Expenses ----------
-  const { data: expensesData, isLoading: expensesLoading } = useQuery({
-    queryKey: ['expenses', branch?.id],
-    queryFn: () => getExpenses(branch?.id),
-    enabled: !!branch?.id && activeTab === 'expenses',
-  });
-  const { data: expenseSummary } = useQuery({
-    queryKey: ['expenseSummary', branch?.id],
-    queryFn: () => getExpenseSummary(branch?.id),
-    enabled: !!branch?.id && activeTab === 'expenses',
-  });
-  const [expenseForm, setExpenseForm] = useState({ category: '', description: '', amount: 0, date: '', isRecurring: false, notes: '' });
-  const createExpenseMut = useMutation({
-    mutationFn: (data: typeof expenseForm) => recordExpense(branch?.id, { ...data, amount: Number(data.amount) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses', branch?.id] }); qc.invalidateQueries({ queryKey: ['expenseSummary', branch?.id] }); setExpenseForm({ category: '', description: '', amount: 0, date: '', isRecurring: false, notes: '' }); },
-  });
-  const deleteExpenseMut = useMutation({
-    mutationFn: (id: string) => deleteExpense(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses', branch?.id] }); qc.invalidateQueries({ queryKey: ['expenseSummary', branch?.id] }); },
-  });
-
-  // ---------- Inventory ----------
-  const { data: products = [], isLoading: productsLoading } = useQuery({
-    queryKey: ['products', branch?.id],
-    queryFn: () => getProducts(branch?.id),
-    enabled: !!branch?.id && activeTab === 'inventory',
-  });
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories', branch?.id],
-    queryFn: () => getCategories(branch?.id),
-    enabled: !!branch?.id && activeTab === 'inventory',
-  });
-  const { data: sales = [] } = useQuery({
-    queryKey: ['sales', branch?.id],
-    queryFn: () => getSales(branch?.id),
-    enabled: !!branch?.id && activeTab === 'inventory',
-  });
-  const [productForm, setProductForm] = useState({ name: '', sku: '', description: '', purchasePrice: 0, sellingPrice: 0, stock: 0, minimumStock: 0, categoryId: '' });
-  const createProductMut = useMutation({
-    mutationFn: (data: typeof productForm) => createProduct(branch?.id, { ...data, purchasePrice: Number(data.purchasePrice), sellingPrice: Number(data.sellingPrice), stock: Number(data.stock), minimumStock: Number(data.minimumStock) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products', branch?.id] }); setProductForm({ name: '', sku: '', description: '', purchasePrice: 0, sellingPrice: 0, stock: 0, minimumStock: 0, categoryId: '' }); },
-  });
-  const deleteProductMut = useMutation({
-    mutationFn: (id: string) => deleteProduct(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['products', branch?.id] }),
-  });
-
   // ---------- Equipment ----------
   const { data: equipment = [], isLoading: equipmentLoading } = useQuery({
     queryKey: ['equipment', branch?.id],
@@ -464,47 +451,6 @@ const GymAdminDashboard = () => {
   const deleteEquipMut = useMutation({
     mutationFn: (id: string) => deleteEquipment(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment', branch?.id] }),
-  });
-
-  // ---------- Classes ----------
-  const { data: gymClasses = [], isLoading: classesLoading } = useQuery({
-    queryKey: ['classes', branch?.id, branchFilter],
-    queryFn: () => getClasses(branch?.id, { ...(branchFilter ? { branchId: branchFilter } : {}) }),
-    enabled: !!branch?.id && activeTab === 'classes',
-  });
-  const [classForm, setClassForm] = useState({ name: '', description: '', capacity: 20, duration: 60, dayOfWeek: '', startTime: '', endTime: '', location: '', trainerId: '', branchId: '' });
-  const createClassMut = useMutation({
-    mutationFn: (data: typeof classForm) => createClass(branch?.id, { ...data, capacity: Number(data.capacity), duration: Number(data.duration), branchId: data.branchId || undefined }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['classes', branch?.id] }); setClassForm({ name: '', description: '', capacity: 20, duration: 60, dayOfWeek: '', startTime: '', endTime: '', location: '', trainerId: '', branchId: '' }); },
-  });
-  const deleteClassMut = useMutation({
-    mutationFn: (id: string) => deleteClass(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['classes', branch?.id] }),
-  });
-
-  // ---------- Payslips ----------
-  const { data: payslips = [], isLoading: payslipsLoading } = useQuery({
-    queryKey: ['payslips', branch?.id],
-    queryFn: () => getPayslips(branch?.id),
-    enabled: !!branch?.id && activeTab === 'payslips',
-  });
-  const { data: payslipSummary } = useQuery({
-    queryKey: ['payslipSummary', branch?.id],
-    queryFn: () => getPayslipSummary(branch?.id),
-    enabled: !!branch?.id && activeTab === 'payslips',
-  });
-  const [payslipForm, setPayslipForm] = useState({ userId: '', month: 1, year: new Date().getFullYear(), basicSalary: 0, bonuses: 0, deductions: 0, notes: '' });
-  const createPayslipMut = useMutation({
-    mutationFn: (data: typeof payslipForm) => createPayslip(branch?.id, { ...data, basicSalary: Number(data.basicSalary), bonuses: Number(data.bonuses), deductions: Number(data.deductions) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payslips', branch?.id] }); qc.invalidateQueries({ queryKey: ['payslipSummary', branch?.id] }); setPayslipForm({ userId: '', month: 1, year: new Date().getFullYear(), basicSalary: 0, bonuses: 0, deductions: 0, notes: '' }); },
-  });
-  const updatePayslipStatusMut = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => updatePayslipStatus(id, { status }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payslips', branch?.id] }); qc.invalidateQueries({ queryKey: ['payslipSummary', branch?.id] }); },
-  });
-  const deletePayslipMut = useMutation({
-    mutationFn: (id: string) => deletePayslip(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payslips', branch?.id] }); qc.invalidateQueries({ queryKey: ['payslipSummary', branch?.id] }); },
   });
 
   // ---------- Referrals ----------
@@ -568,6 +514,24 @@ const GymAdminDashboard = () => {
     return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
   };
 
+  const thisMonthKey = new Date().toISOString().slice(0, 7);
+  const feeStats = fees.reduce(
+    (acc: { collected: number; collectedThisMonth: number; pending: number; overdue: number; overdueCount: number }, f: any) => {
+      if (f.status === 'PAID') {
+        acc.collected += f.amount;
+        if (new Date(f.paymentDate).toISOString().slice(0, 7) === thisMonthKey) acc.collectedThisMonth += f.amount;
+      } else if (f.status === 'OVERDUE') {
+        acc.overdue += f.amount;
+        acc.overdueCount += 1;
+      } else {
+        acc.pending += f.amount;
+      }
+      return acc;
+    },
+    { collected: 0, collectedThisMonth: 0, pending: 0, overdue: 0, overdueCount: 0 }
+  );
+  const filteredFees = feeStatusFilter === 'ALL' ? fees : fees.filter((f: any) => f.status === feeStatusFilter);
+
   const renderStaffTable = (list: StaffEntry[], type: 'trainers' | 'staff') => (
     <div>
       <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-3 capitalize">{type}</h3>
@@ -608,35 +572,82 @@ const GymAdminDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] lg:flex">
+      {/* Mobile top bar */}
+      <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-white/10 bg-white dark:bg-[#141414] sticky top-0 z-30">
+        <div className="min-w-0">
+          <h1 className="text-lg font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">
             {branchLoading ? 'Loading…' : branch?.name || 'Gym Dashboard'}
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">{user?.email}</p>
         </div>
+        <button
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open navigation menu"
+          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      </div>
 
-        <div className="flex gap-1 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl overflow-x-auto">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-                activeTab === id
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-              {id === 'members' && pendingMembers > 0 && (
-                <span className="bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 rounded-full">{pendingMembers}</span>
-              )}
-            </button>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#141414] border-r border-gray-100 dark:border-white/10 flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-6 border-b border-gray-100 dark:border-white/10 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">
+              {branchLoading ? 'Loading…' : branch?.name || 'Gym Dashboard'}
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{user?.email}</p>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation menu"
+            className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                      activeTab === id
+                        ? 'bg-[var(--color-primary)] text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                    {id === 'members' && pendingMembers > 0 && (
+                      <span className="ml-auto bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0">{pendingMembers}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
-        </div>
+        </nav>
+      </aside>
 
+      <div className="flex-1 min-w-0">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {/* Overview */}
         {activeTab === 'overview' && (
           <div>
@@ -914,14 +925,14 @@ const GymAdminDashboard = () => {
                           <td className="px-6 py-4 text-gray-500">{m.user?.email}</td>
                           <td className="px-6 py-4 text-gray-500">{m.membershipPlan?.name || '—'}</td>
                           <td className="px-6 py-4">
-                            {branches.length > 0 ? (
+                            {approvedBranches.length > 0 ? (
                               <select
                                 className="text-sm border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 bg-transparent text-gray-600 dark:text-gray-300"
                                 value={m.branch?.id || ''}
                                 onChange={(e) => assignMemberBranch.mutate({ id: m.id, branchId: e.target.value })}
                               >
                                 <option value="">—</option>
-                                {branches.map((b) => (
+                                {approvedBranches.map((b) => (
                                   <option key={b.id} value={b.id}>{b.name}</option>
                                 ))}
                               </select>
@@ -1001,10 +1012,10 @@ const GymAdminDashboard = () => {
                     <option key={p.id} value={p.id}>{p.name} — ₹{p.price.toLocaleString('en-IN')}</option>
                   ))}
                 </select>
-                {branches.length > 0 && (
+                {approvedBranches.length > 0 && (
                   <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={addMemberForm.branchId} onChange={(e) => setAddMemberForm({ ...addMemberForm, branchId: e.target.value })}>
                     <option value="">No branch</option>
-                    {branches.map((b) => (
+                    {approvedBranches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
@@ -1359,6 +1370,25 @@ const GymAdminDashboard = () => {
         {/* Fees */}
         {activeTab === 'fees' && (
           <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Collected This Month</p>
+                <p className="text-2xl font-extrabold text-green-600">₹{feeStats.collectedThisMonth.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Collected</p>
+                <p className="text-2xl font-extrabold text-emerald-600">₹{feeStats.collected.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
+                <p className="text-2xl font-extrabold text-amber-500">₹{feeStats.pending.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-5 border border-gray-100 dark:border-white/10">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Overdue</p>
+                <p className="text-2xl font-extrabold text-red-500">₹{feeStats.overdue.toLocaleString('en-IN')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{feeStats.overdueCount} record{feeStats.overdueCount === 1 ? '' : 's'}</p>
+              </div>
+            </div>
             <div className="grid lg:grid-cols-2 gap-6 items-start">
               <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Record a Fee</h3>
@@ -1396,12 +1426,29 @@ const GymAdminDashboard = () => {
               </div>
 
               <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center">
-                  <h2 className="font-bold text-lg dark:text-white">Fee Records ({fees.length})</h2>
-                  <button onClick={exportFees} className="btn-outline text-sm px-3 py-1.5"><Download className="w-3.5 h-3.5" /> CSV</button>
+                <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex flex-wrap justify-between items-center gap-3">
+                  <h2 className="font-bold text-lg dark:text-white">Fee Records ({filteredFees.length})</h2>
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
+                      {['ALL', 'PENDING', 'PAID', 'OVERDUE'].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setFeeStatusFilter(s)}
+                          className={`px-3 py-1.5 text-xs font-bold transition-colors ${
+                            feeStatusFilter === s
+                              ? 'bg-[var(--color-primary)] text-white'
+                              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'
+                          }`}
+                        >
+                          {s === 'ALL' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={exportFees} className="btn-outline text-sm px-3 py-1.5"><Download className="w-3.5 h-3.5" /> CSV</button>
+                  </div>
                 </div>
-                {feesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : fees.length === 0 ? (
-                  <div className="p-8 text-center text-gray-400">No fee records yet.</div>
+                {feesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : filteredFees.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400">{fees.length === 0 ? 'No fee records yet.' : 'No fees match this filter.'}</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -1413,26 +1460,23 @@ const GymAdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                        {fees.map((f: any) => (
+                        {filteredFees.map((f: any) => (
                           <tr key={f.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                             <td className="px-6 py-4 font-semibold dark:text-white">{f.member?.user?.username || '—'}</td>
                             <td className="px-6 py-4 font-semibold text-[var(--color-primary)]">₹{f.amount.toLocaleString('en-IN')}</td>
                             <td className="px-6 py-4 text-gray-500">{new Date(f.dueDate).toLocaleDateString('en-IN')}</td>
                             <td className="px-6 py-4">{statusBadge(f.status)}</td>
-<td className="px-6 py-4 text-gray-500 max-w-[200px] truncate" title={f.notes || ''}>{f.notes || '—'}</td>
-                             <td className="px-6 py-4">
-                               <div className="flex items-center gap-2">
-                                 {f.status !== 'PAID' && (
-                                   <button
-                                     onClick={() => {
-                                       const notes = prompt('Add payment notes (optional):');
-                                       updateFeeStatus.mutate({ id: f.id, status: 'PAID', notes: notes || undefined });
-                                     }}
-                                     className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-semibold text-xs hover:underline"
-                                   >
-                                     <CheckCircle className="w-3.5 h-3.5" /> Mark Paid
-                                   </button>
-                                 )}
+                            <td className="px-6 py-4 text-gray-500 max-w-[200px] truncate" title={f.notes || ''}>{f.notes || '—'}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                {f.status !== 'PAID' && (
+                                  <button
+                                    onClick={() => setMarkPaidTarget(f)}
+                                    className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-semibold text-xs hover:underline"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" /> Mark Paid
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => downloadFile(`/fees/${f.id}/receipt`, `receipt-${f.id.slice(0, 8)}.pdf`)}
                                   className="inline-flex items-center gap-1 text-[var(--color-primary)] font-semibold text-xs hover:underline"
@@ -1449,6 +1493,184 @@ const GymAdminDashboard = () => {
                 )}
               </div>
             </div>
+
+            {markPaidTarget && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setMarkPaidTarget(null)}>
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="font-bold text-lg dark:text-white mb-1">Mark Fee as Paid</h3>
+                  <p className="text-sm text-gray-500 mb-4">{markPaidTarget.member?.user?.username} · ₹{markPaidTarget.amount.toLocaleString('en-IN')}</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Payment Method</label>
+                      <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={markPaidForm.paymentMethod} onChange={(e) => setMarkPaidForm({ ...markPaidForm, paymentMethod: e.target.value })}>
+                        <option value="CASH">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="CARD">Card</option>
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Transaction ID (optional)</label>
+                      <input className="input-field" value={markPaidForm.transactionId} onChange={(e) => setMarkPaidForm({ ...markPaidForm, transactionId: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Notes (optional)</label>
+                      <input className="input-field" value={markPaidForm.notes} onChange={(e) => setMarkPaidForm({ ...markPaidForm, notes: e.target.value })} maxLength={1000} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="btn-primary flex-1 justify-center"
+                        disabled={updateFeeStatus.isPending}
+                        onClick={() => updateFeeStatus.mutate({
+                          id: markPaidTarget.id,
+                          status: 'PAID',
+                          paymentMethod: markPaidForm.paymentMethod,
+                          transactionId: markPaidForm.transactionId || undefined,
+                          notes: markPaidForm.notes || undefined,
+                        })}
+                      >
+                        {updateFeeStatus.isPending ? 'Saving…' : 'Confirm Payment'}
+                      </button>
+                      <button className="btn-outline px-5" onClick={() => setMarkPaidTarget(null)}>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* My SaaS Subscription */}
+        {activeTab === 'subscription' && (
+          <div className="space-y-6">
+            {subscriptionLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+              </div>
+            ) : !subscription?.hasSubscription ? (
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-10 text-center">
+                <Diamond className="w-10 h-10 text-[var(--color-primary)] mx-auto mb-4" />
+                <h3 className="font-bold text-lg dark:text-white mb-2">No active platform subscription</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                  Subscribe to a Vajra Fitness plan to unlock member limits, trainer seats and platform features for your gym.
+                </p>
+                <Link to="/subscription" className="btn-primary inline-flex px-6">View Plans</Link>
+              </div>
+            ) : (
+              <>
+                {(() => {
+                  const statusStyles: Record<string, string> = {
+                    ACTIVE: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                    TRIAL: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+                    GRACE_PERIOD: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+                    PENDING: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+                    PAST_DUE: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+                    EXPIRED: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+                    SUSPENDED: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+                    CANCELLED: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400',
+                  };
+                  const daysLeft = subscription.endDate
+                    ? Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+                    : null;
+                  return (
+                    <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white">{subscription.plan?.name || 'Current Plan'}</h3>
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusStyles[subscription.status] || 'bg-gray-100 text-gray-600'}`}>{subscription.status.replace('_', ' ')}</span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {subscription.startDate ? new Date(subscription.startDate).toLocaleDateString('en-IN') : '—'} → {subscription.endDate ? new Date(subscription.endDate).toLocaleDateString('en-IN') : '—'}
+                            {daysLeft != null && daysLeft >= 0 && <span> · {daysLeft} day{daysLeft === 1 ? '' : 's'} left</span>}
+                          </p>
+                        </div>
+                        <Link to="/subscription" className="btn-outline px-5">Change Plan</Link>
+                      </div>
+                      {subscription.isReadonly && (
+                        <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-400">
+                          Your subscription has lapsed — the dashboard is in read-only mode. Renew your plan to resume full access.
+                        </div>
+                      )}
+                      {subscription.features.length > 0 && (
+                        <div className="mt-5 flex flex-wrap gap-2">
+                          {subscription.features.map((f) => (
+                            <span key={f} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">{f}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-6">
+                  <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4">Plan Usage & Limits</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {([
+                      ['Members', subscription.usage.members, subscription.limits.maxMembers],
+                      ['Trainers', subscription.usage.trainers, subscription.limits.maxTrainers],
+                      ['Staff', subscription.usage.staff, subscription.limits.maxStaff],
+                      ['Branches', subscription.usage.branches, subscription.limits.maxBranches],
+                      ['Classes', subscription.usage.classes, subscription.limits.maxClasses],
+                    ] as [string, number, number | null][]).map(([label, used, limit]) => {
+                      const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+                      return (
+                        <div key={label}>
+                          <div className="flex justify-between items-baseline mb-1.5">
+                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{label}</span>
+                            <span className="text-xs text-gray-500">{used} / {limit ?? 'Unlimited'}</span>
+                          </div>
+                          {limit != null && (
+                            <div className="h-2 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-[var(--color-primary)]'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+                    <h2 className="font-bold text-lg dark:text-white">Billing History ({subscriptionInvoices.length})</h2>
+                  </div>
+                  {invoicesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : subscriptionInvoices.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400">No invoices generated yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-white/5">
+                          <tr>
+                            {['Invoice #', 'Plan', 'Period', 'Total', 'Status', 'Issued'].map((h) => (
+                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                          {subscriptionInvoices.map((inv) => (
+                            <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                              <td className="px-6 py-3 font-mono text-xs dark:text-white">{inv.invoiceNumber}</td>
+                              <td className="px-6 py-3 text-gray-500">{inv.planName}</td>
+                              <td className="px-6 py-3 text-gray-500">{inv.billingPeriod}</td>
+                              <td className="px-6 py-3 font-semibold dark:text-white">₹{inv.total.toLocaleString('en-IN')}</td>
+                              <td className="px-6 py-3">
+                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{inv.status}</span>
+                              </td>
+                              <td className="px-6 py-3 text-gray-500">{new Date(inv.issueDate).toLocaleDateString('en-IN')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1460,7 +1682,11 @@ const GymAdminDashboard = () => {
                 <h3 className="font-bold text-lg dark:text-white mb-4">Assign a Workout Slip</h3>
                 <form
                   className="space-y-4"
-                  onSubmit={(e) => { e.preventDefault(); if (slipForm.memberId) createSlip.mutate(slipForm); }}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!slipForm.memberId || !slipExercises.some((it) => it.exercise.trim())) return;
+                    createSlip.mutate({ ...slipForm, exercises: serializeExercisePlan(slipExercises) });
+                  }}
                 >
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Member</label>
@@ -1491,15 +1717,8 @@ const GymAdminDashboard = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Exercises</label>
-                    <textarea
-                      className="input-field"
-                      rows={4}
-                      value={slipForm.exercises}
-                      onChange={(e) => setSlipForm({ ...slipForm, exercises: e.target.value })}
-                      placeholder={'One exercise per line or comma-separated\ne.g.\nBench Press 3x10\nSquats 3x12'}
-                      required
-                    />
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Exercises</label>
+                    <ExercisePlanEditor value={slipExercises} onChange={setSlipExercises} />
                   </div>
                   <button type="submit" className="btn-primary justify-center" disabled={createSlip.isPending || !branch?.id}>
                     <Plus className="w-4 h-4" /> Assign Slip
@@ -1516,21 +1735,23 @@ const GymAdminDashboard = () => {
                 ) : (
                   <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[560px] overflow-y-auto">
                     {workouts.map((slip) => (
-                      <div key={slip.id} className="px-6 py-4 flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-bold text-[var(--color-deepgray)] dark:text-white">{slip.title || 'Workout Plan'}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {slip.member?.user?.username} · by {slip.trainer?.user?.username || 'Gym Admin'} · {new Date(slip.assignedDate).toLocaleDateString('en-IN')}
-                            {slip.validUntil ? ` · valid till ${new Date(slip.validUntil).toLocaleDateString('en-IN')}` : ''}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1 line-clamp-2 max-w-[340px]">{slip.exercises}</p>
+                      <div key={slip.id} className="px-6 py-4">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <div>
+                            <p className="font-bold text-[var(--color-deepgray)] dark:text-white">{slip.title || 'Workout Plan'}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {slip.member?.user?.username} · by {slip.trainer?.user?.username || 'Gym Admin'} · {new Date(slip.assignedDate).toLocaleDateString('en-IN')}
+                              {slip.validUntil ? ` · valid till ${new Date(slip.validUntil).toLocaleDateString('en-IN')}` : ''}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => downloadFile(`/workouts/${slip.id}/pdf`, `workout-${slip.id.slice(0, 8)}.pdf`)}
+                            className="inline-flex items-center gap-1.5 text-[var(--color-primary)] font-semibold text-sm hover:underline shrink-0"
+                          >
+                            <Download className="w-4 h-4" /> PDF
+                          </button>
                         </div>
-                        <button
-                          onClick={() => downloadFile(`/workouts/${slip.id}/pdf`, `workout-${slip.id.slice(0, 8)}.pdf`)}
-                          className="inline-flex items-center gap-1.5 text-[var(--color-primary)] font-semibold text-sm hover:underline shrink-0"
-                        >
-                          <Download className="w-4 h-4" /> PDF
-                        </button>
+                        <ExercisePlanView exercises={slip.exercises} />
                       </div>
                     ))}
                   </div>
@@ -1642,12 +1863,12 @@ const GymAdminDashboard = () => {
                       <input className="input-field" value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} />
                     </div>
                   </div>
-                  {branches.length > 0 && (
+                  {approvedBranches.length > 0 && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Branch</label>
                       <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={staffForm.branchId} onChange={(e) => setStaffForm({ ...staffForm, branchId: e.target.value })}>
                         <option value="">No branch</option>
-                        {branches.map((b) => (
+                        {approvedBranches.map((b) => (
                           <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
                       </select>
@@ -1839,12 +2060,16 @@ const GymAdminDashboard = () => {
               ) : (
                 <div className="grid sm:grid-cols-2 gap-4 mb-6">
                   {branches.map((b) => (
-                    <div key={b.id} className={`rounded-xl border p-4 ${b.isActive ? 'border-gray-100 dark:border-white/10' : 'border-gray-100 dark:border-white/10 opacity-60'}`}>
+                    <div key={b.id} className={`rounded-xl border p-4 ${b.isActive ? 'border-gray-100 dark:border-white/10' : 'border-gray-100 dark:border-white/10 opacity-80'}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-bold text-[var(--color-deepgray)] dark:text-white flex items-center gap-2">
+                          <p className="font-bold text-[var(--color-deepgray)] dark:text-white flex items-center gap-2 flex-wrap">
                             {b.name}
-                            {b.isActive ? (
+                            {b.status === 'PENDING' ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pending Approval</span>
+                            ) : b.status === 'REJECTED' ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Rejected</span>
+                            ) : b.isActive ? (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
                             ) : (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Disabled</span>
@@ -1852,11 +2077,19 @@ const GymAdminDashboard = () => {
                           </p>
                           <p className="text-xs text-gray-500 mt-1">{b.address} · {b.city}, {b.state}</p>
                           {b.phone && <p className="text-xs text-gray-400 mt-0.5">+91 {b.phone}</p>}
-                          <p className="text-xs text-gray-400 mt-1.5">
-                            {b._count?.members ?? 0} members · {b._count?.trainers ?? 0} trainers · {b._count?.staff ?? 0} staff · {b._count?.classes ?? 0} classes
-                          </p>
+                          {b.status === 'PENDING' && (
+                            <p className="text-xs text-amber-600 mt-1.5">Awaiting Super Admin review before members/staff can be assigned.</p>
+                          )}
+                          {b.status === 'REJECTED' && b.rejectionReason && (
+                            <p className="text-xs text-red-500 mt-1.5">Reason: {b.rejectionReason}</p>
+                          )}
+                          {b.status === 'APPROVED' && (
+                            <p className="text-xs text-gray-400 mt-1.5">
+                              {b._count?.members ?? 0} members · {b._count?.trainers ?? 0} trainers · {b._count?.staff ?? 0} staff · {b._count?.classes ?? 0} classes
+                            </p>
+                          )}
                         </div>
-                        {b.isActive && (
+                        {b.status === 'APPROVED' && b.isActive && (
                           <button
                             onClick={() => { if (window.confirm(`Disable branch "${b.name}"? Members/staff assigned to it must be moved to another branch first.`)) disableBranchMut.mutate(b.id); }}
                             disabled={disableBranchMut.isPending}
@@ -1871,7 +2104,8 @@ const GymAdminDashboard = () => {
                 </div>
               )}
 
-              <h3 className="font-bold text-lg dark:text-white mb-4">Add Branch</h3>
+              <h3 className="font-bold text-lg dark:text-white mb-4">Request a New Branch</h3>
+              <p className="text-xs text-gray-400 -mt-2 mb-4">New branches are reviewed by the Vajra Fitness team before they go live.</p>
               <form
                 className="grid sm:grid-cols-2 gap-4"
                 onSubmit={(e) => { e.preventDefault(); createBranchMut.mutate(newBranchForm); }}
@@ -1882,10 +2116,13 @@ const GymAdminDashboard = () => {
                 <input className="input-field" placeholder="State" value={newBranchForm.state} onChange={(e) => setNewBranchForm({ ...newBranchForm, state: e.target.value })} required />
                 <input className="input-field" placeholder="Phone (optional)" value={newBranchForm.phone} onChange={(e) => setNewBranchForm({ ...newBranchForm, phone: e.target.value })} />
                 <button type="submit" disabled={createBranchMut.isPending || !branch?.id} className="btn-primary py-2.5">
-                  <Plus className="w-4 h-4" /> {createBranchMut.isPending ? 'Adding…' : 'Add Branch'}
+                  <Plus className="w-4 h-4" /> {createBranchMut.isPending ? 'Submitting…' : 'Submit for Approval'}
                 </button>
                 {createBranchMut.isError && (
-                  <p className="sm:col-span-2 text-sm text-red-600">{(createBranchMut.error as any)?.response?.data?.error || 'Failed to add branch.'}</p>
+                  <p className="sm:col-span-2 text-sm text-red-600">{(createBranchMut.error as any)?.response?.data?.error || 'Failed to submit branch.'}</p>
+                )}
+                {createBranchMut.isSuccess && (
+                  <p className="sm:col-span-2 text-sm text-green-600">Branch submitted — it'll go live once approved.</p>
                 )}
               </form>
             </div>
@@ -1936,139 +2173,6 @@ const GymAdminDashboard = () => {
                 <p className="text-green-600 text-sm font-medium">Changes saved successfully.</p>
               )}
             </form>
-            </div>
-          </div>
-        )}
-
-        {/* Expenses Tab */}
-        {activeTab === 'expenses' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
-              <h2 className="font-bold text-lg dark:text-white mb-4">Expenses</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Expenses</p>
-                  <p className="text-2xl font-extrabold text-red-500">₹{(expenseSummary?.totalExpenses || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">This Month</p>
-                  <p className="text-2xl font-extrabold text-amber-500">₹{(expenseSummary?.thisMonth || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Recurring</p>
-                  <p className="text-2xl font-extrabold text-blue-500">{expenseSummary?.recurringCount || 0}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Records</p>
-                  <p className="text-2xl font-extrabold text-[var(--color-primary)]">{expenseSummary?.totalRecords || 0}</p>
-                </div>
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); createExpenseMut.mutate(expenseForm); }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <input className="input-field" placeholder="Category" value={expenseForm.category} onChange={(e) => setExpenseForm((p) => ({ ...p, category: e.target.value }))} required />
-                <input className="input-field" placeholder="Description" value={expenseForm.description} onChange={(e) => setExpenseForm((p) => ({ ...p, description: e.target.value }))} required />
-                <input className="input-field" type="number" placeholder="Amount" value={expenseForm.amount || ''} onChange={(e) => setExpenseForm((p) => ({ ...p, amount: Number(e.target.value) }))} required />
-                <input className="input-field" type="date" value={expenseForm.date} onChange={(e) => setExpenseForm((p) => ({ ...p, date: e.target.value }))} />
-                <button type="submit" disabled={createExpenseMut.isPending} className="btn-primary py-2">{createExpenseMut.isPending ? 'Adding…' : 'Add Expense'}</button>
-              </form>
-              {expensesLoading ? (
-                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-white/5">
-                      <tr>
-                        {['Category', 'Description', 'Amount', 'Date', 'Recurring', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {(expensesData?.expenses || []).map((exp: any) => (
-                        <tr key={exp.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
-                          <td className="px-6 py-3 font-semibold dark:text-white">{exp.category}</td>
-                          <td className="px-6 py-3 text-gray-500">{exp.description}</td>
-                          <td className="px-6 py-3 font-semibold text-red-500">₹{exp.amount.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-3 text-gray-500">{new Date(exp.date).toLocaleDateString('en-IN')}</td>
-                          <td className="px-6 py-3">{exp.isRecurring ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-gray-300" />}</td>
-                          <td className="px-6 py-3">
-                            <button onClick={() => deleteExpenseMut.mutate(exp.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Inventory Tab */}
-        {activeTab === 'inventory' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
-              <h2 className="font-bold text-lg dark:text-white mb-4">Inventory & POS</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Products</p>
-                  <p className="text-2xl font-extrabold text-[var(--color-primary)]">{products.length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Low Stock</p>
-                  <p className="text-2xl font-extrabold text-red-500">{products.filter((p: any) => p.stock <= p.minimumStock).length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Categories</p>
-                  <p className="text-2xl font-extrabold text-blue-500">{categories.length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Sales</p>
-                  <p className="text-2xl font-extrabold text-green-600">₹{sales.reduce((s: number, sale: any) => s + sale.finalAmount, 0).toLocaleString('en-IN')}</p>
-                </div>
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); createProductMut.mutate(productForm); }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <input className="input-field" placeholder="Product Name" value={productForm.name} onChange={(e) => setProductForm((p) => ({ ...p, name: e.target.value }))} required />
-                <input className="input-field" placeholder="SKU" value={productForm.sku} onChange={(e) => setProductForm((p) => ({ ...p, sku: e.target.value }))} />
-                <input className="input-field" type="number" placeholder="Purchase Price" value={productForm.purchasePrice || ''} onChange={(e) => setProductForm((p) => ({ ...p, purchasePrice: Number(e.target.value) }))} required />
-                <input className="input-field" type="number" placeholder="Selling Price" value={productForm.sellingPrice || ''} onChange={(e) => setProductForm((p) => ({ ...p, sellingPrice: Number(e.target.value) }))} required />
-                <input className="input-field" type="number" placeholder="Stock" value={productForm.stock || ''} onChange={(e) => setProductForm((p) => ({ ...p, stock: Number(e.target.value) }))} required />
-                <input className="input-field" type="number" placeholder="Min Stock" value={productForm.minimumStock || ''} onChange={(e) => setProductForm((p) => ({ ...p, minimumStock: Number(e.target.value) }))} />
-                <select className="input-field" value={productForm.categoryId} onChange={(e) => setProductForm((p) => ({ ...p, categoryId: e.target.value }))}>
-                  <option value="">No Category</option>
-                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button type="submit" disabled={createProductMut.isPending} className="btn-primary py-2">{createProductMut.isPending ? 'Adding…' : 'Add Product'}</button>
-              </form>
-              {productsLoading ? (
-                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-white/5">
-                      <tr>
-                        {['Name', 'SKU', 'Purchase', 'Selling', 'Stock', 'Category', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {products.map((prod: any) => (
-                        <tr key={prod.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
-                          <td className="px-6 py-3 font-semibold dark:text-white">{prod.name}</td>
-                          <td className="px-6 py-3 text-gray-500">{prod.sku || '—'}</td>
-                          <td className="px-6 py-3 text-gray-500">₹{prod.purchasePrice}</td>
-                          <td className="px-6 py-3 font-semibold text-green-600">₹{prod.sellingPrice}</td>
-                          <td className="px-6 py-3"><span className={prod.stock <= prod.minimumStock ? 'text-red-500 font-bold' : 'dark:text-white'}>{prod.stock}</span></td>
-                          <td className="px-6 py-3 text-gray-500">{prod.category?.name || '—'}</td>
-                          <td className="px-6 py-3">
-                            <button onClick={() => deleteProductMut.mutate(prod.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -2129,160 +2233,6 @@ const GymAdminDashboard = () => {
                           <td className="px-6 py-3 font-semibold dark:text-white">₹{(eq.purchaseCost || 0).toLocaleString('en-IN')}</td>
                           <td className="px-6 py-3">
                             <button onClick={() => deleteEquipMut.mutate(eq.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Classes Tab */}
-        {activeTab === 'classes' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <h2 className="font-bold text-lg dark:text-white">Group Classes</h2>
-                {branches.length > 0 && branchFilterSelect}
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Classes</p>
-                  <p className="text-2xl font-extrabold text-[var(--color-primary)]">{gymClasses.length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Active Classes</p>
-                  <p className="text-2xl font-extrabold text-green-600">{gymClasses.filter((c: any) => c.isActive).length}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Bookings</p>
-                  <p className="text-2xl font-extrabold text-blue-500">{gymClasses.reduce((s: number, c: any) => s + (c._count?.bookings || 0), 0)}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Avg Capacity</p>
-                  <p className="text-2xl font-extrabold text-amber-500">{gymClasses.length ? Math.round(gymClasses.reduce((s: number, c: any) => s + c.capacity, 0) / gymClasses.length) : 0}</p>
-                </div>
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); createClassMut.mutate(classForm); }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <input className="input-field" placeholder="Class Name" value={classForm.name} onChange={(e) => setClassForm((p) => ({ ...p, name: e.target.value }))} required />
-                <input className="input-field" type="number" placeholder="Capacity" value={classForm.capacity || ''} onChange={(e) => setClassForm((p) => ({ ...p, capacity: Number(e.target.value) }))} required />
-                <input className="input-field" type="number" placeholder="Duration (min)" value={classForm.duration || ''} onChange={(e) => setClassForm((p) => ({ ...p, duration: Number(e.target.value) }))} required />
-                <select className="input-field" value={classForm.dayOfWeek} onChange={(e) => setClassForm((p) => ({ ...p, dayOfWeek: e.target.value }))}>
-                  <option value="">Any Day</option>
-                  {['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <input className="input-field" type="time" value={classForm.startTime} onChange={(e) => setClassForm((p) => ({ ...p, startTime: e.target.value }))} />
-                <input className="input-field" type="time" value={classForm.endTime} onChange={(e) => setClassForm((p) => ({ ...p, endTime: e.target.value }))} />
-                <input className="input-field" placeholder="Location" value={classForm.location} onChange={(e) => setClassForm((p) => ({ ...p, location: e.target.value }))} />
-                {branches.length > 0 && (
-                  <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={classForm.branchId} onChange={(e) => setClassForm((p) => ({ ...p, branchId: e.target.value }))}>
-                    <option value="">No branch</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                )}
-                <button type="submit" disabled={createClassMut.isPending} className="btn-primary py-2">{createClassMut.isPending ? 'Creating…' : 'Create Class'}</button>
-              </form>
-              {classesLoading ? (
-                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-white/5">
-                      <tr>
-                        {['Name', 'Day', 'Time', 'Duration', 'Capacity', 'Branch', 'Bookings', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {gymClasses.map((cls: any) => (
-                        <tr key={cls.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
-                          <td className="px-6 py-3 font-semibold dark:text-white">{cls.name}</td>
-                          <td className="px-6 py-3 text-gray-500">{cls.dayOfWeek || '—'}</td>
-                          <td className="px-6 py-3 text-gray-500">{cls.startTime || '—'} - {cls.endTime || '—'}</td>
-                          <td className="px-6 py-3 text-gray-500">{cls.duration}m</td>
-                          <td className="px-6 py-3 dark:text-white">{cls.capacity}</td>
-                          <td className="px-6 py-3 text-gray-500">{cls.branch?.name || '—'}</td>
-                          <td className="px-6 py-3"><span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">{cls._count?.bookings || 0}</span></td>
-                          <td className="px-6 py-3">
-                            <button onClick={() => deleteClassMut.mutate(cls.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Payslips Tab */}
-        {activeTab === 'payslips' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 p-8">
-              <h2 className="font-bold text-lg dark:text-white mb-4">Payroll & Payslips</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Paid</p>
-                  <p className="text-2xl font-extrabold text-green-600">₹{(payslipSummary?.totalPaid || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
-                  <p className="text-2xl font-extrabold text-amber-500">₹{(payslipSummary?.totalPending || 0).toLocaleString('en-IN')}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Payslips</p>
-                  <p className="text-2xl font-extrabold text-blue-500">{payslipSummary?.totalPayslips || 0}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 dark:border-white/10 p-5 bg-gray-50/50 dark:bg-white/[0.03]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Year</p>
-                  <p className="text-2xl font-extrabold text-[var(--color-primary)]">{payslipSummary?.year || new Date().getFullYear()}</p>
-                </div>
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); createPayslipMut.mutate(payslipForm); }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <input className="input-field" placeholder="Staff User ID" value={payslipForm.userId} onChange={(e) => setPayslipForm((p) => ({ ...p, userId: e.target.value }))} required />
-                <select className="input-field" value={payslipForm.month} onChange={(e) => setPayslipForm((p) => ({ ...p, month: Number(e.target.value) }))}>
-                  {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('en-IN', { month: 'long' })}</option>)}
-                </select>
-                <input className="input-field" type="number" placeholder="Basic Salary" value={payslipForm.basicSalary || ''} onChange={(e) => setPayslipForm((p) => ({ ...p, basicSalary: Number(e.target.value) }))} required />
-                <input className="input-field" type="number" placeholder="Bonuses" value={payslipForm.bonuses || ''} onChange={(e) => setPayslipForm((p) => ({ ...p, bonuses: Number(e.target.value) }))} />
-                <input className="input-field" type="number" placeholder="Deductions" value={payslipForm.deductions || ''} onChange={(e) => setPayslipForm((p) => ({ ...p, deductions: Number(e.target.value) }))} />
-                <button type="submit" disabled={createPayslipMut.isPending} className="btn-primary py-2">{createPayslipMut.isPending ? 'Creating…' : 'Create Payslip'}</button>
-              </form>
-              {payslipsLoading ? (
-                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-white/5">
-                      <tr>
-                        {['Staff', 'Month', 'Year', 'Basic', 'Bonuses', 'Deductions', 'Net Pay', 'Status', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {payslips.map((p: any) => (
-                        <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
-                          <td className="px-6 py-3 font-semibold dark:text-white">{p.user?.username}</td>
-                          <td className="px-6 py-3 text-gray-500">{new Date(0, p.month - 1).toLocaleString('en-IN', { month: 'short' })}</td>
-                          <td className="px-6 py-3 text-gray-500">{p.year}</td>
-                          <td className="px-6 py-3 text-gray-500">₹{p.basicSalary.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-3 text-green-600">₹{p.bonuses.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-3 text-red-500">₹{p.deductions.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-3 font-bold dark:text-white">₹{p.netPay.toLocaleString('en-IN')}</td>
-                          <td className="px-6 py-3"><span className={`text-xs font-bold px-2 py-1 rounded-full ${p.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{p.status}</span></td>
-                          <td className="px-6 py-3 flex gap-2">
-                            {p.status !== 'PAID' && (
-                              <button onClick={() => updatePayslipStatusMut.mutate({ id: p.id, status: 'PAID' })} className="text-green-500 hover:text-green-700"><CheckCircle className="w-4 h-4" /></button>
-                            )}
-                            <button onClick={() => deletePayslipMut.mutate(p.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
                           </td>
                         </tr>
                       ))}
@@ -2424,6 +2374,7 @@ const GymAdminDashboard = () => {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

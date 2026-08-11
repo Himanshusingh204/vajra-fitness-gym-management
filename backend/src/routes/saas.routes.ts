@@ -21,7 +21,7 @@ import {
 } from '../controllers/saas.controller';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { saasPlanSchema, saasPlanUpdateSchema, subscriptionSchema, subscriptionStatusSchema, subscriptionPurchaseSchema, verifyPaymentSchema } from '../utils/validators';
+import { saasPlanSchema, saasPlanUpdateSchema, subscriptionSchema, subscriptionStatusSchema, subscriptionPurchaseSchema, verifyPaymentSchema, idParams } from '../utils/validators';
 
 const router = Router();
 
@@ -66,17 +66,17 @@ router.get('/invoices', authenticate, authorize(['GYM_ADMIN']), asyncHandler(get
 
 // Super Admin: plan management
 router.post('/plans', authenticate, authorize(['SUPER_ADMIN']), validate(saasPlanSchema), asyncHandler(createSaaSPlan));
-router.put('/plans/:id', authenticate, authorize(['SUPER_ADMIN']), validate(saasPlanUpdateSchema), asyncHandler(updateSaaSPlan));
-router.delete('/plans/:id', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(deleteSaaSPlan));
+router.put('/plans/:id', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), validate(saasPlanUpdateSchema), asyncHandler(updateSaaSPlan));
+router.delete('/plans/:id', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(deleteSaaSPlan));
 
 // Super Admin: subscription management
 router.get('/subscriptions', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(getSubscriptions));
 router.post('/subscriptions', authenticate, authorize(['SUPER_ADMIN']), validate(subscriptionSchema), asyncHandler(createSubscription));
-router.patch('/subscriptions/:id', authenticate, authorize(['SUPER_ADMIN']), validate(subscriptionStatusSchema), asyncHandler(updateSubscriptionStatus));
+router.patch('/subscriptions/:id', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), validate(subscriptionStatusSchema), asyncHandler(updateSubscriptionStatus));
 
 // Super Admin: extend / cancel subscription
-router.post('/subscriptions/:id/extend', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(extendSubscriptionHandler));
-router.post('/subscriptions/:id/cancel', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(cancelSubscriptionHandler));
+router.post('/subscriptions/:id/extend', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(extendSubscriptionHandler));
+router.post('/subscriptions/:id/cancel', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(cancelSubscriptionHandler));
 
 // Super Admin: generate invoice
 router.post('/invoices/generate', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(generateInvoiceHandler));

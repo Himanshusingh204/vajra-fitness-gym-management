@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getExpenses, recordExpense, deleteExpense, getExpenseSummary } from '../controllers/expense.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { gymIdParams, idParams } from '../utils/validators';
 import { z } from 'zod';
 
 const router = Router();
@@ -23,9 +24,9 @@ const recordExpenseSchema = z.object({
 // All expense routes require GYM_ADMIN role
 router.use(authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']));
 
-router.get('/gym/:gymId/summary', asyncHandler(getExpenseSummary));
-router.get('/gym/:gymId', asyncHandler(getExpenses));
-router.post('/gym/:gymId', validate(recordExpenseSchema), asyncHandler(recordExpense));
-router.delete('/:id', asyncHandler(deleteExpense));
+router.get('/gym/:gymId/summary', validate(gymIdParams, ['params']), asyncHandler(getExpenseSummary));
+router.get('/gym/:gymId', validate(gymIdParams, ['params']), asyncHandler(getExpenses));
+router.post('/gym/:gymId', validate(gymIdParams, ['params']), validate(recordExpenseSchema), asyncHandler(recordExpense));
+router.delete('/:id', validate(idParams, ['params']), asyncHandler(deleteExpense));
 
 export default router;

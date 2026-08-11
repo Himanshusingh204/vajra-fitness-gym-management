@@ -3,6 +3,15 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { logAudit } from '../utils/audit';
 import { assertGymCapacity, isFeatureEnabled } from '../services/entitlements.service';
+import { createNotification } from '../services/notification.service';
+
+const requireSuperAdmin = (req: AuthRequest, res: Response): boolean => {
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'Forbidden: Super Admin access required' });
+    return false;
+  }
+  return true;
+};
 
 // =====================================================================
 // BRANCH / MULTI-LOCATION CONTROLLER
@@ -46,9 +55,11 @@ export const getBranches = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Create a branch (Gym Admin / Super Admin). The first branch is allowed on
-// every plan (it is the gym's home location); additional branches require the
-// MULTI_BRANCH feature and fit within the plan's maxBranches limit.
+// Submit a new branch for approval (Gym Admin / Super Admin). The first
+// branch is allowed on every plan (it is the gym's home location);
+// additional branches require the MULTI_BRANCH feature and fit within the
+// plan's maxBranches limit. New branches start PENDING and inactive — a
+// Super Admin must approve them before members/staff/classes can be assigned.
 export const createBranch = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
@@ -72,11 +83,11 @@ export const createBranch = async (req: AuthRequest, res: Response) => {
     }
 
     const branch = await prisma.branch.create({
-      data: { gymId, name, address, city, state, phone: phone || null },
+      data: { gymId, name, address, city, state, phone: phone || null, status: 'PENDING', isActive: false },
     });
 
     await logAudit({
-      action: 'BRANCH_CREATED',
+      action: 'BRANCH_SUBMITTED',
       entity: 'Branch',
       entityId: branch.id,
       details: JSON.stringify({ name, city }),
@@ -85,7 +96,7 @@ export const createBranch = async (req: AuthRequest, res: Response) => {
 
     res.status(201).json(branch);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create branch' });
+    res.status(500).json({ error: 'Failed to submit branch' });
   }
 };
 
@@ -99,6 +110,14 @@ export const updateBranch = async (req: AuthRequest, res: Response) => {
     if (!branch) return res.status(404).json({ error: 'Branch not found' });
     if (!(await assertGymOwner(branch.gymId, req.user?.userId, req.user?.role))) {
       return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // A Gym Admin can't flip a PENDING/REJECTED branch active themselves —
+    // that would bypass the approval workflow. Only the approve/reject
+    // endpoints (Super Admin) may change status; this endpoint only toggles
+    // isActive on branches that are already APPROVED.
+    if (isActive !== undefined && req.user?.role !== 'SUPER_ADMIN' && branch.status !== 'APPROVED') {
+      return res.status(403).json({ error: 'This branch is awaiting Super Admin approval and cannot be activated yet' });
     }
 
     const updated = await prisma.branch.update({
@@ -169,5 +188,107 @@ export const deleteBranch = async (req: AuthRequest, res: Response) => {
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to disable branch' });
+  }
+};
+
+// Super Admin: list branches awaiting approval, across all gyms.
+export const getPendingBranches = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const branches = await prisma.branch.findMany({
+      where: { status: 'PENDING' },
+      include: { gym: { select: { id: true, name: true, city: true, owner: { select: { username: true, email: true } } } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(branches);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch pending branches' });
+  }
+};
+
+// Super Admin: approve a pending branch, making it active and usable. Plan
+// capacity is re-checked here (not just at submission time) since this is
+// the moment the branch actually starts consuming the gym's branch quota.
+export const approveBranch = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const id = req.params.id as string;
+    const branch = await prisma.branch.findUnique({ where: { id }, include: { gym: { select: { ownerId: true, name: true } } } });
+    if (!branch) return res.status(404).json({ error: 'Branch not found' });
+    if (branch.status !== 'PENDING') return res.status(400).json({ error: 'This branch has already been reviewed' });
+
+    const activeBranchCount = await prisma.branch.count({ where: { gymId: branch.gymId, isActive: true } });
+    if (activeBranchCount > 0 && !(await isFeatureEnabled(branch.gymId, 'MULTI_BRANCH'))) {
+      return res.status(402).json({ error: "This gym's plan doesn't include multi-branch support — ask them to upgrade before approving." });
+    }
+    try {
+      await assertGymCapacity(branch.gymId, { addBranches: 1 });
+    } catch (err: any) {
+      if (err?.name === 'EntitlementError') return res.status(402).json({ error: err.message.split(':')[2] });
+      throw err;
+    }
+
+    const updated = await prisma.branch.update({
+      where: { id },
+      data: { status: 'APPROVED', isActive: true, reviewedAt: new Date(), reviewedBy: req.user?.userId ?? null, rejectionReason: null },
+    });
+
+    await createNotification({
+      userId: branch.gym.ownerId,
+      type: 'SUCCESS',
+      title: 'Branch approved',
+      message: `Your branch "${branch.name}" is now approved and live.`,
+      link: '/admin/gym',
+    });
+
+    await logAudit({
+      action: 'BRANCH_APPROVED',
+      entity: 'Branch',
+      entityId: id,
+      details: JSON.stringify({ name: branch.name, gym: branch.gym.name }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve branch' });
+  }
+};
+
+// Super Admin: reject a pending branch, with an optional reason shown to the
+// gym owner.
+export const rejectBranch = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const id = req.params.id as string;
+    const { reason } = req.body as { reason?: string };
+    const branch = await prisma.branch.findUnique({ where: { id }, include: { gym: { select: { ownerId: true, name: true } } } });
+    if (!branch) return res.status(404).json({ error: 'Branch not found' });
+    if (branch.status !== 'PENDING') return res.status(400).json({ error: 'This branch has already been reviewed' });
+
+    const updated = await prisma.branch.update({
+      where: { id },
+      data: { status: 'REJECTED', isActive: false, reviewedAt: new Date(), reviewedBy: req.user?.userId ?? null, rejectionReason: reason || null },
+    });
+
+    await createNotification({
+      userId: branch.gym.ownerId,
+      type: 'ERROR',
+      title: 'Branch request rejected',
+      message: `Your branch "${branch.name}" was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+      link: '/admin/gym',
+    });
+
+    await logAudit({
+      action: 'BRANCH_REJECTED',
+      entity: 'Branch',
+      entityId: id,
+      details: JSON.stringify({ name: branch.name, gym: branch.gym.name, reason }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject branch' });
   }
 };
