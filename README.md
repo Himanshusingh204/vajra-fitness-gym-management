@@ -75,17 +75,16 @@ VajraFitness is built on a robust, modern tech stack designed for speed, securit
 
 Want to run the platform locally? You can have it up and running in minutes.
 
-> **Requirement:** Ensure you have Node.js (v18+) and Docker installed.
+> **Requirement:** Ensure you have Node.js (v20+) and a PostgreSQL instance
+> (local install, or a free [Neon](https://neon.tech) project).
 
 <details>
 <summary><b>Click here to view setup instructions</b></summary>
 
 <br />
 
-1. **Spin up the Database**
-   ```bash
-   docker compose up -d db
-   ```
+1. **Point at a database** — set `DATABASE_URL` in `backend/.env` to any
+   running Postgres instance (see `backend/.env.example`).
 
 2. **Start the Backend API**
    ```bash
