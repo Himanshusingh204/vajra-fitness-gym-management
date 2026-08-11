@@ -12,7 +12,7 @@ const GymsPage = () => {
     '/gyms',
   );
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
       <section className="relative pt-36 pb-16 md:pt-44 md:pb-20 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img

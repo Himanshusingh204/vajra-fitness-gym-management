@@ -53,7 +53,7 @@ const ActivateAccountPage = () => {
 
   if (!token) {
     return (
-      <div className="min-h-screen pt-24 pb-12 flex items-center justify-center bg-[var(--color-base)] dark:bg-[#0a0a0a]">
+      <div className="min-h-screen pt-24 pb-12 flex items-center justify-center bg-[var(--color-base)] dark:bg-[var(--color-base)]">
         <div className="w-full max-w-md px-4">
           <div className="glass-strong rounded-3xl p-8 text-center space-y-4">
             <XCircle className="w-12 h-12 text-red-500 mx-auto" />
@@ -68,7 +68,7 @@ const ActivateAccountPage = () => {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-12 flex items-center justify-center relative overflow-hidden bg-[var(--color-base)] dark:bg-[#0a0a0a]">
+    <div className="min-h-screen pt-24 pb-12 flex items-center justify-center relative overflow-hidden bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg h-full max-h-[600px] bg-[var(--color-primary)]/20 dark:bg-[var(--color-primary)]/10 blur-[120px] rounded-full pointer-events-none" />
 
       <div className="w-full max-w-md px-4 relative z-10">

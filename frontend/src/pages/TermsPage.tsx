@@ -36,7 +36,7 @@ const TermsPage = () => {
     '/terms',
   );
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
       <div className="relative pt-32 pb-20 overflow-hidden">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-[var(--color-primary)]/10 rounded-full blur-3xl animate-blob" />
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6">

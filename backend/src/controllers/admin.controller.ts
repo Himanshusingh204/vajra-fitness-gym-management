@@ -441,11 +441,12 @@ export const getFaqs = async (_req: Request, res: Response) => {
 
 export const createFaq = async (req: Request, res: Response) => {
   try {
-    const { question, answer, isActive, order } = req.body;
+    const { question, answer, category, isActive, order } = req.body;
     const faq = await prisma.fAQ.create({
       data: {
         question,
         answer,
+        category: category ?? null,
         isActive: isActive ?? true,
         order: order ?? 0,
       },
@@ -459,10 +460,10 @@ export const createFaq = async (req: Request, res: Response) => {
 export const updateFaq = async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { question, answer, isActive, order } = req.body;
+    const { question, answer, category, isActive, order } = req.body;
     const faq = await prisma.fAQ.update({
       where: { id },
-      data: { question, answer, isActive, order },
+      data: { question, answer, category, isActive, order },
     });
     res.json(faq);
   } catch {
@@ -492,14 +493,16 @@ export const getTestimonials = async (_req: Request, res: Response) => {
 
 export const createTestimonial = async (req: Request, res: Response) => {
   try {
-    const { name, role, content, imageUrl, rating, isActive } = req.body;
+    const { name, role, content, imageUrl, gymName, rating, featured, isActive } = req.body;
     const testimonial = await prisma.testimonial.create({
       data: {
         name,
         role,
         content,
         imageUrl: imageUrl ?? null,
+        gymName: gymName ?? null,
         rating: rating ?? 5,
+        featured: featured ?? false,
         isActive: isActive ?? true,
       },
     });
@@ -512,10 +515,10 @@ export const createTestimonial = async (req: Request, res: Response) => {
 export const updateTestimonial = async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { name, role, content, imageUrl, rating, isActive } = req.body;
+    const { name, role, content, imageUrl, gymName, rating, featured, isActive } = req.body;
     const testimonial = await prisma.testimonial.update({
       where: { id },
-      data: { name, role, content, imageUrl, rating, isActive },
+      data: { name, role, content, imageUrl, gymName, rating, featured, isActive },
     });
     res.json(testimonial);
   } catch {
@@ -530,6 +533,62 @@ export const deleteTestimonial = async (req: Request, res: Response) => {
     res.json({ message: 'Testimonial deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete testimonial' });
+  }
+};
+
+// ---------------- CMS: Site Content ----------------
+export const getSiteContent = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const entries = await prisma.siteContent.findMany({ orderBy: { key: 'asc' } });
+    res.json(entries);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch site content' });
+  }
+};
+
+export const createSiteContent = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const { key, value, section, isActive } = req.body;
+    const entry = await prisma.siteContent.create({
+      data: {
+        key,
+        value: value ?? '',
+        section: section ?? null,
+        isActive: isActive ?? true,
+        updatedBy: req.user?.userId ?? null,
+      },
+    });
+    res.status(201).json(entry);
+  } catch {
+    res.status(500).json({ error: 'Failed to create site content' });
+  }
+};
+
+export const updateSiteContent = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const id = req.params.id as string;
+    const { key, value, section, isActive } = req.body;
+    const entry = await prisma.siteContent.update({
+      where: { id },
+      data: { key, value, section, isActive, updatedBy: req.user?.userId ?? null },
+    });
+    res.json(entry);
+  } catch {
+    res.status(500).json({ error: 'Failed to update site content' });
+  }
+};
+
+export const deleteSiteContent = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const id = req.params.id as string;
+    await prisma.siteContent.delete({ where: { id } });
+    res.json({ message: 'Site content deleted' });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete site content' });
   }
 };
 

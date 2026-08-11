@@ -55,9 +55,9 @@ const StaffDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8 border-b border-gray-200 dark:border-white/10 pb-6">
+        <div className="mb-8 border-b border-[var(--color-border)] pb-6">
           <h1 className="text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-2">Staff Portal</h1>
           <p className="text-gray-500 dark:text-gray-400">
             Welcome back, <span className="font-bold text-[var(--color-primary)]">{user?.username}</span>
@@ -65,7 +65,7 @@ const StaffDashboard = () => {
           </p>
         </div>
 
-        <div className="flex gap-2 mb-8 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/10 p-1 rounded-xl w-fit flex-wrap">
+        <div className="flex gap-2 mb-8 bg-[var(--color-surface)] border border-[var(--color-border)] p-1 rounded-xl w-fit flex-wrap">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -80,8 +80,8 @@ const StaffDashboard = () => {
         </div>
 
         {activeTab === 'checkin' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Mark Attendance</h2>
               <p className="text-sm text-gray-500 mt-0.5">Check in a member for today ({today}).</p>
             </div>
@@ -134,8 +134,8 @@ const StaffDashboard = () => {
         )}
 
         {activeTab === 'attendance' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center">
               <h2 className="font-bold text-lg dark:text-white">Today's Attendance</h2>
               <span className="text-sm font-semibold text-gray-500">{attendance?.total ?? 0} check-ins</span>
             </div>
@@ -170,8 +170,8 @@ const StaffDashboard = () => {
         )}
 
         {activeTab === 'members' && (
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-white/10 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-white/10">
+          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Member Lookup</h2>
             </div>
             <div className="p-6">

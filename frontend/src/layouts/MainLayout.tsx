@@ -53,7 +53,7 @@ const MainLayout = () => {
   const year = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+    <div className="min-h-screen flex flex-col bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <Navbar />
       <main className="flex-grow pt-20 md:pt-[88px]">
         <PageTransition>

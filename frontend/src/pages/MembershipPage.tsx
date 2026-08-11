@@ -37,7 +37,7 @@ const MembershipPage = () => {
     '/membership',
   );
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[#0d0d0d] overflow-x-hidden">
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
       {/* HERO */}
       <section className="relative pt-36 pb-20 md:pt-44 md:pb-28 overflow-hidden">
         <div className="absolute inset-0 z-0">

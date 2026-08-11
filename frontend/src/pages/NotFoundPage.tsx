@@ -5,7 +5,7 @@ import { Reveal } from '../components/Reveal';
 
 const NotFoundPage = () => {
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 relative overflow-hidden bg-[var(--color-base)] dark:bg-[#0d0d0d]">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 relative overflow-hidden bg-[var(--color-base)] dark:bg-[var(--color-base)]">
       <div className="absolute top-1/4 -left-24 w-96 h-96 bg-[var(--color-primary)]/10 rounded-full blur-3xl animate-blob" />
       <div className="absolute bottom-1/4 -right-24 w-96 h-96 bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
 

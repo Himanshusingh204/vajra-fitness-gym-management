@@ -11,6 +11,7 @@ const TABLES = [
   'SupportTicket',
   'Testimonial',
   'FAQ',
+  'SiteContent',
   'Notice',
   'Enquiry',
   'Attendance',
