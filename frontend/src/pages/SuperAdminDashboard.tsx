@@ -571,7 +571,8 @@ const SuperAdminDashboard = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-1">Signed in as <strong>{user?.email}</strong></p>
         </div>
 
-        <div className="flex gap-2 mb-8 bg-[var(--color-surface)] border border-[var(--color-border)] p-1 rounded-xl w-fit flex-wrap" role="tablist" aria-label="Platform sections">
+        <div className="-mx-4 mb-8 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="tablist" aria-label="Platform sections">
+          <div className="flex min-w-max gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -591,6 +592,7 @@ const SuperAdminDashboard = () => {
               )}
             </button>
           ))}
+          </div>
         </div>
 
         {/* ============ ANALYTICS ============ */}

@@ -51,8 +51,8 @@ const VendorRegisterPage = () => {
       const response = await api.post('/auth/register/vendor', formData);
       const { token, user: newUser } = response.data;
       setAuth(newUser, token);
-      setSuccess('Registration successful! Redirecting to your dashboard...');
-      setTimeout(() => navigate('/dashboard'), 2500);
+      setSuccess('Registration successful! Redirecting to your gym dashboard...');
+      setTimeout(() => navigate('/admin/gym'), 1200);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed.');
     } finally {
@@ -87,7 +87,7 @@ const VendorRegisterPage = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">Password</label>
-            <input name="password" type="password" className="input-field" placeholder="Secure password" onChange={handleChange} required />
+            <input name="password" type="password" className="input-field" placeholder="At least 8 characters, with a letter and number" onChange={handleChange} minLength={8} required />
           </div>
 
           <div className="md:col-span-2 mt-2">

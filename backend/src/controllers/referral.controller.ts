@@ -58,8 +58,12 @@ export const createReferral = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { userId, referredUserId, rewardType, rewardValue } = req.body;
 
-    if (!userId || !referredUserId || !rewardType || !rewardValue) {
+    if (!userId || !referredUserId || !rewardType || rewardValue === undefined || rewardValue === null || rewardValue === '') {
       return res.status(400).json({ error: 'userId, referredUserId, rewardType, and rewardValue are required' });
+    }
+    const parsedRewardValue = typeof rewardValue === 'number' ? rewardValue : Number(rewardValue);
+    if (!Number.isFinite(parsedRewardValue) || parsedRewardValue < 0) {
+      return res.status(400).json({ error: 'rewardValue must be a non-negative number' });
     }
 
     // Tenant isolation: verify the caller owns this gym.
@@ -89,7 +93,7 @@ export const createReferral = async (req: AuthRequest, res: Response) => {
         referredUserId,
         referralCode: `REF-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
         rewardType,
-        rewardValue: parseFloat(rewardValue),
+        rewardValue: parsedRewardValue,
       },
     });
 

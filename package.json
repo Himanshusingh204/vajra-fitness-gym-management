@@ -6,7 +6,7 @@
     "backend"
   ],
   "scripts": {
-    "build": "npm run build --workspace=frontend && npm run build --workspace=backend && cp -r frontend/dist dist",
+    "build": "npm run postinstall --workspace=backend && npm run build --workspace=backend && npm run build --workspace=frontend",
     "vercel-build": "npm run build"
   }
 }

@@ -15,7 +15,7 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
     const { branchId } = req.query;
     
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || gym.ownerId !== req.user?.userId) {
+    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -51,7 +51,7 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
     // roleSpecifics: specialization for Trainer, or role name for Staff
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || gym.ownerId !== req.user?.userId) {
+    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -137,7 +137,7 @@ export const deleteStaff = async (req: AuthRequest, res: Response) => {
 
     const detail = staff || trainer;
     if (!detail) return res.status(404).json({ error: 'Staff member not found' });
-    if (detail.gym.ownerId !== req.user?.userId) {
+    if (detail.gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

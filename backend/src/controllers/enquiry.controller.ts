@@ -8,7 +8,7 @@ export const getEnquiries = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || gym.ownerId !== req.user?.userId) {
+    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

@@ -140,28 +140,29 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Monthly revenue trend (last 6 months)
-    const monthlyRevenueTrend = [];
-    for (let i = 5; i >= 0; i--) {
+    const monthlyRevenueTrend = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
+      const i = 5 - index;
       const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
 
-      const monthFees = await prisma.fee.aggregate({
-        _sum: { amount: true },
-        where: { gymId, status: 'PAID', paymentDate: { gte: startOfMonth, lte: endOfMonth } }
-      });
+      const [monthFees, monthMemberships] = await Promise.all([
+        prisma.fee.aggregate({
+          _sum: { amount: true },
+          where: { gymId, status: 'PAID', paymentDate: { gte: startOfMonth, lte: endOfMonth } }
+        }),
+        prisma.membership.aggregate({
+          _sum: { finalAmount: true },
+          where: { gymId, status: 'ACTIVE', startDate: { gte: startOfMonth, lte: endOfMonth } }
+        }),
+      ]);
 
-      const monthMemberships = await prisma.membership.aggregate({
-        _sum: { finalAmount: true },
-        where: { gymId, status: 'ACTIVE', startDate: { gte: startOfMonth, lte: endOfMonth } }
-      });
-
-      monthlyRevenueTrend.push({
+      return {
         month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
         fees: monthFees._sum.amount?.toNumber() ?? 0,
         memberships: monthMemberships._sum.finalAmount?.toNumber() ?? 0,
         total: (monthFees._sum.amount?.toNumber() ?? 0) + (monthMemberships._sum.finalAmount?.toNumber() ?? 0)
-      });
-    }
+      };
+    }));
 
     // Membership plan distribution
     const planDistribution = await prisma.membershipPlan.findMany({
@@ -172,32 +173,32 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     });
 
     // Member growth trend (last 6 months)
-    const memberGrowth = [];
-    for (let i = 5; i >= 0; i--) {
+    const memberGrowth = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
+      const i = 5 - index;
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
       const count = await prisma.memberDetails.count({
         where: { gymId, joiningDate: { lte: endOfMonth } }
       });
-      memberGrowth.push({
+      return {
         month: endOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
         totalMembers: count
-      });
-    }
+      };
+    }));
 
     // Attendance trend (last 30 days)
-    const attendanceTrend = [];
-    for (let i = 29; i >= 0; i--) {
+    const attendanceTrend = await Promise.all(Array.from({ length: 30 }, async (_, index) => {
+      const i = 29 - index;
       const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
       const startOfDay = new Date(date.setHours(0, 0, 0, 0));
       const endOfDay = new Date(date.setHours(23, 59, 59, 999));
       const count = await prisma.attendance.count({
         where: { gymId, checkIn: { gte: startOfDay, lte: endOfDay } }
       });
-      attendanceTrend.push({
+      return {
         date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
         checkIns: count
-      });
-    }
+      };
+    }));
 
     // Peak hours heatmap (last 30 days)
     const peakHours = await prisma.attendance.groupBy({

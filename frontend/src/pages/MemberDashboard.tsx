@@ -286,8 +286,24 @@ const MemberDashboard = () => {
 
   return (
     <div className="min-h-screen pt-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] flex flex-col md:flex-row">
+      <div className="md:hidden sticky top-20 z-20 border-y border-[var(--color-border)] bg-[var(--color-base)]/95 px-4 py-3 backdrop-blur">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-extrabold text-[var(--color-deepgray)] dark:text-white">{user?.username}</p>
+            <p className="text-xs font-semibold text-[var(--color-primary)]">{profile?.gym?.name || 'Member dashboard'}</p>
+          </div>
+          <span className="text-xs font-bold text-[var(--color-muted)]">Menu</span>
+        </div>
+        <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Member dashboard sections">
+          {tabs.map(({ key, label, icon: Icon }) => (
+            <button key={key} onClick={() => setActiveTab(key)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${activeTab === key ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-charcoal)] dark:text-white border border-[var(--color-border)]'}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </nav>
+      </div>
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-[var(--color-surface)]/50 backdrop-blur-xl border-r border-[var(--color-border)] md:h-[calc(100vh-5rem)] sticky top-20 flex-shrink-0">
+      <aside className="hidden w-full md:block md:w-64 bg-[var(--color-surface)]/50 backdrop-blur-xl border-r border-[var(--color-border)] md:h-[calc(100vh-5rem)] sticky top-20 flex-shrink-0">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white font-bold text-xl">
@@ -310,7 +326,7 @@ const MemberDashboard = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         {activeTab === 'overview' && (
           <div className="max-w-5xl">
             <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 border-b border-[var(--color-border)] pb-6 gap-4">
