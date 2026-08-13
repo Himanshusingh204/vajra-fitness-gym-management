@@ -65,7 +65,8 @@ const StaffDashboard = () => {
           </p>
         </div>
 
-        <div className="flex gap-2 mb-8 bg-[var(--color-surface)] border border-[var(--color-border)] p-1 rounded-xl w-fit flex-wrap">
+        <div className="-mx-4 mb-8 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <div className="flex min-w-max gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -77,6 +78,7 @@ const StaffDashboard = () => {
               <Icon className="w-4 h-4" /> {label}
             </button>
           ))}
+          </div>
         </div>
 
         {activeTab === 'checkin' && (

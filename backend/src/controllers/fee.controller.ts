@@ -11,7 +11,7 @@ export const getFees = async (req: AuthRequest, res: Response) => {
     
     // Gym Admin validation
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || gym.ownerId !== req.user?.userId) {
+    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -38,7 +38,7 @@ export const recordFee = async (req: AuthRequest, res: Response) => {
       req.body;
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || gym.ownerId !== req.user?.userId) {
+    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

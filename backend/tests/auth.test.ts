@@ -72,6 +72,19 @@ describe('Auth', () => {
     expect(revoked.status).toBe(401);
   });
 
+  it('rejects a refresh request from an unconfigured browser origin', async () => {
+    const { user } = await seedAdmin();
+    const loginRes = await login(user.email);
+    const cookie = refreshCookie(loginRes);
+
+    const refresh = await agent
+      .post('/api/auth/refresh')
+      .set('Cookie', cookie!)
+      .set('Origin', 'https://untrusted-preview.vercel.app');
+
+    expect(refresh.status).toBe(403);
+  });
+
   it('activates an admin-created member via one-time link, then logs in', async () => {
     const { user: admin, gym } = await seedAdmin();
     const adminToken = await login(admin.email).then((r) => r.body.token as string);

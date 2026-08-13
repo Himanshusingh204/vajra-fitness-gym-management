@@ -1,25 +1,21 @@
 # Deploying VajraFitness
 
 This app deploys as **one Vercel project** — frontend and backend together,
-one dashboard, one URL, no juggling multiple services. The root
-[`vercel.json`](./vercel.json) defines this using Vercel's "Services" feature:
+one dashboard, one URL. The root [`vercel.json`](./vercel.json) configures this:
 
 ```json
 {
-  "services": {
-    "frontend": { "root": "frontend", "framework": "vite" },
-    "backend": { "root": "backend" }
-  },
+  "version": 2,
+  "outputDirectory": "frontend/dist",
   "rewrites": [
-    { "source": "/api(/.*)?", "destination": { "type": "service", "service": "backend" } },
-    { "source": "/(.*)?", "destination": { "type": "service", "service": "frontend" } }
+    { "source": "/api", "destination": "/api/index.ts" },
+    { "source": "/api/(.*)", "destination": "/api/index.ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
 ```
 
-Requests to `/api/*` go to the backend service; everything else goes to the
-frontend (Vite SPA). You still need a database, since Vercel doesn't host
-Postgres — the free option below is Neon.
+Requests to `/api` and `/api/*` go to the Express serverless function (`api/index.ts`); everything else serves the frontend (Vite SPA). You still need a database, since Vercel doesn't host Postgres — the free option below is Neon.
 
 ---
 
@@ -50,9 +46,9 @@ Postgres — the free option below is Neon.
    | `DATABASE_URL` | the Neon **pooled** connection string (not "Direct") — Vercel runs the backend as multiple serverless instances, and pooling avoids exhausting Postgres's connection limit under load |
    | `JWT_SECRET` | random ≥32 chars — generate with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
    | `NODE_ENV` | `production` |
-   | `FRONTEND_URL` | your Vercel URL, e.g. `https://vajra-fitness.vercel.app` |
-   | `CORS_ORIGINS` | same as `FRONTEND_URL` |
-   | `VITE_API_URL` | `https://vajra-fitness.vercel.app/api` (same domain — one site) |
+   | `FRONTEND_URL` | `https://vajra-fitness-gym-management.vercel.app` |
+   | `CORS_ORIGINS` | `https://vajra-fitness-gym-management.vercel.app` |
+   | `VITE_API_URL` | *(leave unset for this one-project Vercel deployment)* — the frontend uses `/api` on the same domain. Set it only when deliberately hosting the API on a separate origin. |
    | `TRUST_PROXY` | `1` |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | *(recommended)* so activation/reset emails send — see [Email](#email-activation--password-reset) below |
    | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | *(optional)* enables online fee payments; leave blank to keep payments offline-only |

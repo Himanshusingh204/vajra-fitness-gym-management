@@ -256,36 +256,37 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
     });
     
     // Monthly revenue trend (last 6 months)
-    const monthlyRevenueTrend = [];
-    for (let i = 5; i >= 0; i--) {
+    const monthlyRevenueTrend = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
+      const i = 5 - index;
       const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
       
-      const monthFees = await prisma.fee.aggregate({
-        _sum: { amount: true },
-        where: { 
-          status: 'PAID',
-          paymentDate: { gte: startOfMonth, lte: endOfMonth }
-        }
-      });
-      
-      const monthSubscriptions = await prisma.gymSubscription.findMany({
-        where: {
-          createdAt: { gte: startOfMonth, lte: endOfMonth },
-          status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
-        },
-        include: { plan: true }
-      });
+      const [monthFees, monthSubscriptions] = await Promise.all([
+        prisma.fee.aggregate({
+          _sum: { amount: true },
+          where: {
+            status: 'PAID',
+            paymentDate: { gte: startOfMonth, lte: endOfMonth }
+          }
+        }),
+        prisma.gymSubscription.findMany({
+          where: {
+            createdAt: { gte: startOfMonth, lte: endOfMonth },
+            status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
+          },
+          include: { plan: true }
+        }),
+      ]);
       
       const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => sum + sub.amount.toNumber(), 0);
       
-      monthlyRevenueTrend.push({
+      return {
         month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
         fees: monthFees._sum.amount?.toNumber() ?? 0,
         subscriptions: subscriptionRevenue,
         total: (monthFees._sum.amount?.toNumber() ?? 0) + subscriptionRevenue
-      });
-    }
+      };
+    }));
     
     // ARPU - Average Revenue Per User (gym)
     const arpu = activeGyms > 0 ? mrr / activeGyms : 0;

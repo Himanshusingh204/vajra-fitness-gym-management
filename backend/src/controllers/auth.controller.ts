@@ -61,7 +61,13 @@ const hasAllowedOrigin = (req: Request): boolean => {
     })
     .filter((h): h is string => h !== null);
   try {
-    return allowedHosts.includes(new URL(origin).host);
+    const originUrl = new URL(origin);
+    const originHost = originUrl.host;
+    const reqHost = req.headers.host;
+    // Same-origin deployments (including Vercel) are safe without adding an
+    // unbounded hosting-provider wildcard to the cookie allowlist.
+    if (originHost === reqHost) return true;
+    return allowedHosts.includes(originHost);
   } catch {
     return false;
   }

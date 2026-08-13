@@ -98,49 +98,49 @@ const GymAdminDashboard = () => {
   const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
     queryKey: ['members', branch?.id, branchFilter],
     queryFn: () => api.get(`/members/gym/${branch?.id}`, { params: branchFilter ? { branchId: branchFilter } : undefined }).then((r) => r.data),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && ['members', 'memberships', 'fees', 'workouts', 'attendance'].includes(activeTab),
     refetchInterval: 30000,
   });
 
   const { data: plans = [], isLoading: plansLoading } = useQuery<Plan[]>({
     queryKey: ['plans', branch?.id],
     queryFn: () => api.get(`/plans/admin/gym/${branch?.id}`).then((r) => r.data),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && ['plans', 'memberships', 'fees'].includes(activeTab),
     refetchInterval: 30000,
   });
 
   const { data: fees = [], isLoading: feesLoading } = useQuery({
     queryKey: ['fees', branch?.id],
     queryFn: () => api.get(`/fees/gym/${branch?.id}`).then((r) => r.data),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && activeTab === 'fees',
     refetchInterval: 30000,
   });
 
   const { data: workouts = [], isLoading: workoutsLoading } = useQuery<WorkoutSlip[]>({
     queryKey: ['workouts', branch?.id],
     queryFn: () => api.get(`/workouts/gym/${branch?.id}`).then((r) => r.data),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && activeTab === 'workouts',
     refetchInterval: 30000,
   });
 
   const { data: staffData, isLoading: staffLoading } = useQuery<{ trainers: StaffEntry[]; staff: StaffEntry[] }>({
     queryKey: ['staff', branch?.id, branchFilter],
     queryFn: () => api.get(`/staff/gym/${branch?.id}`, { params: branchFilter ? { branchId: branchFilter } : undefined }).then((r) => r.data),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && ['staff', 'workouts', 'attendance'].includes(activeTab),
     refetchInterval: 30000,
   });
 
   const { data: attendance = [], isLoading: attendanceLoading } = useQuery<AttendanceRecord[]>({
     queryKey: ['attendance', branch?.id, branchFilter],
     queryFn: () => api.get(`/attendance/gym/${branch?.id}`, { params: { date: today, ...(branchFilter ? { branchId: branchFilter } : {}) } }).then((r) => r.data.records),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && activeTab === 'attendance',
     refetchInterval: 30000,
   });
 
   const { data: enquiries = [], isLoading: enquiriesLoading } = useQuery({
     queryKey: ['enquiries', branch?.id],
     queryFn: () => api.get(`/enquiries/gym/${branch?.id}`).then((r) => r.data),
-    enabled: !!branch?.id,
+    enabled: !!branch?.id && (activeTab === 'overview' || activeTab === 'enquiries'),
     refetchInterval: 30000,
   });
 
@@ -596,6 +596,22 @@ const GymAdminDashboard = () => {
         </button>
       </div>
 
+      <div className="lg:hidden sticky top-[68px] z-20 border-b border-[var(--color-border)] bg-[var(--color-base)]/95 px-4 py-3 backdrop-blur">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--color-muted)]">Quick actions</p>
+        <div className="grid grid-cols-3 gap-2">
+          {navGroups.flatMap((group) => group.items).filter(({ id }) => ['overview', 'members', 'fees'].includes(id)).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-bold transition-colors ${activeTab === id ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-charcoal)] dark:text-white border border-[var(--color-border)]'}`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -654,7 +670,7 @@ const GymAdminDashboard = () => {
       </aside>
 
       <div className="flex-1 min-w-0">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         {/* Overview */}
         {activeTab === 'overview' && (
           <div>

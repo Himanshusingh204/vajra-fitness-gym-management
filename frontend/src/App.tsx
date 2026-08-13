@@ -7,7 +7,6 @@ import { NotificationManager } from './components/NotificationManager';
 import HomePage from './pages/HomePage';
 
 import ScrollToTop from './components/ScrollToTop';
-import { FloatingActions } from './components/FloatingActions';
 import { PageLoader } from './components/PageLoader';
 
 // Route-based code splitting: every non-entry page loads on demand, shrinking
@@ -67,7 +66,6 @@ function App() {
     <BrowserRouter>
       <ScrollToTop />
       <NotificationManager />
-      <FloatingActions />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<MainLayout />}>

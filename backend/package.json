@@ -6,7 +6,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "tsx watch src/server.ts",
-    "build": "npx tsc",
+    "build": "tsc",
     "start": "node dist/server.js",
     "db:push": "prisma db push --skip-generate",
     "db:migrate": "prisma migrate deploy --skip-generate",
