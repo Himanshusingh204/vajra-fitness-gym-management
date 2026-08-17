@@ -1,6 +1,13 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { redis, isRedisAvailable } from '../utils/redis';
+
+// Analytics is heavy (a dozen+ queries) and polled every 60s by the
+// dashboard, which already tolerates that much staleness — cache the
+// response for a fraction of the poll interval so repeat polls hit Redis
+// instead of re-running the full query set against a remote DB.
+const ANALYTICS_CACHE_TTL_SECONDS = 30;
 
 const startOfDay = (d: Date) => {
   const date = new Date(d);
@@ -132,6 +139,19 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
     if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
       return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const cacheKey = `gym-analytics:${gymId}`;
+    if (isRedisAvailable() && redis) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          res.json(JSON.parse(cached));
+          return;
+        }
+      } catch {
+        // Redis read failed — fall through to a live query.
+      }
     }
 
     const now = new Date();
@@ -395,7 +415,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    res.json({
+    const payload = {
       monthlyRevenueTrend,
       planDistribution: planDistribution.map(p => ({
         name: p.name,
@@ -441,7 +461,15 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       retentionRate,
       revenuePerMember,
       cohortRetention
-    });
+    };
+
+    if (isRedisAvailable() && redis) {
+      redis.set(cacheKey, JSON.stringify(payload), 'EX', ANALYTICS_CACHE_TTL_SECONDS).catch(() => {
+        // Cache write is best-effort — never fail the request over it.
+      });
+    }
+
+    res.json(payload);
   } catch (error) {
     console.error('Gym analytics error:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });

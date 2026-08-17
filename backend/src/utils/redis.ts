@@ -15,7 +15,14 @@ export const redis: Redis | null = REDIS_URL
     })
   : null;
 
-let redisHealthy = redis !== null;
+// Pessimistic until the client actually confirms a connection — a client
+// object existing doesn't mean Redis is reachable. Before this fix,
+// isRedisAvailable() (and the "redis: connected" boot log) could report
+// healthy before the async connect attempt had even resolved or failed,
+// which is actively misleading when Redis is down: callers would appear
+// to be using the cache/lockout store when they were silently falling
+// through to per-call connection failures instead.
+let redisHealthy = false;
 
 if (redis) {
   redis.on('error', () => {
