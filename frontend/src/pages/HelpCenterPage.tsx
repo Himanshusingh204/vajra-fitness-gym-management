@@ -78,7 +78,7 @@ const HelpCenterPage = () => {
 
   const contactDetails = [
     { icon: Mail, label: 'Email', value: 'support@vajrafitness.in', href: 'mailto:support@vajrafitness.in' },
-    { icon: Phone, label: 'Phone', value: '+91 98765 43210', href: 'tel:+919876543210' },
+    { icon: Phone, label: 'Phone', value: '+91 78945 61230', href: 'tel:+917894561230' },
     { icon: Clock, label: 'Working Hours', value: 'Mon–Sat: 9 AM – 7 PM IST' },
   ];
 
