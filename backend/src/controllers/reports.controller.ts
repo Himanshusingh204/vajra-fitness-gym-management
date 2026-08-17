@@ -139,28 +139,24 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Monthly revenue trend (last 6 months)
+    // Monthly revenue trend (last 6 months).
+    // Every paid membership auto-creates a matching Fee row (see membership.service.ts
+    // createFeeForMembership), so Fee is the single source of truth for money actually
+    // collected — summing Membership.finalAmount separately would double-count new
+    // membership sales.
     const monthlyRevenueTrend = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
       const i = 5 - index;
       const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
 
-      const [monthFees, monthMemberships] = await Promise.all([
-        prisma.fee.aggregate({
-          _sum: { amount: true },
-          where: { gymId, status: 'PAID', paymentDate: { gte: startOfMonth, lte: endOfMonth } }
-        }),
-        prisma.membership.aggregate({
-          _sum: { finalAmount: true },
-          where: { gymId, status: 'ACTIVE', startDate: { gte: startOfMonth, lte: endOfMonth } }
-        }),
-      ]);
+      const monthFees = await prisma.fee.aggregate({
+        _sum: { amount: true },
+        where: { gymId, status: 'PAID', paymentDate: { gte: startOfMonth, lte: endOfMonth } }
+      });
 
       return {
         month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
-        fees: monthFees._sum.amount?.toNumber() ?? 0,
-        memberships: monthMemberships._sum.finalAmount?.toNumber() ?? 0,
-        total: (monthFees._sum.amount?.toNumber() ?? 0) + (monthMemberships._sum.finalAmount?.toNumber() ?? 0)
+        total: monthFees._sum.amount?.toNumber() ?? 0,
       };
     }));
 
@@ -255,15 +251,13 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       take: 10
     });
 
-    const topMemberDetails = await Promise.all(
-      topMembers.map(async (m) => {
-        const member = await prisma.memberDetails.findUnique({
-          where: { id: m.memberId! },
-          include: { user: { select: { username: true, email: true } } }
-        });
-        return { ...m, member };
-      })
-    );
+    const topMemberIds = topMembers.map((m) => m.memberId!);
+    const topMemberRecords = await prisma.memberDetails.findMany({
+      where: { id: { in: topMemberIds } },
+      include: { user: { select: { username: true, email: true } } }
+    });
+    const topMemberById = new Map(topMemberRecords.map((r) => [r.id, r]));
+    const topMemberDetails = topMembers.map((m) => ({ ...m, member: topMemberById.get(m.memberId!) ?? null }));
 
     // Expiring memberships
     const expiringSoon = await prisma.membership.findMany({

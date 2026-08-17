@@ -332,3 +332,80 @@ export const settleSaaSOrderByRazorpayOrder = async (orderId: string, paymentId:
   }
   return subscription;
 };
+
+// ---- Refunds ----
+
+// Refunds a fee that was captured through an online Razorpay payment. Only
+// callable by the gym owner or Super Admin (not the member) — this reverses
+// real money, so it's an admin action, not a self-service one. Supports a
+// partial amount (e.g. correcting an overcharge); defaults to a full refund.
+export const refundFeePayment = async (input: {
+  feeId: string;
+  requesterId: string;
+  requesterRole: string;
+  amount?: number;
+  reason?: string;
+}) => {
+  const fee = await prisma.fee.findUnique({
+    where: { id: input.feeId },
+    include: {
+      gym: { select: { id: true, name: true, ownerId: true } },
+      member: { include: { user: { select: { id: true, username: true } } } },
+    },
+  });
+  if (!fee) throw new Error('FEE_NOT_FOUND');
+
+  const isSuperAdmin = input.requesterRole === 'SUPER_ADMIN';
+  const isGymOwner = fee.gym.ownerId === input.requesterId;
+  if (!isSuperAdmin && !isGymOwner) throw new Error('UNAUTHORIZED');
+
+  if (fee.status !== 'PAID' || fee.paymentMethod !== 'ONLINE' || !fee.transactionId) {
+    throw new Error('FEE_NOT_REFUNDABLE');
+  }
+
+  const fullAmountPaise = toPaise(fee.amount.toNumber());
+  const refundAmountPaise = input.amount != null ? toPaise(input.amount) : fullAmountPaise;
+  if (refundAmountPaise <= 0 || refundAmountPaise > fullAmountPaise) {
+    throw new Error('REFUND_AMOUNT_INVALID');
+  }
+
+  const rzp = getRazorpay(); // throws PaymentDisabledError when keys are absent
+  const refund = await rzp.payments.refund(fee.transactionId, {
+    amount: refundAmountPaise,
+    notes: input.reason ? { reason: input.reason } : undefined,
+  });
+
+  const isFullRefund = refundAmountPaise === fullAmountPaise;
+  const refundNote = `Refunded ₹${(refundAmountPaise / 100).toLocaleString('en-IN')} (${refund.id})${input.reason ? `: ${input.reason}` : ''}`;
+
+  const updatedFee = await prisma.fee.update({
+    where: { id: fee.id },
+    data: {
+      status: isFullRefund ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+      notes: fee.notes ? `${fee.notes}\n${refundNote}` : refundNote,
+    },
+  });
+
+  await prisma.paymentOrder.updateMany({
+    where: { feeId: fee.id, status: 'PAID' },
+    data: { status: isFullRefund ? 'REFUNDED' : 'PAID' },
+  });
+
+  await logAudit({
+    action: 'PAYMENT_REFUNDED',
+    entity: 'Fee',
+    entityId: fee.id,
+    details: JSON.stringify({ refundId: refund.id, amount: refundAmountPaise, reason: input.reason ?? null }),
+    userId: input.requesterId,
+  });
+
+  await createNotification({
+    userId: fee.member.user.id,
+    type: 'INFO',
+    title: 'Payment refunded',
+    message: `₹${(refundAmountPaise / 100).toLocaleString('en-IN')} of your payment for ${fee.gym.name} has been refunded.`,
+    link: '/dashboard',
+  });
+
+  return { fee: updatedFee, refund };
+};

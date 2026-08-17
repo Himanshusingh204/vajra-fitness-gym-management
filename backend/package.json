@@ -11,6 +11,7 @@
     "db:push": "prisma db push --skip-generate",
     "db:migrate": "prisma migrate deploy --skip-generate",
     "jobs": "tsx src/jobs/run.ts",
+    "backup": "bash scripts/backup.sh",
     "test": "vitest run",
     "seed": "tsx scripts/seedSuperAdmin.ts && tsx scripts/seedGyms.ts && tsx scripts/seedDemoData.ts"
   },

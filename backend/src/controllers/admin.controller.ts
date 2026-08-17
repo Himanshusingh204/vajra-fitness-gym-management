@@ -255,36 +255,28 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       }
     });
     
-    // Monthly revenue trend (last 6 months)
+    // Monthly platform revenue trend (last 6 months).
+    // This is SaaS subscription revenue only — gym-collected member fees belong to
+    // the gyms, not the platform, and mixing them in here would contradict the
+    // MRR/ARR figures above (which correctly count subscriptions only).
     const monthlyRevenueTrend = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
       const i = 5 - index;
       const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-      
-      const [monthFees, monthSubscriptions] = await Promise.all([
-        prisma.fee.aggregate({
-          _sum: { amount: true },
-          where: {
-            status: 'PAID',
-            paymentDate: { gte: startOfMonth, lte: endOfMonth }
-          }
-        }),
-        prisma.gymSubscription.findMany({
-          where: {
-            createdAt: { gte: startOfMonth, lte: endOfMonth },
-            status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
-          },
-          include: { plan: true }
-        }),
-      ]);
-      
+
+      const monthSubscriptions = await prisma.gymSubscription.findMany({
+        where: {
+          createdAt: { gte: startOfMonth, lte: endOfMonth },
+          status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
+        },
+        include: { plan: true }
+      });
+
       const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => sum + sub.amount.toNumber(), 0);
-      
+
       return {
         month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
-        fees: monthFees._sum.amount?.toNumber() ?? 0,
-        subscriptions: subscriptionRevenue,
-        total: (monthFees._sum.amount?.toNumber() ?? 0) + subscriptionRevenue
+        total: subscriptionRevenue,
       };
     }));
     
@@ -427,6 +419,48 @@ export const setUserActive = async (req: AuthRequest, res: Response) => {
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update user status' });
+  }
+};
+
+// Permanently delete a user account (Super Admin only) — for removing
+// fake/test/duplicate accounts. GYM_ADMIN accounts that still own a gym
+// can't be deleted here: the owner→gym foreign key isn't cascading, and
+// gym deletion already has its own dedicated flow (deleteGym) that handles
+// the owner-account nuance correctly — route them there instead of
+// duplicating that logic.
+export const deleteUserAccount = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const id = req.params.id as string;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { ownedGyms: { select: { id: true } } },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.role === 'SUPER_ADMIN') {
+      return res.status(400).json({ error: 'Cannot delete a Super Admin account' });
+    }
+    if (user.id === req.user?.userId) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    if (user.ownedGyms.length > 0) {
+      return res.status(400).json({ error: 'This user owns a gym — delete the gym instead, which handles the owner account correctly.' });
+    }
+
+    await prisma.user.delete({ where: { id } });
+
+    await logAudit({
+      action: 'USER_DELETED',
+      entity: 'User',
+      entityId: id,
+      details: JSON.stringify({ username: user.username, email: user.email, role: user.role }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json({ message: 'User deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete user' });
   }
 };
 

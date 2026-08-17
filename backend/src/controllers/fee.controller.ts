@@ -139,6 +139,37 @@ export const updateFeeStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Delete a fee record (Gym Admin for their own gym, or Super Admin) — for
+// removing mistaken/duplicate/test entries. Paid fees linked to a webhook-
+// settled online payment are kept as the financial record of that
+// transaction; use status updates instead of deleting those.
+export const deleteFee = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id as string;
+
+    const fee = await prisma.fee.findUnique({
+      where: { id },
+      include: { gym: { select: { ownerId: true } } },
+    });
+    if (!fee) return res.status(404).json({ error: 'Fee not found' });
+
+    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+    const isGymOwner = fee.gym.ownerId === req.user?.userId;
+    if (!isSuperAdmin && !isGymOwner) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    if (fee.transactionId && fee.paymentMethod === 'ONLINE') {
+      return res.status(400).json({ error: 'Cannot delete a fee settled by an online payment. Use a refund or status change instead.' });
+    }
+
+    await prisma.fee.delete({ where: { id } });
+    res.json({ message: 'Fee deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete fee' });
+  }
+};
+
 // Get fees for a specific member (member self, their gym owner, or Super Admin)
 export const getMemberFees = async (req: AuthRequest, res: Response) => {
   try {
