@@ -139,68 +139,141 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Monthly revenue trend (last 6 months).
-    // Every paid membership auto-creates a matching Fee row (see membership.service.ts
-    // createFeeForMembership), so Fee is the single source of truth for money actually
-    // collected — summing Membership.finalAmount separately would double-count new
-    // membership sales.
-    const monthlyRevenueTrend = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
-      const i = 5 - index;
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+    // This endpoint fires ~14 independent read queries. Against a remote DB
+    // (Neon, connection round-trip dominates over query cost), awaiting them
+    // one at a time was taking 10+ seconds end-to-end. None of these depend
+    // on each other's results, so they all run concurrently in one
+    // Promise.all instead — only topMemberRecords (needs topMembers' ids
+    // first) stays sequential afterward.
+    const [
+      monthlyRevenueTrend,
+      planDistribution,
+      memberGrowth,
+      attendanceRecords,
+      paymentStatus,
+      paymentMethods,
+      memberStatus,
+      topMembers,
+      expiringSoon,
+      overdueFees,
+      gymMemberships,
+      last30DaysPaid,
+    ] = await Promise.all([
+      // Monthly revenue trend (last 6 months).
+      // Every paid membership auto-creates a matching Fee row (see membership.service.ts
+      // createFeeForMembership), so Fee is the single source of truth for money actually
+      // collected — summing Membership.finalAmount separately would double-count new
+      // membership sales.
+      Promise.all(Array.from({ length: 6 }, async (_, index) => {
+        const i = 5 - index;
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
 
-      const monthFees = await prisma.fee.aggregate({
+        const monthFees = await prisma.fee.aggregate({
+          _sum: { amount: true },
+          where: { gymId, status: 'PAID', paymentDate: { gte: startOfMonth, lte: endOfMonth } }
+        });
+
+        return {
+          month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+          total: monthFees._sum.amount?.toNumber() ?? 0,
+        };
+      })),
+
+      // Membership plan distribution
+      prisma.membershipPlan.findMany({
+        where: { gymId, isActive: true },
+        include: {
+          _count: { select: { memberships: { where: { status: 'ACTIVE' } } } }
+        }
+      }),
+
+      // Member growth trend (last 6 months)
+      Promise.all(Array.from({ length: 6 }, async (_, index) => {
+        const i = 5 - index;
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        const count = await prisma.memberDetails.count({
+          where: { gymId, joiningDate: { lte: endOfMonth } }
+        });
+        return {
+          month: endOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+          totalMembers: count
+        };
+      })),
+
+      // Raw attendance check-ins for the last 30 days — a single fetch, used
+      // below to derive both the peak-hours heatmap and the 30-day daily
+      // attendance trend in-memory instead of 30 separate COUNT round trips.
+      prisma.attendance.findMany({
+        where: { gymId, checkIn: { gte: thirtyDaysAgo } },
+        select: { checkIn: true }
+      }),
+
+      // Payment status breakdown
+      prisma.fee.groupBy({
+        by: ['status'],
+        where: { gymId, paymentDate: { gte: thirtyDaysAgo } },
+        _count: true,
+        _sum: { amount: true }
+      }),
+
+      // Revenue by payment method
+      prisma.fee.groupBy({
+        by: ['paymentMethod'],
+        where: { gymId, status: 'PAID', paymentDate: { gte: thirtyDaysAgo } },
+        _count: true,
+        _sum: { amount: true }
+      }),
+
+      // Member status breakdown
+      prisma.memberDetails.groupBy({
+        by: ['status'],
+        where: { gymId },
+        _count: true
+      }),
+
+      // Top members by attendance
+      prisma.attendance.groupBy({
+        by: ['memberId'],
+        where: { gymId, checkIn: { gte: thirtyDaysAgo }, memberId: { not: null } },
+        _count: true,
+        orderBy: { _count: { memberId: 'desc' } },
+        take: 10
+      }),
+
+      // Expiring memberships
+      prisma.membership.findMany({
+        where: {
+          gymId,
+          status: 'ACTIVE',
+          endDate: { gte: now, lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) }
+        },
+        include: { member: { include: { user: { select: { username: true, email: true } } } }, plan: true },
+        orderBy: { endDate: 'asc' },
+        take: 10
+      }),
+
+      // Overdue fees
+      prisma.fee.findMany({
+        where: { gymId, status: 'OVERDUE' },
+        include: { member: { include: { user: { select: { username: true, email: true } } } } },
+        orderBy: { dueDate: 'asc' },
+        take: 10
+      }),
+
+      // ---- Churn & retention analytics ----
+      // Fetched once, reused for churnTrend, retentionRate, revenuePerMember and cohortRetention.
+      prisma.membership.findMany({
+        where: { gymId, status: { not: 'CANCELLED' } },
+        select: { memberId: true, startDate: true, endDate: true, status: true }
+      }) as Promise<MembershipSlice[]>,
+
+      // Revenue per member: last-30-days PAID revenue.
+      prisma.fee.aggregate({
         _sum: { amount: true },
-        where: { gymId, status: 'PAID', paymentDate: { gte: startOfMonth, lte: endOfMonth } }
-      });
-
-      return {
-        month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
-        total: monthFees._sum.amount?.toNumber() ?? 0,
-      };
-    }));
-
-    // Membership plan distribution
-    const planDistribution = await prisma.membershipPlan.findMany({
-      where: { gymId, isActive: true },
-      include: {
-        _count: { select: { memberships: { where: { status: 'ACTIVE' } } } }
-      }
-    });
-
-    // Member growth trend (last 6 months)
-    const memberGrowth = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
-      const i = 5 - index;
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-      const count = await prisma.memberDetails.count({
-        where: { gymId, joiningDate: { lte: endOfMonth } }
-      });
-      return {
-        month: endOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
-        totalMembers: count
-      };
-    }));
-
-    // Attendance trend (last 30 days)
-    const attendanceTrend = await Promise.all(Array.from({ length: 30 }, async (_, index) => {
-      const i = 29 - index;
-      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(date.setHours(23, 59, 59, 999));
-      const count = await prisma.attendance.count({
-        where: { gymId, checkIn: { gte: startOfDay, lte: endOfDay } }
-      });
-      return {
-        date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-        checkIns: count
-      };
-    }));
-
-    // Peak hours heatmap (last 30 days)
-    const peakHours = await prisma.attendance.groupBy({
-      by: ['checkIn'],
-      where: { gymId, checkIn: { gte: thirtyDaysAgo } }
-    });
+        where: { gymId, status: 'PAID', paymentDate: { gte: thirtyDaysAgo } }
+      }),
+    ]);
 
     const heatmapData: { day: number; hour: number; value: number }[] = [];
     for (let day = 0; day < 7; day++) {
@@ -209,7 +282,14 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    peakHours.forEach((record) => {
+    // Daily attendance trend (last 30 days) — bucket the same raw
+    // check-in list used for the heatmap instead of running 30 separate
+    // COUNT queries. Bucketed by local calendar day (matches the original
+    // per-day startOfDay/endOfDay window this replaced), not UTC day.
+    const localDayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+    const attendanceByDayKey = new Map<string, number>();
+    attendanceRecords.forEach((record) => {
       const date = new Date(record.checkIn);
       const day = date.getDay();
       const hour = date.getHours();
@@ -217,38 +297,17 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       if (heatmapData[index]) {
         heatmapData[index].value += 1;
       }
+      const dayKey = localDayKey(date);
+      attendanceByDayKey.set(dayKey, (attendanceByDayKey.get(dayKey) ?? 0) + 1);
     });
 
-    // Payment status breakdown
-    const paymentStatus = await prisma.fee.groupBy({
-      by: ['status'],
-      where: { gymId, paymentDate: { gte: thirtyDaysAgo } },
-      _count: true,
-      _sum: { amount: true }
-    });
-
-    // Revenue by payment method
-    const paymentMethods = await prisma.fee.groupBy({
-      by: ['paymentMethod'],
-      where: { gymId, status: 'PAID', paymentDate: { gte: thirtyDaysAgo } },
-      _count: true,
-      _sum: { amount: true }
-    });
-
-    // Member status breakdown
-    const memberStatus = await prisma.memberDetails.groupBy({
-      by: ['status'],
-      where: { gymId },
-      _count: true
-    });
-
-    // Top members by attendance
-    const topMembers = await prisma.attendance.groupBy({
-      by: ['memberId'],
-      where: { gymId, checkIn: { gte: thirtyDaysAgo }, memberId: { not: null } },
-      _count: true,
-      orderBy: { _count: { memberId: 'desc' } },
-      take: 10
+    const attendanceTrend = Array.from({ length: 30 }, (_, index) => {
+      const i = 29 - index;
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      return {
+        date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        checkIns: attendanceByDayKey.get(localDayKey(date)) ?? 0
+      };
     });
 
     const topMemberIds = topMembers.map((m) => m.memberId!);
@@ -258,33 +317,6 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     });
     const topMemberById = new Map(topMemberRecords.map((r) => [r.id, r]));
     const topMemberDetails = topMembers.map((m) => ({ ...m, member: topMemberById.get(m.memberId!) ?? null }));
-
-    // Expiring memberships
-    const expiringSoon = await prisma.membership.findMany({
-      where: {
-        gymId,
-        status: 'ACTIVE',
-        endDate: { gte: now, lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) }
-      },
-      include: { member: { include: { user: { select: { username: true, email: true } } } }, plan: true },
-      orderBy: { endDate: 'asc' },
-      take: 10
-    });
-
-    // Overdue fees
-    const overdueFees = await prisma.fee.findMany({
-      where: { gymId, status: 'OVERDUE' },
-      include: { member: { include: { user: { select: { username: true, email: true } } } } },
-      orderBy: { dueDate: 'asc' },
-      take: 10
-    });
-
-    // ---- Churn & retention analytics ----
-    // Fetch once, reused for churnTrend, retentionRate, revenuePerMember and cohortRetention.
-    const gymMemberships: MembershipSlice[] = await prisma.membership.findMany({
-      where: { gymId, status: { not: 'CANCELLED' } },
-      select: { memberId: true, startDate: true, endDate: true, status: true }
-    });
 
     // Churn trend: for each of the last 6 months, who was active at month
     // start vs. still active at month end.
@@ -317,11 +349,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     });
     const retentionRate = windowStartSet.size > 0 ? stillActive / windowStartSet.size : 0;
 
-    // Revenue per member: last-30-days PAID revenue divided by current active members.
-    const last30DaysPaid = await prisma.fee.aggregate({
-      _sum: { amount: true },
-      where: { gymId, status: 'PAID', paymentDate: { gte: thirtyDaysAgo } }
-    });
+    // Revenue per member: last-30-days PAID revenue (fetched above) divided by current active members.
     const currentActiveCount = nowActiveSet.size;
     const revenuePerMember = currentActiveCount > 0
       ? (last30DaysPaid._sum.amount?.toNumber() ?? 0) / currentActiveCount
