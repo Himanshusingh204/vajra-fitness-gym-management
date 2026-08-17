@@ -3,6 +3,10 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
+import { redis, isRedisAvailable } from '../utils/redis';
+
+const PLATFORM_ANALYTICS_CACHE_KEY = 'platform-analytics';
+const PLATFORM_ANALYTICS_CACHE_TTL_SECONDS = 30;
 
 // Defense-in-depth: every cross-tenant handler must verify the caller is a
 // Super Admin inside the controller, even when the route guard already enforces
@@ -156,6 +160,18 @@ export const suspendGym = async (req: AuthRequest, res: Response) => {
 export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
+    if (isRedisAvailable() && redis) {
+      try {
+        const cached = await redis.get(PLATFORM_ANALYTICS_CACHE_KEY);
+        if (cached) {
+          res.json(JSON.parse(cached));
+          return;
+        }
+      } catch {
+        // Redis read failed — fall through to a live query.
+      }
+    }
+
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -315,7 +331,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       take: 10
     });
     
-    res.json({
+    const payload = {
       // Basic metrics
       totalGyms,
       activeGyms,
@@ -326,7 +342,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       totalTrainers,
       activeMembers,
       platformRevenue,
-      
+
       // SaaS metrics
       mrr: Math.round(mrr * 100) / 100,
       arr: Math.round(arr * 100) / 100,
@@ -337,7 +353,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       newSubscriptionsThisMonth,
       trialConversionRate: Math.round(trialConversionRate * 100) / 100,
       failedPayments,
-      
+
       // Breakdowns
       revenueByPlan,
       gymsByStatus,
@@ -350,7 +366,15 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
         plan: g.subscriptions[0]?.plan?.name || 'None',
         subscriptionStatus: g.subscriptions[0]?.status || 'NONE'
       }))
-    });
+    };
+
+    if (isRedisAvailable() && redis) {
+      redis.set(PLATFORM_ANALYTICS_CACHE_KEY, JSON.stringify(payload), 'EX', PLATFORM_ANALYTICS_CACHE_TTL_SECONDS).catch(() => {
+        // Cache write is best-effort — never fail the request over it.
+      });
+    }
+
+    res.json(payload);
   } catch (error) {
     console.error('Get platform analytics error:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });

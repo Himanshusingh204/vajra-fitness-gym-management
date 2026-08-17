@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { getOrSetJSON } from '../utils/cache';
 
 export const listPublicGyms = async (_req: Request, res: Response) => {
   try {
@@ -99,42 +100,49 @@ export const getGymStats = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    // Frontend polls this every 30s and tolerates that much staleness —
+    // cache for a fraction of the poll interval so repeat polls hit Redis
+    // instead of re-running 11 queries against a remote DB.
+    const stats = await getOrSetJSON(`gym-stats:${gymId}`, 15, async () => {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart);
+      todayEnd.setDate(todayEnd.getDate() + 1);
 
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
 
-    const [totalMembers, activeMembers, pendingMembers, trainers, staff, totalFeesPaid, monthFeesPaid, pendingFees, attendanceToday, plans, notices] = await Promise.all([
-      prisma.memberDetails.count({ where: { gymId } }),
-      prisma.memberDetails.count({ where: { gymId, status: 'ACTIVE' } }),
-      prisma.memberDetails.count({ where: { gymId, status: 'PENDING' } }),
-      prisma.trainerDetails.count({ where: { gymId } }),
-      prisma.staffDetails.count({ where: { gymId } }),
-      prisma.fee.aggregate({ _sum: { amount: true }, where: { gymId, status: 'PAID' } }),
-      prisma.fee.aggregate({ _sum: { amount: true }, where: { gymId, status: 'PAID', paymentDate: { gte: monthStart } } }),
-      prisma.fee.count({ where: { gymId, status: { in: ['PENDING', 'OVERDUE'] } } }),
-      prisma.attendance.count({ where: { gymId, checkIn: { gte: todayStart, lt: todayEnd } } }),
-      prisma.membershipPlan.count({ where: { gymId } }),
-      prisma.notice.count({ where: { gymId } }),
-    ]);
+      const [totalMembers, activeMembers, pendingMembers, trainers, staff, totalFeesPaid, monthFeesPaid, pendingFees, attendanceToday, plans, notices] = await Promise.all([
+        prisma.memberDetails.count({ where: { gymId } }),
+        prisma.memberDetails.count({ where: { gymId, status: 'ACTIVE' } }),
+        prisma.memberDetails.count({ where: { gymId, status: 'PENDING' } }),
+        prisma.trainerDetails.count({ where: { gymId } }),
+        prisma.staffDetails.count({ where: { gymId } }),
+        prisma.fee.aggregate({ _sum: { amount: true }, where: { gymId, status: 'PAID' } }),
+        prisma.fee.aggregate({ _sum: { amount: true }, where: { gymId, status: 'PAID', paymentDate: { gte: monthStart } } }),
+        prisma.fee.count({ where: { gymId, status: { in: ['PENDING', 'OVERDUE'] } } }),
+        prisma.attendance.count({ where: { gymId, checkIn: { gte: todayStart, lt: todayEnd } } }),
+        prisma.membershipPlan.count({ where: { gymId } }),
+        prisma.notice.count({ where: { gymId } }),
+      ]);
 
-    res.json({
-      totalMembers,
-      activeMembers,
-      pendingMembers,
-      trainers,
-      staff,
-      totalRevenue: totalFeesPaid._sum.amount ?? 0,
-      revenueThisMonth: monthFeesPaid._sum.amount ?? 0,
-      pendingFees,
-      attendanceToday,
-      plans,
-      notices,
+      return {
+        totalMembers,
+        activeMembers,
+        pendingMembers,
+        trainers,
+        staff,
+        totalRevenue: totalFeesPaid._sum.amount ?? 0,
+        revenueThisMonth: monthFeesPaid._sum.amount ?? 0,
+        pendingFees,
+        attendanceToday,
+        plans,
+        notices,
+      };
     });
+
+    res.json(stats);
   } catch {
     res.status(500).json({ error: 'Failed to fetch gym stats' });
   }

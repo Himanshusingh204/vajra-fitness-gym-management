@@ -27,6 +27,23 @@ const server = app.listen(PORT, () => {
   setInterval(() => {
     runAllJobs().catch((err) => logger.errorWith('background jobs interval run failed', err));
   }, JOB_INTERVAL_MS);
+
+  // Neon (and similar serverless Postgres) auto-suspends the compute after a
+  // few minutes idle; the next query then pays a multi-second cold-start
+  // tax on top of normal query time — this is the dominant cause of
+  // "randomly slow" requests observed in testing, far more than any single
+  // query's own cost. A cheap keep-alive ping well inside that idle window
+  // keeps the compute warm during active use. This only runs in this
+  // always-on process — it does nothing for the Vercel serverless
+  // deployment (api/index.ts), which has no persistent process to host an
+  // interval; that path should rely on a paid Neon tier with autosuspend
+  // disabled, or accept the cold-start cost as inherent to serverless.
+  setInterval(() => {
+    prisma.$queryRaw`SELECT 1`.catch(() => {
+      // Best-effort — a failed ping just means the next real query pays
+      // the cold-start cost, same as if this didn't exist.
+    });
+  }, 4 * 60 * 1000);
 });
 
 process.on('SIGTERM', async () => {
