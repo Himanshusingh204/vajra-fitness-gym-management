@@ -23,6 +23,7 @@ const MemberRegisterPage = () => {
 
   const [gymId, setGymId] = useState(preselectId);
   const [planId, setPlanId] = useState('');
+  const [decideLater, setDecideLater] = useState(false);
   const [preferredPaymentMethod, setPreferredPaymentMethod] = useState('UPI');
   const [formData, setFormData] = useState({ username: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
@@ -35,6 +36,15 @@ const MemberRegisterPage = () => {
   const handleGymChange = (id: string) => {
     setGymId(id);
     setPlanId('');
+    if (id) setDecideLater(false);
+  };
+
+  const handleDecideLaterToggle = (checked: boolean) => {
+    setDecideLater(checked);
+    if (checked) {
+      setGymId('');
+      setPlanId('');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,14 +52,21 @@ const MemberRegisterPage = () => {
     setError('');
     setSuccess('');
 
-    if (!gymId || !gym) {
-      setError('Please select a gym.');
+    if (isLoggedInMember && decideLater) {
+      // "Join a new gym" for an existing member only makes sense with a gym picked.
+      setError('Please select a gym, or come back to this page later.');
       return;
     }
 
-    if (!planId) {
-      setError('Please choose a membership plan.');
-      return;
+    if (!decideLater) {
+      if (!gymId || !gym) {
+        setError('Please select a gym, or choose "I\'ll pick a gym later" below.');
+        return;
+      }
+      if (!planId) {
+        setError('Please choose a membership plan.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -58,11 +75,15 @@ const MemberRegisterPage = () => {
         await enrollMember(gymId, planId, preferredPaymentMethod);
         navigate('/dashboard', { replace: true });
       } else {
-        const payload = { ...formData, gymId, planId, preferredPaymentMethod };
+        const payload = decideLater
+          ? { ...formData }
+          : { ...formData, gymId, planId, preferredPaymentMethod };
         const response = await api.post('/auth/register/member', payload);
         const { token, user: newUser } = response.data;
         setAuth(newUser, token);
-        setSuccess('Registration successful! Redirecting to your dashboard...');
+        setSuccess(decideLater
+          ? 'Account created! Redirecting to your dashboard — you can browse gyms any time.'
+          : 'Registration successful! Redirecting to your dashboard...');
         setTimeout(() => navigate('/dashboard'), 2500);
       }
     } catch (err: any) {
@@ -132,14 +153,16 @@ const MemberRegisterPage = () => {
               </div>
             ) : (
               <>
-                <label className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">
+                <label htmlFor="register-gym" className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">
                   {gyms.length === 0 ? 'No gyms available yet' : 'Select Gym'}
                 </label>
                 <select
+                  id="register-gym"
                   value={gymId}
                   onChange={(e) => handleGymChange(e.target.value)}
-                  className="input-field bg-white! dark:bg-[#1a1a1a]!"
-                  required
+                  disabled={decideLater}
+                  className="input-field bg-white! dark:bg-[#1a1a1a]! disabled:opacity-50 disabled:cursor-not-allowed"
+                  required={!decideLater}
                 >
                   <option value="">Select a gym…</option>
                   {gyms.map((g) => (
@@ -148,10 +171,25 @@ const MemberRegisterPage = () => {
                     </option>
                   ))}
                 </select>
+
+                {!isLoggedInMember && (
+                  <label className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--color-border)] p-3.5 cursor-pointer hover:border-[var(--color-primary)]/40 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={decideLater}
+                      onChange={(e) => handleDecideLaterToggle(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]"
+                    />
+                    <span className="text-sm">
+                      <span className="block font-semibold text-[var(--color-charcoal)] dark:text-white">I'll pick a gym later</span>
+                      <span className="block text-[var(--color-muted)] mt-0.5">Create your account now and browse gyms whenever you're ready — no gym required to sign up.</span>
+                    </span>
+                  </label>
+                )}
               </>
             )}
 
-            {gym && (
+            {gym && !decideLater && (
               <div className="mt-5">
                 <div className="rounded-2xl overflow-hidden border border-[var(--color-border)]">
                   <div className="relative h-36">
@@ -284,6 +322,7 @@ const MemberRegisterPage = () => {
             )}
 
             {/* Step 3: Payment method */}
+            {!decideLater && (
             <div className="mt-6">
               <p className="text-sm font-bold text-[var(--color-charcoal)] dark:text-white mb-3">How would you like to pay?</p>
               <div className="space-y-2.5">
@@ -305,6 +344,7 @@ const MemberRegisterPage = () => {
                 ))}
               </div>
             </div>
+            )}
 
             <button
               type="submit"
@@ -314,9 +354,11 @@ const MemberRegisterPage = () => {
               <UserPlus className="w-5 h-5" />
               {isSubmitting
                 ? 'Submitting…'
-                : isLoggedInMember
-                  ? 'Confirm Membership Request'
-                  : 'Create Account & Request Membership'}
+                : decideLater
+                  ? 'Create Account'
+                  : isLoggedInMember
+                    ? 'Confirm Membership Request'
+                    : 'Create Account & Request Membership'}
             </button>
 
             <div className="mt-5 text-center text-sm text-[var(--color-muted)]">

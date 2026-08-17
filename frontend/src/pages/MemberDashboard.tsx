@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyProfile, getMyWorkouts, getMyFees } from '../api/member.api';
@@ -12,6 +12,7 @@ import { getMyProgress, createProgressLog } from '../api/progress.api';
 import { getMyNutritionPlans, createNutritionPlan, deleteNutritionPlan, parseNutritionMeals } from '../api/nutrition.api';
 import { getClasses, bookClass } from '../api/class.api';
 import { ExercisePlanView } from '../components/ExercisePlan';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreditCard, Dumbbell, Calendar, Activity, ChevronRight, MapPin, Building2, BadgeCheck, Download, Users, XCircle, Clock, Bell, CalendarDays, KeyRound, UserCircle, Megaphone, ExternalLink, Loader2, TrendingUp, Salad, Trash2, Dumbbell as DumbbellIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { formatPrice } from '../utils/format';
@@ -62,10 +63,11 @@ const MemberDashboard = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: ['myProfile'],
     queryFn: getMyProfile,
-    refetchInterval: 30000
+    refetchInterval: 30000,
+    retry: false, // a missing profile means "hasn't joined a gym yet", not a transient failure
   });
 
   const { data: memberships } = useQuery({
@@ -185,6 +187,12 @@ const MemberDashboard = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myNutritionPlans'] })
   });
 
+  type ConfirmAction =
+    | { type: 'deletePlan'; id: string; title: string }
+    | { type: 'cancelBooking'; id: string }
+    | null;
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+
   const payNow = async (fee: any) => {
     if (payingFeeId) return;
     setPayingFeeId(fee.id);
@@ -270,6 +278,25 @@ const MemberDashboard = () => {
     return months;
   };
 
+  if (!profileLoading && profileError) {
+    return (
+      <div className="min-h-screen pt-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] flex items-center justify-center px-4">
+        <div className="card max-w-md w-full p-10 text-center">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white flex items-center justify-center shadow-lg shadow-[var(--color-primary)]/25">
+            <Building2 className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-[var(--color-deepgray)] dark:text-white mt-6">You haven't joined a gym yet</h1>
+          <p className="text-[var(--color-muted)] mt-2">
+            Welcome, {user?.username}! Browse gyms near you and send a membership request whenever you're ready.
+          </p>
+          <Link to="/membership" className="btn-primary w-full mt-8 py-3! justify-center">
+            <Dumbbell className="w-5 h-5" /> Browse Gyms
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const tabs = [
     { key: 'overview', label: 'Overview', icon: Activity },
     { key: 'membership', label: 'My Membership', icon: Building2 },
@@ -317,7 +344,7 @@ const MemberDashboard = () => {
 
           <nav className="space-y-2">
             {tabs.map(({ key, label, icon: Icon }) => (
-              <button key={key} onClick={() => setActiveTab(key)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeTab === key ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}>
+              <button key={key} onClick={() => setActiveTab(key)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-[background-color,color,box-shadow] ${activeTab === key ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}>
                 <Icon className="w-5 h-5" /> {label}
               </button>
             ))}
@@ -375,7 +402,7 @@ const MemberDashboard = () => {
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-0.5">Joined</p>
                     <p className="font-extrabold text-[var(--color-deepgray)] dark:text-white">
-                      {new Date(profile.joiningDate).toLocaleDateString('en-IN')}
+                      {profile?.joiningDate ? new Date(profile.joiningDate).toLocaleDateString('en-IN') : '—'}
                     </p>
                   </div>
                 </div>
@@ -418,13 +445,17 @@ const MemberDashboard = () => {
                 </p>
               </div>
 
-              <div className="bg-[var(--color-primary)] p-6 rounded-2xl border border-[var(--color-primary)] shadow-sm relative overflow-hidden group text-white flex flex-col justify-center cursor-pointer hover:bg-[var(--color-accent)] transition-colors" onClick={() => setActiveTab('pt')}>
+              <button
+                type="button"
+                onClick={() => setActiveTab('pt')}
+                className="bg-[var(--color-primary)] p-6 rounded-2xl border border-[var(--color-primary)] shadow-sm relative overflow-hidden group text-white flex flex-col justify-center text-left w-full hover:bg-[var(--color-accent)] transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold">Book a PT</h3>
                   <ChevronRight className="w-6 h-6 opacity-70 group-hover:translate-x-1 transition-transform" />
                 </div>
                 <p className="text-white/70 text-sm mt-2">Get personalized training sessions</p>
-              </div>
+              </button>
             </div>
 
             {/* Activity chart */}
@@ -586,7 +617,12 @@ const MemberDashboard = () => {
             {notificationsLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading...</div> : (
               <div className="space-y-3">
                 {notifications?.notifications?.map((n: any) => (
-                  <div key={n.id} onClick={() => markReadMutation.mutate(n.id)} className={`p-5 rounded-2xl border cursor-pointer transition-colors ${n.isRead ? 'bg-[var(--color-surface)] border-[var(--color-border)]' : 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20'}`}>
+                  <button
+                    type="button"
+                    key={n.id}
+                    onClick={() => markReadMutation.mutate(n.id)}
+                    className={`w-full text-left p-5 rounded-2xl border transition-colors ${n.isRead ? 'bg-[var(--color-surface)] border-[var(--color-border)]' : 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20'}`}
+                  >
                     <div className="flex items-center justify-between">
                       <p className="font-bold dark:text-white flex items-center gap-2">
                         {n.title}
@@ -595,7 +631,7 @@ const MemberDashboard = () => {
                       <span className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleString('en-IN')}</span>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{n.message}</p>
-                  </div>
+                  </button>
                 ))}
                 {(!notifications?.notifications || notifications.notifications.length === 0) && (
                   <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
@@ -699,7 +735,7 @@ const MemberDashboard = () => {
                               {plan.calories && <p className="text-sm text-gray-500 mt-0.5">{plan.calories} kcal / day</p>}
                             </div>
                             <button
-                              onClick={() => deleteNutritionMutation.mutate(plan.id)}
+                              onClick={() => setConfirmAction({ type: 'deletePlan', id: plan.id, title: plan.title })}
                               className="text-gray-400 hover:text-red-500 transition-colors"
                               aria-label={`Delete ${plan.title}`}
                             >
@@ -803,7 +839,7 @@ const MemberDashboard = () => {
               <div className="p-4 mb-6 bg-gray-50 dark:bg-white/5 border border-[var(--color-border)] rounded-xl text-sm text-gray-400 animate-pulse">Checking payment options…</div>
             ) : !payConfig?.enabled ? (
               <div className="p-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl text-sm text-amber-700 dark:text-amber-400">
-                Online payments aren't configured yet — contact your gym front desk to pay. Receipts are available here once paid.
+                Online payments aren’t configured yet — contact your gym front desk to pay. Receipts are available here once paid.
               </div>
             ) : (
               <div className="p-4 mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/40 rounded-xl text-sm text-green-700 dark:text-green-400">
@@ -915,7 +951,7 @@ const MemberDashboard = () => {
                         {(b.status === 'PENDING' || b.status === 'CONFIRMED') && (
                           <div className="mt-4 flex justify-end">
                             <button
-                              onClick={() => cancelMutation.mutate(b.id)}
+                              onClick={() => setConfirmAction({ type: 'cancelBooking', id: b.id })}
                               disabled={cancelMutation.isPending}
                               className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1"
                             >
@@ -976,7 +1012,7 @@ const MemberDashboard = () => {
                         disabled={bookClassMutation.isPending || (cls._count?.bookings || 0) >= cls.capacity}
                         className="btn-primary w-full py-2 text-sm"
                       >
-                        {bookClassMutation.isPending ? 'Booking...' : (cls._count?.bookings || 0) >= cls.capacity ? 'Class Full' : 'Book Class'}
+                        {bookClassMutation.isPending ? 'Booking…' : (cls._count?.bookings || 0) >= cls.capacity ? 'Class Full' : 'Book Class'}
                       </button>
                     )}
                   </div>
@@ -986,6 +1022,28 @@ const MemberDashboard = () => {
           </div>
         )}
       </main>
+
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction?.type === 'deletePlan' ? 'Delete nutrition plan?' : 'Cancel PT session?'}
+        message={
+          confirmAction?.type === 'deletePlan'
+            ? `This will permanently delete “${confirmAction.title}”. This can’t be undone.`
+            : 'This will cancel your booked personal training session. This can’t be undone.'
+        }
+        confirmLabel={confirmAction?.type === 'deletePlan' ? 'Delete' : 'Cancel Session'}
+        cancelLabel="Keep it"
+        destructive
+        loading={confirmAction?.type === 'deletePlan' ? deleteNutritionMutation.isPending : cancelMutation.isPending}
+        onConfirm={() => {
+          if (confirmAction?.type === 'deletePlan') {
+            deleteNutritionMutation.mutate(confirmAction.id, { onSuccess: () => setConfirmAction(null) });
+          } else if (confirmAction?.type === 'cancelBooking') {
+            cancelMutation.mutate(confirmAction.id, { onSuccess: () => setConfirmAction(null) });
+          }
+        }}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 };
@@ -1019,8 +1077,9 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Trainer</label>
+          <label htmlFor="pt-trainer" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Trainer</label>
           <select
+            id="pt-trainer"
             required
             className="input-field"
             value={formData.trainerId}
@@ -1035,22 +1094,22 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-            <input type="date" required className="input-field" min={new Date().toISOString().split('T')[0]} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+            <label htmlFor="pt-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+            <input id="pt-date" type="date" required className="input-field" min={new Date().toISOString().split('T')[0]} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time</label>
-            <input type="time" required className="input-field" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} />
+            <label htmlFor="pt-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time</label>
+            <input id="pt-time" type="time" required className="input-field" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (Optional)</label>
-          <textarea className="input-field" rows={2} placeholder="Focus areas, injuries..." value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})}></textarea>
+          <label htmlFor="pt-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (Optional)</label>
+          <textarea id="pt-notes" className="input-field" rows={2} placeholder="Focus areas, injuries…" value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})}></textarea>
         </div>
 
         <button type="submit" disabled={loading} className="btn-primary w-full mt-4">
-          {loading ? 'Booking...' : 'Confirm Booking'}
+          {loading ? 'Booking…' : 'Confirm Booking'}
         </button>
       </div>
     </form>
@@ -1060,12 +1119,14 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
 const ProgressLogForm = ({ onSubmit }: { onSubmit: (data: { weight: number; height?: number | null; bodyFat?: number | null }) => void }) => {
   const [form, setForm] = useState({ weight: '', height: '', bodyFat: '' });
   const [error, setError] = useState('');
+  const weightRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const weight = parseFloat(form.weight);
     if (!weight || weight <= 0) {
       setError('Enter a valid weight in kg.');
+      weightRef.current?.focus();
       return;
     }
     setError('');
@@ -1081,20 +1142,33 @@ const ProgressLogForm = ({ onSubmit }: { onSubmit: (data: { weight: number; heig
     <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg self-start">
       <h3 className="text-xl font-bold dark:text-white mb-1">Log Your Progress</h3>
       <p className="text-sm text-gray-500 mb-4">Track weight, height and body fat over time.</p>
-      {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weight (kg)</label>
-          <input type="number" step="0.1" min="1" required className="input-field" placeholder="e.g. 72.5" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
+          <label htmlFor="progress-weight" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weight (kg)</label>
+          <input
+            id="progress-weight"
+            ref={weightRef}
+            type="number"
+            step="0.1"
+            min="1"
+            required
+            className="input-field"
+            placeholder="e.g. 72.5"
+            value={form.weight}
+            onChange={(e) => setForm({ ...form, weight: e.target.value })}
+            aria-invalid={!!error}
+            aria-describedby={error ? 'progress-weight-error' : undefined}
+          />
+          {error && <p id="progress-weight-error" className="mt-1 text-sm text-red-500">{error}</p>}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Height (cm)</label>
-            <input type="number" step="0.1" min="1" className="input-field" placeholder="e.g. 175" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
+            <label htmlFor="progress-height" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Height (cm)</label>
+            <input id="progress-height" type="number" step="0.1" min="1" className="input-field" placeholder="e.g. 175" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body Fat (%)</label>
-            <input type="number" step="0.1" min="1" className="input-field" placeholder="e.g. 18" value={form.bodyFat} onChange={(e) => setForm({ ...form, bodyFat: e.target.value })} />
+            <label htmlFor="progress-bodyfat" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body Fat (%)</label>
+            <input id="progress-bodyfat" type="number" step="0.1" min="1" className="input-field" placeholder="e.g. 18" value={form.bodyFat} onChange={(e) => setForm({ ...form, bodyFat: e.target.value })} />
           </div>
         </div>
         <button type="submit" className="btn-primary w-full">
@@ -1108,14 +1182,17 @@ const ProgressLogForm = ({ onSubmit }: { onSubmit: (data: { weight: number; heig
 const NutritionPlanForm = ({ onCreated }: { onCreated: () => void }) => {
   const [form, setForm] = useState({ title: '', calories: '', meals: '' });
   const [error, setError] = useState('');
+  const [titleError, setTitleError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); setSuccess('');
+    setError(''); setSuccess(''); setTitleError('');
     if (form.title.trim().length < 2) {
-      setError('Plan title must be at least 2 characters.');
+      setTitleError('Plan title must be at least 2 characters.');
+      titleRef.current?.focus();
       return;
     }
     setLoading(true);
@@ -1151,19 +1228,31 @@ const NutritionPlanForm = ({ onCreated }: { onCreated: () => void }) => {
       {success && <div className="text-green-500 mb-4 bg-green-50 dark:bg-green-900/20 p-3 rounded text-sm">{success}</div>}
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan Title</label>
-          <input type="text" required className="input-field" placeholder="e.g. Lean Muscle Diet" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <label htmlFor="nutrition-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan Title</label>
+          <input
+            id="nutrition-title"
+            ref={titleRef}
+            type="text"
+            required
+            className="input-field"
+            placeholder="e.g. Lean Muscle Diet"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            aria-invalid={!!titleError}
+            aria-describedby={titleError ? 'nutrition-title-error' : undefined}
+          />
+          {titleError && <p id="nutrition-title-error" className="mt-1 text-sm text-red-500">{titleError}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Daily Calories (optional)</label>
-          <input type="number" min="1" className="input-field" placeholder="e.g. 2200" value={form.calories} onChange={(e) => setForm({ ...form, calories: e.target.value })} />
+          <label htmlFor="nutrition-calories" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Daily Calories (optional)</label>
+          <input id="nutrition-calories" type="number" min="1" className="input-field" placeholder="e.g. 2200" value={form.calories} onChange={(e) => setForm({ ...form, calories: e.target.value })} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Meals (one per line)</label>
-          <textarea className="input-field" rows={4} placeholder={'Breakfast: Oats, eggs, banana\nLunch: Rice, dal, veggies\nDinner: Grilled chicken, salad'} value={form.meals} onChange={(e) => setForm({ ...form, meals: e.target.value })} />
+          <label htmlFor="nutrition-meals" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Meals (one per line)</label>
+          <textarea id="nutrition-meals" className="input-field" rows={4} placeholder={'Breakfast: Oats, eggs, banana\nLunch: Rice, dal, veggies\nDinner: Grilled chicken, salad'} value={form.meals} onChange={(e) => setForm({ ...form, meals: e.target.value })} />
         </div>
         <button type="submit" disabled={loading} className="btn-primary w-full">
-          {loading ? 'Saving...' : 'Create Plan'}
+          {loading ? 'Saving…' : 'Create Plan'}
         </button>
       </div>
     </form>
@@ -1174,18 +1263,24 @@ const SettingsTab = () => {
   const user = useAuthStore(state => state.user);
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [error, setError] = useState('');
+  const [newPasswordError, setNewPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const newPasswordRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); setSuccess('');
+    setError(''); setSuccess(''); setNewPasswordError(''); setConfirmPasswordError('');
     if (form.newPassword.length < 8) {
-      setError('New password must be at least 8 characters');
+      setNewPasswordError('New password must be at least 8 characters');
+      newPasswordRef.current?.focus();
       return;
     }
     if (form.newPassword !== form.confirmPassword) {
-      setError('Passwords do not match');
+      setConfirmPasswordError('Passwords do not match');
+      confirmPasswordRef.current?.focus();
       return;
     }
     setLoading(true);
@@ -1229,21 +1324,57 @@ const SettingsTab = () => {
         {success && <div className="text-green-500 mb-4 bg-green-50 dark:bg-green-900/20 p-3 rounded text-sm">{success}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Password</label>
-            <input type="password" required className="input-field" value={form.currentPassword} onChange={(e) => setForm({...form, currentPassword: e.target.value})} />
+            <label htmlFor="password-current" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Password</label>
+            <input
+              id="password-current"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              required
+              className="input-field"
+              value={form.currentPassword}
+              onChange={(e) => setForm({...form, currentPassword: e.target.value})}
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
-              <input type="password" required className="input-field" value={form.newPassword} onChange={(e) => setForm({...form, newPassword: e.target.value})} placeholder="At least 8 characters" />
+              <label htmlFor="password-new" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+              <input
+                id="password-new"
+                name="newPassword"
+                ref={newPasswordRef}
+                type="password"
+                autoComplete="new-password"
+                required
+                className="input-field"
+                value={form.newPassword}
+                onChange={(e) => setForm({...form, newPassword: e.target.value})}
+                placeholder="At least 8 characters"
+                aria-invalid={!!newPasswordError}
+                aria-describedby={newPasswordError ? 'password-new-error' : undefined}
+              />
+              {newPasswordError && <p id="password-new-error" className="mt-1 text-sm text-red-500">{newPasswordError}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm New Password</label>
-              <input type="password" required className="input-field" value={form.confirmPassword} onChange={(e) => setForm({...form, confirmPassword: e.target.value})} />
+              <label htmlFor="password-confirm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm New Password</label>
+              <input
+                id="password-confirm"
+                name="confirmPassword"
+                ref={confirmPasswordRef}
+                type="password"
+                autoComplete="new-password"
+                required
+                className="input-field"
+                value={form.confirmPassword}
+                onChange={(e) => setForm({...form, confirmPassword: e.target.value})}
+                aria-invalid={!!confirmPasswordError}
+                aria-describedby={confirmPasswordError ? 'password-confirm-error' : undefined}
+              />
+              {confirmPasswordError && <p id="password-confirm-error" className="mt-1 text-sm text-red-500">{confirmPasswordError}</p>}
             </div>
           </div>
           <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? 'Updating...' : 'Update Password'}
+            {loading ? 'Updating…' : 'Update Password'}
           </button>
         </form>
       </div>

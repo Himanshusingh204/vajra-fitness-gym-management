@@ -31,7 +31,7 @@ export function ThemeSelector() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-all"
+        className="flex items-center gap-2 p-2 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-deepgray)] dark:hover:text-white hover:bg-[var(--color-border)]/40 transition-all"
         aria-label="Select theme"
         title="Select Theme"
       >
@@ -39,9 +39,9 @@ export function ThemeSelector() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl border border-gray-100 dark:border-white/10 overflow-hidden z-50 animate-in fade-in zoom-in duration-200">
+        <div className="absolute right-0 mt-2 w-48 bg-[var(--color-surface)] rounded-xl shadow-xl border border-[var(--color-border)] overflow-hidden z-50 animate-in fade-in zoom-in duration-200">
           <div className="py-2">
-            <div className="px-3 pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-white/5 mb-1">
+            <div className="px-3 pb-2 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider border-b border-[var(--color-border)] mb-1">
               Select Theme
             </div>
             {THEMES.map((t) => (
@@ -51,14 +51,14 @@ export function ThemeSelector() {
                   setTheme(t.id as any);
                   setIsOpen(false);
                 }}
-                className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group"
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-left hover:bg-[var(--color-border)]/30 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-4 h-4 rounded-full border border-gray-200 dark:border-white/20 shadow-inner group-hover:scale-110 transition-transform"
+                    className="w-4 h-4 rounded-full border border-[var(--color-border-strong)] shadow-inner group-hover:scale-110 transition-transform"
                     style={{ backgroundColor: t.color }}
                   />
-                  <span className={`font-medium ${theme === t.id ? 'text-[var(--color-primary)]' : 'text-gray-700 dark:text-gray-300'}`}>
+                  <span className={`font-medium ${theme === t.id ? 'text-[var(--color-primary)]' : 'text-[var(--color-deepgray)]'}`}>
                     {t.label}
                   </span>
                 </div>
