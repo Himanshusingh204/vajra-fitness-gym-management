@@ -3,3 +3,6 @@ node_modules
 .env
 
 /generated/prisma
+
+# Local database dumps produced by scripts/backup.sh — never commit real data
+/backups

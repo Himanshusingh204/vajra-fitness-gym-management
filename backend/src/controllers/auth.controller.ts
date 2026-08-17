@@ -10,6 +10,7 @@ import { isLocked, registerFailure, clearFailures } from '../utils/bruteForce';
 import { createNotification } from '../services/notification.service';
 import { generateRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllUserTokens } from '../services/refreshToken.service';
 import { sendPasswordResetEmail, sendActivationEmail } from '../utils/email';
+import { logger } from '../utils/logger';
 
 // Brute-force lockout (Redis-backed when available, in-memory fallback).
 // see utils/bruteForce.ts for the shared cross-instance implementation.
@@ -123,14 +124,19 @@ export const registerMember = async (req: Request, res: Response) => {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(409).json({ error: 'An account with this email already exists' });
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (!gym.isApproved) return res.status(403).json({ error: 'Membership registration is closed at this gym' });
+    // Gym selection is optional at signup — a member can create an account
+    // and pick a gym later from their dashboard (see enrollMember).
+    let gym: Awaited<ReturnType<typeof prisma.gym.findUnique>> = null;
+    if (gymId) {
+      gym = await prisma.gym.findUnique({ where: { id: gymId } });
+      if (!gym) return res.status(404).json({ error: 'Gym not found' });
+      if (!gym.isApproved) return res.status(403).json({ error: 'Membership registration is closed at this gym' });
 
-    if (planId) {
-      const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
-      if (!plan) return res.status(404).json({ error: 'Membership plan not found' });
-      if (plan.gymId !== gym.id) return res.status(400).json({ error: 'Plan does not belong to the selected gym' });
+      if (planId) {
+        const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
+        if (!plan) return res.status(404).json({ error: 'Membership plan not found' });
+        if (plan.gymId !== gym.id) return res.status(400).json({ error: 'Plan does not belong to the selected gym' });
+      }
     }
 
     const hashedPassword = await argon2.hash(password);
@@ -142,30 +148,38 @@ export const registerMember = async (req: Request, res: Response) => {
         password: hashedPassword,
         role: 'MEMBER',
         phone,
-        memberDetails: {
-          create: {
-            gymId: gym.id,
-            planId: planId || undefined,
-            status: 'PENDING', // Self-registration requires gym-admin approval
-            preferredPaymentMethod: preferredPaymentMethod || null,
-          },
-        },
+        ...(gym
+          ? {
+              memberDetails: {
+                create: {
+                  gymId: gym.id,
+                  planId: planId || undefined,
+                  status: 'PENDING', // Self-registration requires gym-admin approval
+                  preferredPaymentMethod: preferredPaymentMethod || null,
+                },
+              },
+            }
+          : {}),
       },
     });
 
     const refreshRaw = await generateRefreshToken(member.id);
     setRefreshCookie(res, refreshRaw);
 
-    await createNotification({
-      userId: gym.ownerId,
-      type: 'INFO',
-      title: 'New member registration',
-      message: `${username} registered to join ${gym.name}. Review their membership request.`,
-      link: '/admin/gym',
-    });
+    if (gym) {
+      await createNotification({
+        userId: gym.ownerId,
+        type: 'INFO',
+        title: 'New member registration',
+        message: `${username} registered to join ${gym.name}. Review their membership request.`,
+        link: '/admin/gym',
+      });
+    }
 
     res.status(201).json({
-      message: 'Member registered successfully, pending gym approval.',
+      message: gym
+        ? 'Member registered successfully, pending gym approval.'
+        : 'Account created. Browse gyms any time to send a membership request.',
       token: issueAccessToken(member),
       user: { id: member.id, username: member.username, email: member.email, role: member.role },
     });
@@ -398,8 +412,14 @@ export const forgotPassword = async (req: Request, res: Response) => {
       },
     });
 
+    // Best-effort: the reset token already exists, and failing the whole
+    // request on an email-delivery error would both break the flow for a
+    // valid account and (since non-existent accounts never reach this line)
+    // leak account existence via a differing response.
     const resetLink = `${FRONTEND_URL}/reset-password?token=${token}`;
-    await sendPasswordResetEmail(user.email, resetLink);
+    await sendPasswordResetEmail(user.email, resetLink).catch((err) =>
+      logger.warn('password reset email failed', { email: user.email, error: String(err) }),
+    );
 
     res.json({ message: generic, ...(process.env.NODE_ENV === 'development' ? { resetLink } : {}) });
   } catch (error) {

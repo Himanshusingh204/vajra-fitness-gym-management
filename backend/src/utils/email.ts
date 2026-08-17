@@ -49,6 +49,11 @@ const shell = (title: string, body: string) => `
 `;
 
 const sendMail = async (to: string, subject: string, html: string) => {
+  // Never hit a real SMTP server from the test suite, even if .env has live
+  // credentials configured for local dev — mirrors the isTest bypass already
+  // used for rate limiting (see middlewares/rateLimit.middleware.ts).
+  if (process.env.NODE_ENV === 'test') return;
+
   const transport = getTransporter();
   if (!transport) {
     if (process.env.NODE_ENV === 'production') {

@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getFees, recordFee, updateFeeStatus, getMemberFees, getFeeReceiptPDF } from '../controllers/fee.controller';
+import { getFees, recordFee, updateFeeStatus, deleteFee, getMemberFees, getFeeReceiptPDF } from '../controllers/fee.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { recordFeeSchema, updateFeeStatusSchema, idParams, gymIdParams, memberIdParams } from '../utils/validators';
@@ -22,5 +22,6 @@ router.use(authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']));
 router.get('/gym/:gymId', validate(gymIdParams, ['params']), asyncHandler(getFees));
 router.post('/gym/:gymId', validate(gymIdParams, ['params']), validate(recordFeeSchema), asyncHandler(recordFee));
 router.put('/:id', validate(idParams, ['params']), validate(updateFeeStatusSchema), asyncHandler(updateFeeStatus));
+router.delete('/:id', validate(idParams, ['params']), asyncHandler(deleteFee));
 
 export default router;

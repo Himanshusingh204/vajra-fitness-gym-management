@@ -331,8 +331,14 @@ export const addMember = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Best-effort; the member record and activation link already exist, so an
+    // email failure (bad SMTP config, provider outage) shouldn't roll back an
+    // otherwise-successful creation — see the bulk-import path above for the
+    // same pattern.
     const activationLink = `${FRONTEND_URL}/activate?token=${activationToken}`;
-    await sendActivationEmail(email, username, activationLink);
+    await sendActivationEmail(email, username, activationLink).catch((err) =>
+      logger.warn('activation email failed', { email, error: String(err) }),
+    );
 
     await notifyGymOwner({
       gymId,
@@ -379,7 +385,9 @@ export const sendActivationLink = async (req: AuthRequest, res: Response) => {
     });
 
     const activationLink = `${FRONTEND_URL}/activate?token=${activationToken}`;
-    await sendActivationEmail(memberDetails.user.email, memberDetails.user.username, activationLink);
+    await sendActivationEmail(memberDetails.user.email, memberDetails.user.username, activationLink).catch((err) =>
+      logger.warn('activation email failed', { email: memberDetails.user.email, error: String(err) }),
+    );
 
     res.json({ activationLink });
   } catch (error) {

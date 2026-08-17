@@ -22,6 +22,7 @@ import {
   updateSupportTicket,
   getAuditLogs,
   setUserActive,
+  deleteUserAccount,
   updateGymProfile,
   getAllFees,
   getPlatformMessages,
@@ -51,6 +52,7 @@ router.put('/messages/:id', validate(idParams, ['params']), asyncHandler(updateP
 router.get('/analytics', asyncHandler(getPlatformAnalytics));
 router.get('/users', asyncHandler(getUsers));
 router.put('/users/:id/status', validate(userIdParams, ['params']), validate(userStatusSchema), asyncHandler(setUserActive));
+router.delete('/users/:id', validate(userIdParams, ['params']), asyncHandler(deleteUserAccount));
 router.get('/support/tickets', asyncHandler(getSupportTickets));
 router.put('/support/tickets/:id', validate(idParams, ['params']), validate(ticketAdminSchema), asyncHandler(updateSupportTicket));
 router.get('/audit-logs', asyncHandler(getAuditLogs));

@@ -149,7 +149,9 @@ export const registerMemberSchema = z.object({
   email,
   password,
   phone: optionalIndianPhone(),
-  gymId: uuid,
+  // Optional: a member can create an account without picking a gym yet and
+  // join one later from their dashboard (see enrollMember).
+  gymId: uuid.optional().nullable(),
   planId: uuid.optional().nullable(),
   preferredPaymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable(),
 });
@@ -271,6 +273,12 @@ export const verifyPaymentSchema = z.object({
   orderId: razorpayId,
   paymentId: razorpayId,
   signature: z.string().trim().length(64),
+});
+
+export const refundPaymentSchema = z.object({
+  feeId: uuid,
+  amount: z.number().positive().finite().optional(),
+  reason: z.string().trim().max(300).optional(),
 });
 
 export const createMembershipSchema = z.object({

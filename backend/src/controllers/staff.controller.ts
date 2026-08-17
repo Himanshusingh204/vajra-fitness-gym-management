@@ -7,6 +7,7 @@ import { FRONTEND_URL } from '../utils/env';
 import { notifyGymOwner } from '../services/notification.service';
 import { sendActivationEmail } from '../utils/email';
 import { assertGymCapacity } from '../services/entitlements.service';
+import { logger } from '../utils/logger';
 
 // Get all staff and trainers for a gym
 export const getStaff = async (req: AuthRequest, res: Response) => {
@@ -104,8 +105,13 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Best-effort; the account and activation link already exist, so an email
+    // failure (bad SMTP config, provider outage) shouldn't roll back an
+    // otherwise-successful creation.
     const activationLink = `${FRONTEND_URL}/activate?token=${activationToken}`;
-    await sendActivationEmail(email, username, activationLink);
+    await sendActivationEmail(email, username, activationLink).catch((err) =>
+      logger.warn('activation email failed', { email, error: String(err) }),
+    );
 
     await notifyGymOwner({
       gymId,
