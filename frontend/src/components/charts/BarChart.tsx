@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import type { ChartSeries, ChartConfig } from './types';
 
 interface BarChartProps {
@@ -9,7 +9,18 @@ interface BarChartProps {
   grouped?: boolean;
 }
 
-export const BarChart: React.FC<BarChartProps> = ({
+const DEFAULT_PADDING = { top: 20, right: 20, bottom: 60, left: 50 };
+
+const DEFAULT_COLORS = [
+  'var(--color-primary)',
+  'var(--color-secondary)',
+  'var(--color-accent)',
+  'var(--color-primary-light)',
+  'var(--color-secondary-light)',
+  '#ff7b00',
+];
+
+const BarChartImpl: React.FC<BarChartProps> = ({
   series,
   config = {},
   className = '',
@@ -20,18 +31,11 @@ export const BarChart: React.FC<BarChartProps> = ({
   const {
     width = 600,
     height = 300,
-    padding = { top: 20, right: 20, bottom: 60, left: 50 },
+    padding = DEFAULT_PADDING,
     showGrid = true,
     showLabels = true,
     animate = true,
-    colors = [
-      'var(--color-primary)',
-      'var(--color-secondary)',
-      'var(--color-accent)',
-      'var(--color-primary-light)',
-      'var(--color-secondary-light)',
-      '#ff7b00',
-    ],
+    colors = DEFAULT_COLORS,
   } = config;
 
   const pad = useMemo(
@@ -267,3 +271,5 @@ export const BarChart: React.FC<BarChartProps> = ({
     />
   );
 };
+
+export const BarChart = memo(BarChartImpl);

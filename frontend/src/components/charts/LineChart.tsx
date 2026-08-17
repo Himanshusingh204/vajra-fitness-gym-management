@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, memo } from 'react';
 import type { ChartSeries, ChartConfig } from './types';
 
 interface LineChartProps {
@@ -7,7 +7,18 @@ interface LineChartProps {
   className?: string;
 }
 
-export const LineChart: React.FC<LineChartProps> = ({
+const DEFAULT_PADDING = { top: 20, right: 20, bottom: 40, left: 50 };
+
+const DEFAULT_COLORS = [
+  'var(--color-primary)',
+  'var(--color-secondary)',
+  'var(--color-accent)',
+  'var(--color-primary-light)',
+  'var(--color-secondary-light)',
+  '#ff7b00',
+];
+
+const LineChartImpl: React.FC<LineChartProps> = ({
   series,
   config = {},
   className = '',
@@ -16,20 +27,13 @@ export const LineChart: React.FC<LineChartProps> = ({
   const {
     width = 600,
     height = 300,
-    padding = { top: 20, right: 20, bottom: 40, left: 50 },
+    padding = DEFAULT_PADDING,
     showGrid = true,
     showLabels = true,
     showPoints = true,
     showArea = false,
     animate = true,
-    colors = [
-      'var(--color-primary)',
-      'var(--color-secondary)',
-      'var(--color-accent)',
-      'var(--color-primary-light)',
-      'var(--color-secondary-light)',
-      '#ff7b00',
-    ],
+    colors = DEFAULT_COLORS,
   } = config;
 
   const pad = useMemo(
@@ -182,3 +186,5 @@ export const LineChart: React.FC<LineChartProps> = ({
     />
   );
 };
+
+export const LineChart = memo(LineChartImpl);

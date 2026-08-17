@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, memo } from 'react';
 import type { ChartSeries, ChartConfig } from './types';
 
 interface AreaChartProps {
@@ -7,7 +7,18 @@ interface AreaChartProps {
   className?: string;
 }
 
-export const AreaChart: React.FC<AreaChartProps> = ({
+const DEFAULT_PADDING = { top: 20, right: 20, bottom: 40, left: 50 };
+
+const DEFAULT_COLORS = [
+  'var(--color-primary)',
+  'var(--color-secondary)',
+  'var(--color-accent)',
+  'var(--color-primary-light)',
+  'var(--color-secondary-light)',
+  '#ff7b00',
+];
+
+const AreaChartImpl: React.FC<AreaChartProps> = ({
   series,
   config = {},
   className = '',
@@ -16,18 +27,11 @@ export const AreaChart: React.FC<AreaChartProps> = ({
   const {
     width = 600,
     height = 300,
-    padding = { top: 20, right: 20, bottom: 40, left: 50 },
+    padding = DEFAULT_PADDING,
     showGrid = true,
     showLabels = true,
     animate = true,
-    colors = [
-      'var(--color-primary)',
-      'var(--color-secondary)',
-      'var(--color-accent)',
-      'var(--color-primary-light)',
-      'var(--color-secondary-light)',
-      '#ff7b00',
-    ],
+    colors = DEFAULT_COLORS,
   } = config;
 
   const pad = useMemo(
@@ -173,3 +177,5 @@ export const AreaChart: React.FC<AreaChartProps> = ({
     />
   );
 };
+
+export const AreaChart = memo(AreaChartImpl);
