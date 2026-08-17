@@ -116,6 +116,48 @@ in the meantime.
 
 ---
 
+## Backups
+
+Neon's own automatic backups are a dashboard toggle, not something this repo
+controls — and the **free tier only retains ~1 day of point-in-time
+restore**, which isn't enough for a paying gym's member/payment data. This
+repo also ships a real, portable backup path that doesn't depend on your
+Neon plan:
+
+- `backend/scripts/backup.sh` — runs `pg_dump` against `DATABASE_URL` (use
+  the Neon **direct** string) and writes a timestamped, gzip-compressed
+  `.sql.gz` file to `backend/backups/` (git-ignored). Run it locally any
+  time with `cd backend && npm run backup`. Set `AWS_S3_BACKUP_BUCKET` (plus
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`) to also push the
+  dump to S3-compatible storage (AWS S3, Cloudflare R2, Backblaze B2 all
+  work via the AWS CLI).
+- `.github/workflows/backup.yml` — runs the same script on a daily schedule
+  (02:00 UTC). To turn it on:
+  1. Repo Settings → Secrets and variables → Actions → **Secrets**: add
+     `PROD_DATABASE_URL` (Neon direct string) and, if using S3 upload,
+     `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
+  2. Same page → **Variables**: add `BACKUPS_ENABLED = true` (the workflow
+     no-ops until this is set, so it doesn't fail nightly on forks/clones
+     that haven't configured it) and, if using S3, `AWS_S3_BACKUP_BUCKET` /
+     `AWS_REGION`.
+
+  ⚠️ **If this repository is public** (as it is at the time of writing),
+  **do not skip this step**: also add secret `BACKUP_ENCRYPTION_KEY` (any
+  long random string). GitHub Actions workflow artifacts on a public repo
+  are downloadable by *any* GitHub user, not just collaborators — a raw
+  production dump (member PII, payment records) must never be uploaded
+  unencrypted. Without `BACKUP_ENCRYPTION_KEY` set, the workflow simply
+  skips the artifact-upload step entirely rather than uploading it in the
+  clear; the S3 path (if configured) is unaffected either way, since a
+  private S3 bucket doesn't have this exposure. With the key set, the
+  workflow uploads a GPG-encrypted `.sql.gz.gpg` artifact — decrypt it with:
+  `gpg --batch --yes --decrypt --passphrase "$BACKUP_ENCRYPTION_KEY" backup.sql.gz.gpg > backup.sql.gz`.
+  If this repo is private, or you're running `npm run backup` locally
+  (which never touches GitHub Actions artifacts), this doesn't apply.
+- **Test a restore before you need one**: `gunzip -c backup.sql.gz | psql "$DATABASE_URL"`
+  against a scratch database, and confirm row counts match. A backup nobody
+  has ever restored from is not a verified backup.
+
 ## Scaling to real traffic
 
 The app is stateless at the request layer — JWTs for access, hashed refresh
@@ -148,7 +190,7 @@ changes. As traffic grows past what a single instance handles:
 - [ ] Real SMTP credentials so activation/reset emails deliver.
 - [ ] Replace seeded demo credentials after first login.
 - [ ] `npm audit` before each release.
-- [ ] Enable Neon automatic backups; test a restore.
+- [ ] Enable Neon automatic backups (or a higher-retention plan) **and** turn on `.github/workflows/backup.yml` (see "Backups" above) so recovery doesn't depend solely on Neon's free-tier 1-day retention; test a restore.
 - [x] Schema changes ship as committed Prisma migrations under `backend/prisma/migrations/`, applied via `npm run db:migrate` (`prisma migrate deploy`).
 - [x] Automated tests run in CI (`.github/workflows/deploy.yml`): auth, authorization/IDOR, membership lifecycle, entitlements, notices.
 - [ ] For multi-instance scaling, set `REDIS_URL` and move background jobs to a single worker (see "Scaling to real traffic" above).
@@ -200,24 +242,3 @@ Vercel's own GitHub integration once the project is imported (step 2 above).
 - **No Super Admin at login** → the seed step wasn't run against the
   production `DATABASE_URL`; run `npm run seed` per step 2.5 above.
 
-
----
-
-## 🗑️ Recently Deleted Unimportant Files
-> As requested, the following redundant or unimportant markdown files were permanently deleted to keep the repository clean. You can verify they are gone:
-- `AI Planning.md`
-- `CONTRIBUTING.md`
-- `MOBILE_APP_MASTER_PROMPT.md`
-- `Resume.md`
-- `ROADMAP.md`
-- `RUNBOOK.md`
-- `Things needed to add.md`
-- `docs/architecture.md`
-- `docs/authentication.md`
-- `docs/deployment.md`
-- `docs/multi-tenancy.md`
-- `docs/payments.md`
-- `docs/security.md`
-- `docs/subscriptions.md`
-- `docs/testing.md`
-- `docs/troubleshooting.md`

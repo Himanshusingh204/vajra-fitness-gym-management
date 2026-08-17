@@ -24,7 +24,7 @@ backend/scripts/*.js
 backend/scripts/*.js.map
 backend/scripts/*.d.ts
 
-# AI and Planning files
+# AI and Planning files (internal working notes — not for the public repo)
 .claude/
 .windsurf/
 .agents/
@@ -35,6 +35,11 @@ ROADMAP.md
 TODO.md
 Resume.md
 RUNBOOK.md
-DEPLOYMENT.md
 HANDOVER.md
-DEPLOYMENT.md
+PLAN.md
+MASTER_PLAN.md
+
+# Local-only scratch/log output
+*.tsbuildinfo
+backend/backups/
+frontend/dist-ssr/
