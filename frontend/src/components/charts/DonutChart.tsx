@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, memo } from 'react';
 import type { ChartDataPoint, ChartConfig } from './types';
 
 interface DonutChartProps {
@@ -9,7 +9,20 @@ interface DonutChartProps {
   showLegend?: boolean;
 }
 
-export const DonutChart: React.FC<DonutChartProps> = ({
+const DEFAULT_PADDING = { top: 20, right: 120, bottom: 20, left: 20 };
+
+const DEFAULT_COLORS = [
+  'var(--color-primary)',
+  'var(--color-secondary)',
+  'var(--color-accent)',
+  'var(--color-primary-light)',
+  'var(--color-secondary-light)',
+  '#ff7b00',
+  'var(--color-primary-dark)',
+  '#022417',
+];
+
+const DonutChartImpl: React.FC<DonutChartProps> = ({
   data,
   config = {},
   className = '',
@@ -20,18 +33,9 @@ export const DonutChart: React.FC<DonutChartProps> = ({
   const {
     width = 300,
     height = 300,
-    padding = { top: 20, right: 120, bottom: 20, left: 20 },
+    padding = DEFAULT_PADDING,
     animate = true,
-    colors = [
-      'var(--color-primary)',
-      'var(--color-secondary)',
-      'var(--color-accent)',
-      'var(--color-primary-light)',
-      'var(--color-secondary-light)',
-      '#ff7b00',
-      'var(--color-primary-dark)',
-      '#022417',
-    ],
+    colors = DEFAULT_COLORS,
   } = config;
 
   const pad = useMemo(
@@ -156,3 +160,5 @@ export const DonutChart: React.FC<DonutChartProps> = ({
     />
   );
 };
+
+export const DonutChart = memo(DonutChartImpl);

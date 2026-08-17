@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import type { ChartConfig } from './types';
 
 interface HeatmapDataPoint {
@@ -15,18 +15,22 @@ interface HeatmapChartProps {
   hours?: string[];
 }
 
-export const HeatmapChart: React.FC<HeatmapChartProps> = ({
+const DEFAULT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DEFAULT_HOURS = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+const DEFAULT_PADDING = { top: 30, right: 20, bottom: 40, left: 50 };
+
+const HeatmapChartImpl: React.FC<HeatmapChartProps> = ({
   data,
   config = {},
   className = '',
-  days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  hours = Array.from({ length: 24 }, (_, i) => `${i}:00`),
+  days = DEFAULT_DAYS,
+  hours = DEFAULT_HOURS,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const {
     width = 700,
     height = 300,
-    padding = { top: 30, right: 20, bottom: 40, left: 50 },
+    padding = DEFAULT_PADDING,
     animate = true,
   } = config;
 
@@ -158,3 +162,5 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     />
   );
 };
+
+export const HeatmapChart = memo(HeatmapChartImpl);

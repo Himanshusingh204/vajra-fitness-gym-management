@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, Bell, Megaphone, Wrench, Gift, TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, PieChart, Menu, X, Sparkles, Award } from 'lucide-react';
+import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, CalendarDays, Bell, Megaphone, Wrench, Gift, TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, PieChart, Menu, X, Sparkles, Award, RotateCcw, Package, Wallet, Banknote } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api, { downloadFile } from '../services/api';
 import { getGymBookings, updateBookingStatus, getGymMemberships, createMembership, renewMembership } from '../api/booking.api';
@@ -14,6 +14,11 @@ import { getGymAnalytics, getTrainerPerformance, type TrainerPerformance } from 
 import { getMyGymSubscription, getInvoices } from '../api/saas.api';
 import { LineChart, BarChart, AreaChart, DonutChart, HeatmapChart } from '../components/charts';
 import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import InventoryTab from './gymadmin/InventoryTab';
+import ExpensesTab from './gymadmin/ExpensesTab';
+import ClassesTab from './gymadmin/ClassesTab';
+import PayrollTab from './gymadmin/PayrollTab';
 
 type NavGroup = { label: string; items: { id: string; label: string; icon: any }[] };
 
@@ -48,6 +53,12 @@ const navGroups: NavGroup[] = [
     { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'branch', label: 'Branch', icon: Settings },
   ] },
+  { label: 'Business Ops', items: [
+    { id: 'inventory', label: 'Inventory & POS', icon: Package },
+    { id: 'expenses', label: 'Expenses', icon: Wallet },
+    { id: 'classes', label: 'Group Classes', icon: CalendarDays },
+    { id: 'payroll', label: 'Payroll', icon: Banknote },
+  ] },
 ];
 
 type Plan = { id: string; name: string; description: string | null; duration: number; price: number; isActive: boolean };
@@ -62,6 +73,8 @@ const statusBadge = (status: string) => {
     PAID: 'bg-green-100 text-green-700',
     PENDING: 'bg-amber-100 text-amber-700',
     OVERDUE: 'bg-red-100 text-red-700',
+    REFUNDED: 'bg-purple-100 text-purple-700',
+    PARTIALLY_REFUNDED: 'bg-purple-100 text-purple-700',
   };
   return <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>{status}</span>;
 };
@@ -69,6 +82,7 @@ const statusBadge = (status: string) => {
 const GymAdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel?: string; onConfirm: () => void } | null>(null);
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
@@ -86,7 +100,10 @@ const GymAdminDashboard = () => {
     refetchInterval: 60000,
   });
   const [branchFilter, setBranchFilter] = useState('');
-  const approvedBranches = branches.filter((b) => b.status === 'APPROVED' && b.isActive);
+  const approvedBranches = useMemo(
+    () => branches.filter((b) => b.status === 'APPROVED' && b.isActive),
+    [branches]
+  );
 
   const { data: stats, isLoading: statsLoading } = useQuery<GymStats>({
     queryKey: ['gym-stats', branch?.id],
@@ -357,12 +374,12 @@ const GymAdminDashboard = () => {
     },
   });
 
-  const pendingMembers = members.filter((m) => m.status === 'PENDING').length;
-  const filteredMembers = members.filter((m) => {
+  const pendingMembers = useMemo(() => members.filter((m) => m.status === 'PENDING').length, [members]);
+  const filteredMembers = useMemo(() => {
     const q = memberSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (m.user?.username || '').toLowerCase().includes(q) || (m.user?.email || '').toLowerCase().includes(q);
-  });
+    if (!q) return members;
+    return members.filter((m) => (m.user?.username || '').toLowerCase().includes(q) || (m.user?.email || '').toLowerCase().includes(q));
+  }, [members, memberSearch]);
 
   // ---------- Fees ----------
   const [feeForm, setFeeForm] = useState({ memberId: '', amount: 999, dueDate: '', status: 'PENDING', notes: '' });
@@ -386,6 +403,20 @@ const GymAdminDashboard = () => {
       qc.invalidateQueries({ queryKey: ['gymMemberships', branch?.id] });
       setMarkPaidTarget(null);
       setMarkPaidForm({ paymentMethod: 'CASH', transactionId: '', notes: '' });
+    },
+  });
+  const deleteFee = useMutation({
+    mutationFn: (id: string) => api.delete(`/fees/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fees', branch?.id] });
+      qc.invalidateQueries({ queryKey: ['gym-stats', branch?.id] });
+    },
+  });
+  const refundFee = useMutation({
+    mutationFn: (feeId: string) => api.post('/payments/refund', { feeId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fees', branch?.id] });
+      qc.invalidateQueries({ queryKey: ['gym-stats', branch?.id] });
     },
   });
 
@@ -507,37 +538,44 @@ const GymAdminDashboard = () => {
     ]);
   };
 
-  const monthly: Record<string, { collected: number; outstanding: number; count: number }> = {};
-  fees.forEach((f: any) => {
-    const key = new Date(f.paymentDate).toISOString().slice(0, 7);
-    if (!monthly[key]) monthly[key] = { collected: 0, outstanding: 0, count: 0 };
-    monthly[key].count += 1;
-    if (f.status === 'PAID') monthly[key].collected += f.amount;
-    else monthly[key].outstanding += f.amount;
-  });
-  const monthlyRows = Object.entries(monthly).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  const monthlyRows = useMemo(() => {
+    const monthly: Record<string, { collected: number; outstanding: number; count: number }> = {};
+    fees.forEach((f: any) => {
+      const key = new Date(f.paymentDate).toISOString().slice(0, 7);
+      if (!monthly[key]) monthly[key] = { collected: 0, outstanding: 0, count: 0 };
+      monthly[key].count += 1;
+      if (f.status === 'PAID') monthly[key].collected += f.amount;
+      else monthly[key].outstanding += f.amount;
+    });
+    return Object.entries(monthly).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [fees]);
   const monthLabel = (key: string) => {
     const [y, m] = key.split('-');
     return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
   };
 
-  const thisMonthKey = new Date().toISOString().slice(0, 7);
-  const feeStats = fees.reduce(
-    (acc: { collected: number; collectedThisMonth: number; pending: number; overdue: number; overdueCount: number }, f: any) => {
-      if (f.status === 'PAID') {
-        acc.collected += f.amount;
-        if (new Date(f.paymentDate).toISOString().slice(0, 7) === thisMonthKey) acc.collectedThisMonth += f.amount;
-      } else if (f.status === 'OVERDUE') {
-        acc.overdue += f.amount;
-        acc.overdueCount += 1;
-      } else {
-        acc.pending += f.amount;
-      }
-      return acc;
-    },
-    { collected: 0, collectedThisMonth: 0, pending: 0, overdue: 0, overdueCount: 0 }
+  const feeStats = useMemo(() => {
+    const thisMonthKey = new Date().toISOString().slice(0, 7);
+    return fees.reduce(
+      (acc: { collected: number; collectedThisMonth: number; pending: number; overdue: number; overdueCount: number }, f: any) => {
+        if (f.status === 'PAID') {
+          acc.collected += f.amount;
+          if (new Date(f.paymentDate).toISOString().slice(0, 7) === thisMonthKey) acc.collectedThisMonth += f.amount;
+        } else if (f.status === 'OVERDUE') {
+          acc.overdue += f.amount;
+          acc.overdueCount += 1;
+        } else {
+          acc.pending += f.amount;
+        }
+        return acc;
+      },
+      { collected: 0, collectedThisMonth: 0, pending: 0, overdue: 0, overdueCount: 0 }
+    );
+  }, [fees]);
+  const filteredFees = useMemo(
+    () => (feeStatusFilter === 'ALL' ? fees : fees.filter((f: any) => f.status === feeStatusFilter)),
+    [fees, feeStatusFilter]
   );
-  const filteredFees = feeStatusFilter === 'ALL' ? fees : fees.filter((f: any) => f.status === feeStatusFilter);
 
   const renderStaffTable = (list: StaffEntry[], type: 'trainers' | 'staff') => (
     <div>
@@ -553,7 +591,11 @@ const GymAdminDashboard = () => {
                 <p className="text-xs text-gray-500">{s.user.email} · {type === 'trainers' ? (s.specialization || 'Trainer') : s.role}{s.branch?.name ? ` · ${s.branch.name}` : ''}</p>
               </div>
               <button
-                onClick={() => { if (window.confirm(`Remove ${s.user.username}?`)) deleteStaff.mutate(s.id); }}
+                onClick={() => setConfirmAction({
+                  title: 'Remove staff member',
+                  message: `Remove ${s.user.username}? They will lose access immediately.`,
+                  onConfirm: () => { deleteStaff.mutate(s.id); setConfirmAction(null); },
+                })}
                 className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline shrink-0"
               >
                 Remove
@@ -650,7 +692,7 @@ const GymAdminDashboard = () => {
                   <button
                     key={id}
                     onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-150 ${
                       activeTab === id
                         ? 'bg-[var(--color-primary)] text-white'
                         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
@@ -691,7 +733,7 @@ const GymAdminDashboard = () => {
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)]">
                       <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
-                      <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
+                      <p className={`text-3xl font-extrabold tabular-nums ${color}`}>{value}</p>
                     </div>
                   ))}
                 </>
@@ -739,7 +781,7 @@ const GymAdminDashboard = () => {
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)]">
                       <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
-                      <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
+                      <p className={`text-3xl font-extrabold tabular-nums ${color}`}>{value}</p>
                     </div>
                   ))}
                 </div>
@@ -801,9 +843,7 @@ const GymAdminDashboard = () => {
                   <div className="h-72">
                     <LineChart
                       series={[
-                        { name: 'Fees', data: analytics.monthlyRevenueTrend.map(d => ({ label: d.month, value: d.fees })) },
-                        { name: 'Memberships', data: analytics.monthlyRevenueTrend.map(d => ({ label: d.month, value: d.memberships })) },
-                        { name: 'Total', data: analytics.monthlyRevenueTrend.map(d => ({ label: d.month, value: d.total })) },
+                        { name: 'Revenue', data: analytics.monthlyRevenueTrend.map(d => ({ label: d.month, value: d.total })) },
                       ]}
                       config={{ height: 280, showArea: true }}
                     />
@@ -935,7 +975,7 @@ const GymAdminDashboard = () => {
                                 <p className="text-xs text-gray-500">{m.email}</p>
                               </div>
                             </div>
-                            <span className="text-lg font-extrabold text-[var(--color-primary)]">{m.checkIns}</span>
+                            <span className="text-lg font-extrabold tabular-nums text-[var(--color-primary)]">{m.checkIns}</span>
                           </div>
                         ))}
                       </div>
@@ -969,7 +1009,7 @@ const GymAdminDashboard = () => {
                           {analytics.overdueFees.slice(0, 5).map(f => (
                             <div key={f.member} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
                               <p className="font-semibold dark:text-white">{f.member}</p>
-                              <p className="text-xs text-gray-500">₹{f.amount.toLocaleString('en-IN')} · Due {f.dueDate}</p>
+                              <p className="text-xs text-gray-500 tabular-nums">₹{f.amount.toLocaleString('en-IN')} · Due {f.dueDate}</p>
                             </div>
                           ))}
                         </>
@@ -1043,7 +1083,7 @@ const GymAdminDashboard = () => {
                 <div className="flex items-center gap-3">
                   <input
                     className="input-field sm:w-64 py-2! text-sm"
-                    placeholder="Search by name or email..."
+                    placeholder="Search by name or email…"
                     value={memberSearch}
                     onChange={(e) => setMemberSearch(e.target.value)}
                   />
@@ -1109,9 +1149,14 @@ const GymAdminDashboard = () => {
                                   <XCircle className="w-3.5 h-3.5" /> Reject
                                 </button>
                                 <button
-                                  onClick={() => { if (window.confirm(`Permanently delete member ${m.user?.username}? This removes their fees, memberships, attendance and bookings.`)) deleteMember.mutate(m.id); }}
+                                  onClick={() => setConfirmAction({
+                                    title: 'Delete member',
+                                    message: `Permanently delete member ${m.user?.username}? This removes their fees, memberships, attendance and bookings.`,
+                                    onConfirm: () => { deleteMember.mutate(m.id); setConfirmAction(null); },
+                                  })}
                                   className="inline-flex items-center gap-1 text-gray-400 hover:text-red-600 font-semibold text-sm"
                                   title="Delete member permanently"
+                                  aria-label={`Delete member ${m.user?.username}`}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1125,9 +1170,14 @@ const GymAdminDashboard = () => {
                                   {m.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                                 </button>
                                 <button
-                                  onClick={() => { if (window.confirm(`Permanently delete member ${m.user?.username}? This removes their fees, memberships, attendance and bookings.`)) deleteMember.mutate(m.id); }}
+                                  onClick={() => setConfirmAction({
+                                    title: 'Delete member',
+                                    message: `Permanently delete member ${m.user?.username}? This removes their fees, memberships, attendance and bookings.`,
+                                    onConfirm: () => { deleteMember.mutate(m.id); setConfirmAction(null); },
+                                  })}
                                   className="inline-flex items-center gap-1 text-gray-400 hover:text-red-600 font-semibold text-sm"
                                   title="Delete member permanently"
+                                  aria-label={`Delete member ${m.user?.username}`}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1169,7 +1219,7 @@ const GymAdminDashboard = () => {
                   <Plus className="w-4 h-4" /> Add Member
                 </button>
                 {addMember.isSuccess && (
-                  <div className="sm:col-span-2 text-sm space-y-1.5">
+                  <div className="sm:col-span-2 text-sm space-y-1.5" aria-live="polite">
                     <p className="text-green-600">Member added. Share the activation link to let them set their password:</p>
                     {addMember.data?.data?.activationLink && (
                       <p className="text-[var(--color-primary)] font-mono text-xs break-all bg-[var(--color-base)] border border-[var(--color-border)] p-2.5 rounded-lg">
@@ -1256,10 +1306,15 @@ const GymAdminDashboard = () => {
                         <button
                           onClick={() => { setEditingPlan(p); setPlanForm({ name: p.name, description: p.description || '', duration: p.duration, price: p.price }); }}
                           className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+                          aria-label={`Edit ${p.name} plan`}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button onClick={() => deletePlan.mutate(p.id)} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                        <button
+                          onClick={() => deletePlan.mutate(p.id)}
+                          className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          aria-label={`Delete ${p.name} plan`}
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1344,8 +1399,10 @@ const GymAdminDashboard = () => {
                   <button type="submit" className="btn-primary justify-center" disabled={createMembershipMut.isPending || !branch?.id}>
                     <Plus className="w-4 h-4" /> Create Membership
                   </button>
-                  {createMembershipMut.isSuccess && <p className="text-green-600 text-sm">Membership created and member activated.</p>}
-                  {createMembershipMut.isError && <p className="text-red-600 text-sm">{(createMembershipMut.error as any)?.response?.data?.error || 'Failed to create membership.'}</p>}
+                  <div aria-live="polite">
+                    {createMembershipMut.isSuccess && <p className="text-green-600 text-sm">Membership created and member activated.</p>}
+                    {createMembershipMut.isError && <p className="text-red-600 text-sm">{(createMembershipMut.error as any)?.response?.data?.error || 'Failed to create membership.'}</p>}
+                  </div>
                 </form>
               </div>
 
@@ -1518,19 +1575,19 @@ const GymAdminDashboard = () => {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Collected This Month</p>
-                <p className="text-2xl font-extrabold text-green-600">₹{feeStats.collectedThisMonth.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-extrabold tabular-nums text-green-600">₹{feeStats.collectedThisMonth.toLocaleString('en-IN')}</p>
               </div>
               <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Collected</p>
-                <p className="text-2xl font-extrabold text-emerald-600">₹{feeStats.collected.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-extrabold tabular-nums text-emerald-600">₹{feeStats.collected.toLocaleString('en-IN')}</p>
               </div>
               <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
-                <p className="text-2xl font-extrabold text-amber-500">₹{feeStats.pending.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-extrabold tabular-nums text-amber-500">₹{feeStats.pending.toLocaleString('en-IN')}</p>
               </div>
               <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Overdue</p>
-                <p className="text-2xl font-extrabold text-red-500">₹{feeStats.overdue.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-extrabold tabular-nums text-red-500">₹{feeStats.overdue.toLocaleString('en-IN')}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{feeStats.overdueCount} record{feeStats.overdueCount === 1 ? '' : 's'}</p>
               </div>
             </div>
@@ -1592,6 +1649,11 @@ const GymAdminDashboard = () => {
                     <button onClick={exportFees} className="btn-outline text-sm px-3 py-1.5"><Download className="w-3.5 h-3.5" /> CSV</button>
                   </div>
                 </div>
+                {refundFee.isError && (
+                  <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+                    {(refundFee.error as any)?.response?.data?.error || 'Failed to process refund'}
+                  </div>
+                )}
                 {feesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : filteredFees.length === 0 ? (
                   <div className="p-8 text-center text-gray-400">{fees.length === 0 ? 'No fee records yet.' : 'No fees match this filter.'}</div>
                 ) : (
@@ -1627,6 +1689,31 @@ const GymAdminDashboard = () => {
                                   className="inline-flex items-center gap-1 text-[var(--color-primary)] font-semibold text-xs hover:underline"
                                 >
                                   <Download className="w-3.5 h-3.5" /> Receipt
+                                </button>
+                                {f.status === 'PAID' && f.paymentMethod === 'ONLINE' && (
+                                  <button
+                                    onClick={() => setConfirmAction({
+                                      title: 'Refund payment',
+                                      message: `Refund ₹${f.amount.toLocaleString('en-IN')} to ${f.member?.user?.username || 'this member'} via Razorpay? This reverses real money and can't be undone.`,
+                                      confirmLabel: 'Refund',
+                                      onConfirm: () => { refundFee.mutate(f.id); setConfirmAction(null); },
+                                    })}
+                                    disabled={refundFee.isPending}
+                                    className="inline-flex items-center gap-1 text-purple-600 hover:text-purple-700 font-semibold text-xs hover:underline disabled:opacity-50"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" /> Refund
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setConfirmAction({
+                                    title: 'Delete fee record',
+                                    message: `Delete this ₹${f.amount.toLocaleString('en-IN')} fee for ${f.member?.user?.username || 'this member'}? This can't be undone.`,
+                                    onConfirm: () => { deleteFee.mutate(f.id); setConfirmAction(null); },
+                                  })}
+                                  aria-label={`Delete fee for ${f.member?.user?.username || 'member'}`}
+                                  className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Delete
                                 </button>
                               </div>
                             </td>
@@ -1937,7 +2024,9 @@ const GymAdminDashboard = () => {
                   <button type="submit" className="btn-primary justify-center" disabled={markAttendance.isPending || !branch?.id}>
                     <ClipboardCheck className="w-4 h-4" /> Mark Present
                   </button>
-                  {markAttendance.isSuccess && <p className="text-green-600 text-sm">Checked in successfully.</p>}
+                  <div aria-live="polite">
+                    {markAttendance.isSuccess && <p className="text-green-600 text-sm">Checked in successfully.</p>}
+                  </div>
                 </form>
               </div>
 
@@ -2142,7 +2231,9 @@ const GymAdminDashboard = () => {
                     <button type="button" className="btn-outline px-5" onClick={() => { setEditingNotice(null); setNoticeForm({ title: '', content: '' }); }}>Cancel</button>
                   )}
                 </div>
-                {createNoticeMut.isError && <p className="text-red-600 text-sm">{(createNoticeMut.error as any)?.response?.data?.error || 'Failed to publish notice.'}</p>}
+                <div aria-live="polite">
+                  {createNoticeMut.isError && <p className="text-red-600 text-sm">{(createNoticeMut.error as any)?.response?.data?.error || 'Failed to publish notice.'}</p>}
+                </div>
               </form>
             </div>
 
@@ -2166,12 +2257,18 @@ const GymAdminDashboard = () => {
                           <button
                             onClick={() => { setEditingNotice(n); setNoticeForm({ title: n.title, content: n.content }); }}
                             className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+                            aria-label={`Edit notice: ${n.title}`}
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => { if (window.confirm(`Delete "${n.title}"?`)) deleteNoticeMut.mutate(n.id); }}
+                            onClick={() => setConfirmAction({
+                              title: 'Delete notice',
+                              message: `Delete "${n.title}"? This can't be undone.`,
+                              onConfirm: () => { deleteNoticeMut.mutate(n.id); setConfirmAction(null); },
+                            })}
                             className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            aria-label={`Delete notice: ${n.title}`}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -2236,7 +2333,11 @@ const GymAdminDashboard = () => {
                         </div>
                         {b.status === 'APPROVED' && b.isActive && (
                           <button
-                            onClick={() => { if (window.confirm(`Disable branch "${b.name}"? Members/staff assigned to it must be moved to another branch first.`)) disableBranchMut.mutate(b.id); }}
+                            onClick={() => setConfirmAction({
+                              title: 'Disable branch',
+                              message: `Disable branch "${b.name}"? Members/staff assigned to it must be moved to another branch first.`,
+                              onConfirm: () => { disableBranchMut.mutate(b.id); setConfirmAction(null); },
+                            })}
                             disabled={disableBranchMut.isPending}
                             className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline shrink-0"
                           >
@@ -2263,12 +2364,14 @@ const GymAdminDashboard = () => {
                 <button type="submit" disabled={createBranchMut.isPending || !branch?.id} className="btn-primary py-2.5">
                   <Plus className="w-4 h-4" /> {createBranchMut.isPending ? 'Submitting…' : 'Submit for Approval'}
                 </button>
-                {createBranchMut.isError && (
-                  <p className="sm:col-span-2 text-sm text-red-600">{(createBranchMut.error as any)?.response?.data?.error || 'Failed to submit branch.'}</p>
-                )}
-                {createBranchMut.isSuccess && (
-                  <p className="sm:col-span-2 text-sm text-green-600">Branch submitted — it'll go live once approved.</p>
-                )}
+                <div className="sm:col-span-2" aria-live="polite">
+                  {createBranchMut.isError && (
+                    <p className="text-sm text-red-600">{(createBranchMut.error as any)?.response?.data?.error || 'Failed to submit branch.'}</p>
+                  )}
+                  {createBranchMut.isSuccess && (
+                    <p className="text-sm text-green-600">Branch submitted — it'll go live once approved.</p>
+                  )}
+                </div>
               </form>
             </div>
 
@@ -2305,7 +2408,7 @@ const GymAdminDashboard = () => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Cover Image URL</label>
-                <input className="input-field" value={branchForm.imageUrl} onChange={(e) => setBranchForm((p) => ({ ...p, imageUrl: e.target.value }))} placeholder="https://... (shows on the public gym directory)" />
+                <input className="input-field" value={branchForm.imageUrl} onChange={(e) => setBranchForm((p) => ({ ...p, imageUrl: e.target.value }))} placeholder="https://… (shows on the public gym directory)" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Facilities</label>
@@ -2314,9 +2417,11 @@ const GymAdminDashboard = () => {
               <button type="submit" disabled={branchUpdate.isPending} className="btn-primary py-3 px-8">
                 {branchUpdate.isPending ? 'Saving…' : 'Save Changes'}
               </button>
-              {branchUpdate.isSuccess && (
-                <p className="text-green-600 text-sm font-medium">Changes saved successfully.</p>
-              )}
+              <div aria-live="polite">
+                {branchUpdate.isSuccess && (
+                  <p className="text-green-600 text-sm font-medium">Changes saved successfully.</p>
+                )}
+              </div>
             </form>
             </div>
           </div>
@@ -2377,7 +2482,7 @@ const GymAdminDashboard = () => {
                           <td className="px-6 py-3 text-gray-500">{eq.location || '—'}</td>
                           <td className="px-6 py-3 font-semibold dark:text-white">₹{(eq.purchaseCost || 0).toLocaleString('en-IN')}</td>
                           <td className="px-6 py-3">
-                            <button onClick={() => deleteEquipMut.mutate(eq.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
+                            <button onClick={() => deleteEquipMut.mutate(eq.id)} className="text-red-500 hover:text-red-700" aria-label={`Delete ${eq.name}`}><Trash2 className="w-4 h-4" /></button>
                           </td>
                         </tr>
                       ))}
@@ -2445,7 +2550,7 @@ const GymAdminDashboard = () => {
                           <td className="px-6 py-3 text-gray-500">{new Date(ref.createdAt).toLocaleDateString('en-IN')}</td>
                           <td className="px-6 py-3">
                             {ref.status !== 'COMPLETED' && (
-                              <button onClick={() => updateReferralStatusMut.mutate({ id: ref.id, status: 'COMPLETED' })} className="text-green-500 hover:text-green-700"><CheckCircle className="w-4 h-4" /></button>
+                              <button onClick={() => updateReferralStatusMut.mutate({ id: ref.id, status: 'COMPLETED' })} className="text-green-500 hover:text-green-700" aria-label={`Mark referral ${ref.referralCode} as completed`}><CheckCircle className="w-4 h-4" /></button>
                             )}
                           </td>
                         </tr>
@@ -2519,8 +2624,23 @@ const GymAdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Business Ops: ERP modules */}
+        {activeTab === 'inventory' && branch?.id && <InventoryTab gymId={branch.id} />}
+        {activeTab === 'expenses' && branch?.id && <ExpensesTab gymId={branch.id} />}
+        {activeTab === 'classes' && branch?.id && <ClassesTab gymId={branch.id} />}
+        {activeTab === 'payroll' && branch?.id && <PayrollTab gymId={branch.id} />}
       </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.title || ''}
+        message={confirmAction?.message || ''}
+        confirmLabel={confirmAction?.confirmLabel || 'Delete'}
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 };
