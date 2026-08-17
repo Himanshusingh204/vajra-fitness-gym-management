@@ -66,25 +66,37 @@ const NotificationsBell = () => {
 
   const handleClick = async (n: AppNotification) => {
     if (!n.isRead) {
-      await markNotificationRead(n.id).catch(() => {});
-      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
-      setUnread((u) => Math.max(0, u - 1));
+      try {
+        await markNotificationRead(n.id);
+        setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+        setUnread((u) => Math.max(0, u - 1));
+      } catch {
+        /* leave local state unchanged so it stays in sync with the server */
+      }
     }
     setOpen(false);
     if (n.link) navigate(n.link);
   };
 
   const handleMarkAll = async () => {
-    await markAllNotificationsRead().catch(() => {});
-    setItems((prev) => prev.map((x) => ({ ...x, isRead: true })));
-    setUnread(0);
+    try {
+      await markAllNotificationsRead();
+      setItems((prev) => prev.map((x) => ({ ...x, isRead: true })));
+      setUnread(0);
+    } catch {
+      /* leave local state unchanged so it stays in sync with the server */
+    }
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string, wasRead: boolean) => {
     e.stopPropagation();
-    await deleteNotification(id).catch(() => {});
-    setItems((prev) => prev.filter((x) => x.id !== id));
-    if (!wasRead) setUnread((u) => Math.max(0, u - 1));
+    try {
+      await deleteNotification(id);
+      setItems((prev) => prev.filter((x) => x.id !== id));
+      if (!wasRead) setUnread((u) => Math.max(0, u - 1));
+    } catch {
+      /* leave local state unchanged so it stays in sync with the server */
+    }
   };
 
   return (

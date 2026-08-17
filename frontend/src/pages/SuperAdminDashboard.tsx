@@ -3,12 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, Users, Settings, BarChart3, CheckCircle, Clock,
   Plus, Pencil, Trash2, Search, Mail, FileText, Star, XCircle, Diamond, CreditCard,
-  DollarSign, AlertTriangle, MessageSquare, Archive, MapPinned, Pin, Tag, FileCode
+  DollarSign, AlertTriangle, MessageSquare, Archive, MapPinned, Pin, Tag, FileCode,
+  Menu, X
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useThemeStore } from '../store/useThemeStore';
 import api, { downloadFile } from '../services/api';
 import { getPendingBranches, approveBranch, rejectBranch, type PendingBranch } from '../api/branch.api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 type AnalyticsData = {
   // Basic metrics
@@ -36,7 +38,7 @@ type AnalyticsData = {
   // Breakdowns
   revenueByPlan: Record<string, number>;
   gymsByStatus: Record<string, number>;
-  monthlyRevenueTrend: Array<{ month: string; fees: number; subscriptions: number; total: number }>;
+  monthlyRevenueTrend: Array<{ month: string; total: number }>;
   topGyms: Array<{ id: string; name: string; city: string; memberCount: number; plan: string; subscriptionStatus: string }>;
 };
 
@@ -174,6 +176,7 @@ const EmptyState = ({ text }: { text: string }) => (
 
 const SuperAdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('analytics');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [userSearch, setUserSearch] = useState('');
   const user = useAuthStore((s) => s.user);
@@ -252,15 +255,13 @@ const SuperAdminDashboard = () => {
     
     const data = analytics.monthlyRevenueTrend;
     const labels = data.map(d => d.month);
-    const feesData = data.map(d => d.fees);
-    const subsData = data.map(d => d.subscriptions);
     const totalData = data.map(d => d.total);
-    
+
     const isDark = theme === 'dark';
     const axisColor = isDark ? '#aaa' : '#888';
     const legendTextColor = isDark ? '#e5e5e5' : '#333';
 
-    const maxVal = Math.max(...totalData, ...feesData, ...subsData, 1);
+    const maxVal = Math.max(...totalData, 1);
     const padding = 40;
     const chartWidth = canvas.width - padding * 2;
     const chartHeight = canvas.height - padding * 2;
@@ -331,16 +332,11 @@ const SuperAdminDashboard = () => {
       });
     };
     
-    // Draw in order: total (background), fees, subscriptions
     drawLine(totalData, 'rgba(1, 50, 32, 0.8)', 'rgba(1, 50, 32, 0.1)');
-    drawLine(feesData, 'rgba(128, 0, 32, 0.8)', 'rgba(128, 0, 32, 0.1)');
-    drawLine(subsData, 'rgba(230, 99, 0, 0.8)', 'rgba(230, 99, 0, 0.1)');
 
     // Legend
     const legendItems = [
-      { label: 'Total Revenue', color: 'rgba(1, 50, 32, 0.8)' },
-      { label: 'Fees', color: 'rgba(128, 0, 32, 0.8)' },
-      { label: 'Subscriptions', color: 'rgba(230, 99, 0, 0.8)' }
+      { label: 'Subscription Revenue', color: 'rgba(1, 50, 32, 0.8)' }
     ];
 
     legendItems.forEach((item, i) => {
@@ -371,6 +367,9 @@ const SuperAdminDashboard = () => {
       qc.invalidateQueries({ queryKey: ['admin-audit'] });
     },
   });
+
+  // Shared confirmation dialog state for lighter-weight destructive/state-changing actions.
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel?: string; destructive?: boolean; onConfirm: () => void } | null>(null);
 
   const [deletingGym, setDeletingGym] = useState<Gym | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -417,6 +416,14 @@ const SuperAdminDashboard = () => {
 
   const setUserActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.put(`/admin/users/${id}/status`, { isActive }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+    },
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/users/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       qc.invalidateQueries({ queryKey: ['admin-audit'] });
@@ -550,56 +557,121 @@ const SuperAdminDashboard = () => {
     return <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${styles[role] || styles.MEMBER}`}>{role.replace('_', ' ')}</span>;
   };
 
-  const tabs = [
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'gyms', label: 'Gyms', icon: Building2 },
-    { id: 'branches', label: 'Branch Approvals', icon: MapPinned },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'saas', label: 'SaaS & Subscriptions', icon: Diamond },
-    { id: 'cms', label: 'Content (CMS)', icon: LayoutDashboard },
-    { id: 'support', label: 'Support', icon: Clock },
-    { id: 'messages', label: 'Contact Messages', icon: MessageSquare },
-    { id: 'audit', label: 'Audit Logs', icon: Settings },
+  const navGroups: { label: string; items: { id: string; label: string; icon: any }[] }[] = [
+    { label: 'Overview', items: [
+      { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    ] },
+    { label: 'Platform', items: [
+      { id: 'gyms', label: 'Gyms', icon: Building2 },
+      { id: 'branches', label: 'Branch Approvals', icon: MapPinned },
+      { id: 'users', label: 'Users', icon: Users },
+    ] },
+    { label: 'Billing', items: [
+      { id: 'payments', label: 'Payments', icon: CreditCard },
+      { id: 'saas', label: 'SaaS & Subscriptions', icon: Diamond },
+    ] },
+    { label: 'Content & Support', items: [
+      { id: 'cms', label: 'Content (CMS)', icon: LayoutDashboard },
+      { id: 'support', label: 'Support', icon: Clock },
+      { id: 'messages', label: 'Contact Messages', icon: MessageSquare },
+      { id: 'audit', label: 'Audit Logs', icon: Settings },
+    ] },
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white">Platform Control</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Signed in as <strong>{user?.email}</strong></p>
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] lg:flex">
+      {/* Mobile top bar */}
+      <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-30">
+        <div className="min-w-0">
+          <h1 className="text-lg font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">Platform Control</h1>
         </div>
+        <button
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open navigation menu"
+          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      </div>
 
-        <div className="-mx-4 mb-8 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="tablist" aria-label="Platform sections">
-          <div className="flex min-w-max gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          {tabs.map(({ id, label, icon: Icon }) => (
+      <div className="lg:hidden sticky top-[68px] z-20 border-b border-[var(--color-border)] bg-[var(--color-base)]/95 px-4 py-3 backdrop-blur">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--color-muted)]">Quick actions</p>
+        <div className="grid grid-cols-3 gap-2">
+          {navGroups.flatMap((group) => group.items).filter(({ id }) => ['analytics', 'gyms', 'branches'].includes(id)).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              role="tab"
-              aria-selected={activeTab === id}
               onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === id
-                  ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
+              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-bold transition-colors ${activeTab === id ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-charcoal)] dark:text-white border border-[var(--color-border)]'}`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="h-4 w-4" />
               {label}
-              {id === 'branches' && pendingBranches.length > 0 && (
-                <span className="bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 rounded-full">{pendingBranches.length}</span>
-              )}
             </button>
           ))}
-          </div>
         </div>
+      </div>
 
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-6 border-b border-[var(--color-border)] flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">Platform Control</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">Signed in as <strong>{user?.email}</strong></p>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation menu"
+            className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-150 ${
+                      activeTab === id
+                        ? 'bg-[var(--color-primary)] text-white'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                    {id === 'branches' && pendingBranches.length > 0 && (
+                      <span className="ml-auto bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0">{pendingBranches.length}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="flex-1 min-w-0">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         {/* ============ ANALYTICS ============ */}
         {activeTab === 'analytics' && (
           <div className="space-y-8">
             {analyticsLoading ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4" aria-busy="true" aria-live="polite">
                 {[...Array(12)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
               </div>
             ) : (
@@ -689,9 +761,9 @@ const SuperAdminDashboard = () => {
                 </div>
 
                 {/* Revenue Trend Chart */}
-                <Panel title="Revenue Trend (Last 6 Months)">
+                <Panel title="Subscription Revenue Trend (Last 6 Months)">
                   <div className="h-80">
-                    <canvas id="revenueChart" width="800" height="320" role="img" aria-label="Revenue trend chart showing total revenue, fees, and subscriptions over the last six months">Revenue trend chart</canvas>
+                    <canvas id="revenueChart" width="800" height="320" role="img" aria-label="Platform subscription revenue trend over the last six months">Revenue trend chart</canvas>
                   </div>
                 </Panel>
 
@@ -767,8 +839,8 @@ const SuperAdminDashboard = () => {
                         <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                           {analytics?.topGyms?.map((gym) => (
                             <tr key={gym.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
-                              <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white">{gym.name}</td>
-                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.city}</td>
+                              <td className="px-6 py-4 font-semibold text-[var(--color-deepgray)] dark:text-white max-w-50 truncate">{gym.name}</td>
+                              <td className="px-6 py-4 text-gray-500 dark:text-gray-400 max-w-40 truncate">{gym.city}</td>
                               <td className="px-6 py-4 font-bold dark:text-white">{gym.memberCount}</td>
                               <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{gym.plan}</td>
                               <td className="px-6 py-4">
@@ -862,9 +934,33 @@ const SuperAdminDashboard = () => {
                           <div className="flex items-center gap-3">
                             <button onClick={() => openGymEditor(gym)} className="inline-flex items-center gap-1 text-gray-500 hover:text-[var(--color-primary)] font-semibold text-sm"><Pencil className="w-3.5 h-3.5" /> Edit</button>
                             {!gym.isApproved ? (
-                              <button onClick={() => approve.mutate(gym.id)} disabled={approve.isPending} className="text-green-600 hover:text-green-700 font-semibold text-sm hover:underline disabled:opacity-50">Approve</button>
+                              <button
+                                onClick={() => setConfirmAction({
+                                  title: `Approve "${gym.name}"?`,
+                                  message: 'The gym owner will be notified and gain full access to the platform.',
+                                  confirmLabel: 'Approve',
+                                  destructive: false,
+                                  onConfirm: () => { approve.mutate(gym.id); setConfirmAction(null); },
+                                })}
+                                disabled={approve.isPending}
+                                className="text-green-600 hover:text-green-700 font-semibold text-sm hover:underline disabled:opacity-50"
+                              >
+                                Approve
+                              </button>
                             ) : (
-                              <button onClick={() => suspend.mutate(gym.id)} disabled={suspend.isPending} className="text-red-600 hover:text-red-700 font-semibold text-sm hover:underline disabled:opacity-50">Suspend</button>
+                              <button
+                                onClick={() => setConfirmAction({
+                                  title: `Suspend "${gym.name}"?`,
+                                  message: 'The gym will lose access to the platform until reactivated.',
+                                  confirmLabel: 'Suspend',
+                                  destructive: true,
+                                  onConfirm: () => { suspend.mutate(gym.id); setConfirmAction(null); },
+                                })}
+                                disabled={suspend.isPending}
+                                className="text-red-600 hover:text-red-700 font-semibold text-sm hover:underline disabled:opacity-50"
+                              >
+                                Suspend
+                              </button>
                             )}
                             <button onClick={() => { setDeletingGym(gym); setDeleteConfirmText(''); }} className="inline-flex items-center gap-1 text-gray-400 hover:text-red-600 font-semibold text-sm"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
                           </div>
@@ -891,31 +987,31 @@ const SuperAdminDashboard = () => {
             >
               <label className="block text-sm">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Name</span>
-                <input className="input-field mt-1" value={gymForm.name} onChange={(e) => setGymForm({ ...gymForm, name: e.target.value })} />
+                <input name="gymName" autoComplete="off" className="input-field mt-1" value={gymForm.name} onChange={(e) => setGymForm({ ...gymForm, name: e.target.value })} />
               </label>
               <label className="block text-sm">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">GST Number</span>
-                <input className="input-field mt-1" value={gymForm.gstNumber} onChange={(e) => setGymForm({ ...gymForm, gstNumber: e.target.value })} />
+                <input name="gymGstNumber" autoComplete="off" className="input-field mt-1" value={gymForm.gstNumber} onChange={(e) => setGymForm({ ...gymForm, gstNumber: e.target.value })} />
               </label>
               <label className="block text-sm sm:col-span-2">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Address</span>
-                <input className="input-field mt-1" value={gymForm.address} onChange={(e) => setGymForm({ ...gymForm, address: e.target.value })} />
+                <input name="gymAddress" autoComplete="off" className="input-field mt-1" value={gymForm.address} onChange={(e) => setGymForm({ ...gymForm, address: e.target.value })} />
               </label>
               <label className="block text-sm">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">City</span>
-                <input className="input-field mt-1" value={gymForm.city} onChange={(e) => setGymForm({ ...gymForm, city: e.target.value })} />
+                <input name="gymCity" autoComplete="off" className="input-field mt-1" value={gymForm.city} onChange={(e) => setGymForm({ ...gymForm, city: e.target.value })} />
               </label>
               <label className="block text-sm">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">State</span>
-                <input className="input-field mt-1" value={gymForm.state} onChange={(e) => setGymForm({ ...gymForm, state: e.target.value })} />
+                <input name="gymState" autoComplete="off" className="input-field mt-1" value={gymForm.state} onChange={(e) => setGymForm({ ...gymForm, state: e.target.value })} />
               </label>
               <label className="block text-sm">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Logo URL</span>
-                <input className="input-field mt-1" value={gymForm.logoUrl} onChange={(e) => setGymForm({ ...gymForm, logoUrl: e.target.value })} />
+                <input name="gymLogoUrl" autoComplete="off" className="input-field mt-1" value={gymForm.logoUrl} onChange={(e) => setGymForm({ ...gymForm, logoUrl: e.target.value })} />
               </label>
               <label className="block text-sm">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Image URL</span>
-                <input className="input-field mt-1" value={gymForm.imageUrl} onChange={(e) => setGymForm({ ...gymForm, imageUrl: e.target.value })} />
+                <input name="gymImageUrl" autoComplete="off" className="input-field mt-1" value={gymForm.imageUrl} onChange={(e) => setGymForm({ ...gymForm, imageUrl: e.target.value })} />
               </label>
               <div className="sm:col-span-2 flex items-center gap-3">
                 <button type="submit" className="btn-primary px-5" disabled={updateGymProfile.isPending}>
@@ -1099,7 +1195,7 @@ const SuperAdminDashboard = () => {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
-                      {['User', 'Role', 'Gym / Membership', 'Phone', 'Joined', 'Account'].map((h) => (
+                      {['User', 'Role', 'Gym / Membership', 'Phone', 'Joined', 'Account', 'Delete'].map((h) => (
                         <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -1126,7 +1222,13 @@ const SuperAdminDashboard = () => {
                             <span className="text-xs font-semibold text-gray-400">—</span>
                           ) : u.isActive ? (
                             <button
-                              onClick={() => { if (window.confirm(`Suspend ${u.username}? They will be logged out and blocked from signing in.`)) setUserActive.mutate({ id: u.id, isActive: false }); }}
+                              onClick={() => setConfirmAction({
+                                title: `Suspend ${u.username}?`,
+                                message: 'They will be logged out and blocked from signing in.',
+                                confirmLabel: 'Suspend',
+                                destructive: true,
+                                onConfirm: () => { setUserActive.mutate({ id: u.id, isActive: false }); setConfirmAction(null); },
+                              })}
                               disabled={setUserActive.isPending}
                               className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
                             >
@@ -1140,6 +1242,30 @@ const SuperAdminDashboard = () => {
                             >
                               <CheckCircle className="w-3.5 h-3.5" /> Activate
                             </button>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {u.role !== 'SUPER_ADMIN' && (
+                            u.ownedGyms?.length ? (
+                              <span className="text-xs text-gray-400" title="This user owns a gym — delete the gym instead, which handles the owner account correctly.">
+                                Delete via gym
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmAction({
+                                  title: `Delete ${u.username}?`,
+                                  message: "This permanently removes the account and all their data. This can't be undone.",
+                                  confirmLabel: 'Delete',
+                                  destructive: true,
+                                  onConfirm: () => { deleteUser.mutate(u.id); setConfirmAction(null); },
+                                })}
+                                disabled={deleteUser.isPending}
+                                aria-label={`Delete ${u.username}`}
+                                className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            )
                           )}
                         </td>
                       </tr>
@@ -1201,7 +1327,19 @@ const SuperAdminDashboard = () => {
                               {faq.isActive ? 'Active' : 'Hidden'}
                             </button>
                             <button onClick={() => setEditingFaq(faq)} aria-label={`Edit FAQ: ${faq.question}`} className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><Pencil className="w-4 h-4" /></button>
-                            <button onClick={() => deleteFaq.mutate(faq.id)} aria-label={`Delete FAQ: ${faq.question}`} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                            <button
+                              onClick={() => setConfirmAction({
+                                title: 'Delete this FAQ?',
+                                message: `"${faq.question}" will be removed from the Help page. This cannot be undone.`,
+                                confirmLabel: 'Delete',
+                                destructive: true,
+                                onConfirm: () => { deleteFaq.mutate(faq.id); setConfirmAction(null); },
+                              })}
+                              aria-label={`Delete FAQ: ${faq.question}`}
+                              className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </>
                       )}
@@ -1275,7 +1413,19 @@ const SuperAdminDashboard = () => {
                             <div className="flex items-center gap-1">
                               <button onClick={() => updateTesti.mutate({ ...t, isActive: !t.isActive })} className={`text-xs font-bold px-2 py-1 rounded-full ${t.isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-white/10 text-gray-500'}`}>{t.isActive ? 'Active' : 'Hidden'}</button>
                               <button onClick={() => setEditingTesti(t)} aria-label={`Edit testimonial by ${t.name}`} className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--color-primary)]"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteTesti.mutate(t.id)} aria-label={`Delete testimonial by ${t.name}`} className="p-1.5 rounded-lg text-gray-500 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <button
+                                onClick={() => setConfirmAction({
+                                  title: 'Delete this testimonial?',
+                                  message: `The testimonial from "${t.name}" will be permanently removed. This cannot be undone.`,
+                                  confirmLabel: 'Delete',
+                                  destructive: true,
+                                  onConfirm: () => { deleteTesti.mutate(t.id); setConfirmAction(null); },
+                                })}
+                                aria-label={`Delete testimonial by ${t.name}`}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-red-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
                         </>
@@ -1333,7 +1483,19 @@ const SuperAdminDashboard = () => {
                               {c.isActive ? 'Active' : 'Hidden'}
                             </button>
                             <button onClick={() => setEditingSiteContent(c)} aria-label={`Edit site content: ${c.key}`} className="p-2 rounded-lg text-gray-500 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"><Pencil className="w-4 h-4" /></button>
-                            <button onClick={() => deleteSiteContent.mutate(c.id)} aria-label={`Delete site content: ${c.key}`} className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                            <button
+                              onClick={() => setConfirmAction({
+                                title: 'Delete this site content entry?',
+                                message: `"${c.key}" will be permanently removed. This cannot be undone.`,
+                                confirmLabel: 'Delete',
+                                destructive: true,
+                                onConfirm: () => { deleteSiteContent.mutate(c.id); setConfirmAction(null); },
+                              })}
+                              aria-label={`Delete site content: ${c.key}`}
+                              className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </>
                       )}
@@ -1617,6 +1779,17 @@ const SuperAdminDashboard = () => {
           </Panel>
         )}
       </div>
+      </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.title ?? ''}
+        message={confirmAction?.message ?? ''}
+        confirmLabel={confirmAction?.confirmLabel}
+        destructive={confirmAction?.destructive}
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 };

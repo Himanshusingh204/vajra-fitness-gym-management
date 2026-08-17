@@ -151,16 +151,6 @@ const HomePage = () => {
         </div>
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <Reveal>
-            <span className="eyebrow bg-[var(--color-primary)]/10! text-[var(--color-primary)]! border-[var(--color-primary)]/20!">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--color-primary)] opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-primary)]" />
-              </span>
-              Now onboarding gyms across India
-            </span>
-          </Reveal>
-
           <Reveal delay={100}>
             <h1 className="display mt-8 text-5xl sm:text-6xl md:text-8xl leading-[0.95]">
               Run Your Gym.<br />
@@ -435,7 +425,7 @@ const HomePage = () => {
                   </div>
                   <div className="flex items-center gap-4 pt-5 border-t border-[var(--color-border)]">
                     {t.imageUrl ? (
-                      <img src={t.imageUrl} alt={t.name} loading="lazy" className="w-11 h-11 rounded-full object-cover shrink-0" />
+                      <img src={t.imageUrl} alt={t.name} width={44} height={44} loading="lazy" className="w-11 h-11 rounded-full object-cover shrink-0" />
                     ) : (
                       <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white text-sm font-extrabold flex items-center justify-center shrink-0">
                         {t.initials}

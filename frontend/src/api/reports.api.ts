@@ -3,8 +3,6 @@ import api from '../services/api';
 export interface GymAnalytics {
   monthlyRevenueTrend: {
     month: string;
-    fees: number;
-    memberships: number;
     total: number;
   }[];
   planDistribution: {
