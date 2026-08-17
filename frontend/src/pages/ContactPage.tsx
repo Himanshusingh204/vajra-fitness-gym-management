@@ -58,8 +58,8 @@ const ContactPage = () => {
   };
 
   const contactDetails = [
-    { icon: MapPin, label: 'Address', value: 'Vajra Fitness HQ, Jodhpur, Rajasthan 342001' },
-    { icon: Phone, label: 'Phone', value: '+91 98765 43210', href: 'tel:+919876543210' },
+    { icon: MapPin, label: 'Address', value: 'Vajra Fitness HQ, Jodhpur, Rajasthan' },
+    { icon: Phone, label: 'Phone', value: '+91 78945 61230', href: 'tel:+917894561230' },
     { icon: Mail, label: 'Email', value: 'support@vajrafitness.in', href: 'mailto:support@vajrafitness.in' },
     { icon: Clock, label: 'Working Hours', value: 'Mon–Sat: 9 AM – 7 PM IST' },
   ];
@@ -111,7 +111,7 @@ const ContactPage = () => {
 
               <Reveal delay={320}>
                 <a
-                  href="https://wa.me/919876543210"
+                  href="https://wa.me/917894561230"
                   target="_blank"
                   rel="noreferrer"
                   className="card-hover flex items-center gap-4 p-5! group"

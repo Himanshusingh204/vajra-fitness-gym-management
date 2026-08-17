@@ -80,36 +80,21 @@ Requests to `/api` and `/api/*` go to the Express serverless function (`api/inde
 
 ## Before Going Live — Placeholder Content to Replace
 
-The codebase ships with **placeholder contact details** (a fake phone number,
-WhatsApp number, and office address) so the site has something to show
-during development. Replace them whenever your real business phone/WhatsApp/
-address are ready — there's no rush, the site works fine with placeholders
-in the meantime.
+**Updated 2026-08-17**: phone/WhatsApp/address were set to real-for-now
+values across `MainLayout.tsx`, `ContactPage.tsx`, `HelpCenterPage.tsx`
+(`+91 78945 61230`, same number for WhatsApp, "Jodhpur, Rajasthan"). SaaS
+plan pricing was also set live in the database (Starter ₹2,000/mo,
+Professional ₹7,000/mo, Enterprise ₹12,000/mo — set via the Super Admin
+SaaS & Subscriptions panel / API, not hardcoded in source).
 
-### 1. Placeholder phone number: `+91 98765 43210`
+**Still worth a final pass before real marketing traffic**: confirm the
+phone number above is the one you actually want live (it was provided as
+a placeholder-replacement, not necessarily final), add a real street
+address if you want one beyond "Jodhpur, Rajasthan", and double check the
+quarterly/half-yearly/yearly SaaS prices (currently ₹0 — only monthly was
+set) if you plan to offer those billing cycles.
 
-| File | Line | What's there now | Replace with |
-| --- | --- | --- | --- |
-| `frontend/src/layouts/MainLayout.tsx` | 121 | `<a href="tel:+919876543210" ...>+91 98765 43210</a>` | Your real number, both the `tel:` link and the visible text. |
-| `frontend/src/pages/ContactPage.tsx` | 62 | `{ icon: Phone, ..., value: '+91 98765 43210', href: 'tel:+919876543210' }` | Same, `value` and `href`. |
-| `frontend/src/pages/ContactPage.tsx` | 159 | `placeholder="+91 98765 43210"` on the phone input | Cosmetic placeholder text — update to match. |
-| `frontend/src/pages/HelpCenterPage.tsx` | 81 | Same shape as ContactPage.tsx line 62 | Same fix. |
-
-### 2. Placeholder WhatsApp number: `919876543210`
-
-| File | Line | What's there now | Replace with |
-| --- | --- | --- | --- |
-| `frontend/src/components/FloatingActions.tsx` | 4 | `const WHATSAPP_NUMBER = '919876543210';` | Your real WhatsApp number, international format, no `+`/spaces/dashes. Powers the site-wide floating button. |
-| `frontend/src/pages/ContactPage.tsx` | 114 | `href="https://wa.me/919876543210"` | Same digits as above. |
-
-### 3. Placeholder address: "Jodhpur, Rajasthan 342001" / "Vajra Fitness HQ"
-
-| File | Line | What's there now | Replace with |
-| --- | --- | --- | --- |
-| `frontend/src/layouts/MainLayout.tsx` | 117 | `Jodhpur, Rajasthan 342001` (footer) | Your real city/state/postal code. |
-| `frontend/src/pages/ContactPage.tsx` | 61 | `value: 'Vajra Fitness HQ, Jodhpur, Rajasthan 342001'` | Your real office/HQ name + full address. |
-
-### 4. Also worth double-checking before launch
+### Also worth double-checking before launch
 
 - **Social links** in `frontend/src/layouts/MainLayout.tsx` (lines 47–49) — Instagram/Facebook/YouTube handles.
 - **Careers mailbox**: `frontend/src/pages/AboutPage.tsx` line 253 (`mailto:careers@vajrafitness.in`) — confirm it's monitored.
