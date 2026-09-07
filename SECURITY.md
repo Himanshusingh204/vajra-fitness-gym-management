@@ -6,7 +6,7 @@ a public GitHub issue.
 
 ## Reporting a vulnerability
 
-Email **security@vajrafitness.in** with:
+Email **himanshuyt21361@gmail.com** with:
 
 - A description of the vulnerability and its potential impact.
 - Steps to reproduce (a minimal proof-of-concept if possible).

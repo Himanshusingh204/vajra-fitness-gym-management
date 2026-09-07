@@ -1,27 +1,18 @@
-# Contributing Guidelines
+# Contributing
 
-Thank you for your interest in contributing to our project! We welcome all contributions, from bug reports to new features and documentation updates.
+VajraFitness is a commercial product (see [`LICENSE`](./LICENSE)) — this
+repository is public for portfolio and evaluation purposes, not as an
+open-source project accepting external contributions, forks, or pull
+requests.
 
-## Getting Started
+## Found a bug or security issue?
 
-1. Fork the repository.
-2. Clone your fork locally.
-3. Install dependencies (`npm install` or `npm ci`).
-4. Create a new branch for your feature or bug fix (`git checkout -b feature/your-feature-name`).
+- **Security vulnerabilities**: see [`SECURITY.md`](./SECURITY.md) — please
+  report privately, not as a public issue.
+- **Everything else**: open an issue describing the problem. Pull requests
+  from outside the maintaining team won't be merged, but a clear bug report
+  is genuinely useful and welcome.
 
-## Development
+## Licensing or partnership inquiries
 
-- Follow the existing code style.
-- Make sure all tests pass before submitting your PR.
-- Write clear and descriptive commit messages.
-
-## Submitting a Pull Request
-
-1. Push your changes to your fork.
-2. Open a Pull Request against the `main` branch.
-3. Fill out the provided Pull Request template.
-4. Await review from the maintainers.
-
-## Issues
-
-When opening an issue, please use the provided issue templates and fill in as much information as possible to help us understand and resolve the problem.
+Contact <legal@vajrafitness.in>.

@@ -44,7 +44,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="6. Third-Party Services">
-        <p>We integrate with Razorpay (payments), Fast2SMS (OTP delivery), and AWS (cloud infrastructure). Each operates under its own privacy policy.</p>
+        <p>We integrate with Razorpay (payments), Fast2SMS (OTP delivery), AWS (cloud infrastructure), and Vercel Analytics (cookieless, privacy-friendly page-view analytics — no personal data or cross-site tracking). Each operates under its own privacy policy.</p>
       </Section>
 
       <Section title="7. Contact">

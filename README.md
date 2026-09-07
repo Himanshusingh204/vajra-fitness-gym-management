@@ -12,6 +12,11 @@
     <img alt="React" src="https://img.shields.io/badge/React-19-blue.svg?style=flat-square&logo=react&color=61DAFB&logoColor=black" />
     <img alt="Node.js" src="https://img.shields.io/badge/Node.js-Express-green.svg?style=flat-square&logo=nodedotjs&color=339933" />
     <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Prisma-blue.svg?style=flat-square&logo=postgresql&color=4169E1" />
+    <img alt="License" src="https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey.svg?style=flat-square" />
+  </p>
+
+  <p>
+    <a href="https://vajra-fitness-gym-management.vercel.app"><strong>Live demo →</strong></a>
   </p>
 </div>
 
@@ -75,9 +80,12 @@ Running `npm run seed` prints the demo login credentials it creates directly to 
 
 Architecture, authentication, multi-tenancy, payments, security, and deployment details live in [`docs/detailed_overview.md`](docs/detailed_overview.md). Deployment instructions are in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
-## Contributing
+## License
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+VajraFitness is proprietary software — see [`LICENSE`](LICENSE). This
+repository is public for portfolio and evaluation purposes, not as an
+open-source project. Found a bug or security issue? See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) / [`SECURITY.md`](SECURITY.md).
 
 ---
 
