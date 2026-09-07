@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import argon2 from 'argon2';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
+import { getOrSetJSON } from '../utils/cache';
 import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
 import { FRONTEND_URL } from '../utils/env';
 import { logger } from '../utils/logger';
@@ -147,7 +148,7 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
     }
 
     // Transactional insert of the valid, new members.
-    const created: Array<{ username: string; email: string }> = [];
+    const created: Array<{ username: string; email: string; token: string }> = [];
     if (toImport.length > 0) {
       await prisma.$transaction(async (tx) => {
         for (const r of toImport) {
@@ -161,20 +162,20 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
               memberDetails: { create: { gymId, planId: planId ?? null, status: 'PENDING' } },
             },
           });
+          const token = generateSecureToken();
           await tx.activationToken.create({
-            data: { token: generateSecureToken(), userId: user.id, expiresAt: new Date(Date.now() + TOKEN_TTL.activation) },
+            data: { token, userId: user.id, expiresAt: new Date(Date.now() + TOKEN_TTL.activation) },
           });
-          created.push({ username: r.username, email: r.email });
+          created.push({ username: r.username, email: r.email, token });
         }
       });
     }
 
     // Send activation emails (best-effort; failures are logged, not fatal).
+    // The token was captured during creation above — no need to look it back up.
     await Promise.allSettled(
       created.map(async (c) => {
-        const token = (await prisma.activationToken.findFirst({ where: { user: { email: c.email }, usedAt: null }, orderBy: { createdAt: 'desc' } }))?.token;
-        if (!token) return;
-        const link = `${FRONTEND_URL}/activate?token=${token}`;
+        const link = `${FRONTEND_URL}/activate?token=${c.token}`;
         await sendActivationEmail(c.email, c.username, link);
       }),
     ).then((results) => {
@@ -250,20 +251,25 @@ export const getMembers = async (req: AuthRequest, res: Response) => {
       where.branchId = branchId;
     }
 
-    const members = await prisma.memberDetails.findMany({
-      where,
-      include: {
-        user: {
-          select: isOwner
-            ? { id: true, username: true, email: true, phone: true }
-            : { id: true, username: true },
+    // Frontend polls this every 30s across several dashboard tabs — cache
+    // briefly so repeat polls hit Redis instead of the DB (same pattern as
+    // gym-stats). Keyed on isOwner too since the included PII differs.
+    const members = await getOrSetJSON(`members:${gymId}:${branchId ?? 'all'}:${isOwner}`, 15, () =>
+      prisma.memberDetails.findMany({
+        where,
+        include: {
+          user: {
+            select: isOwner
+              ? { id: true, username: true, email: true, phone: true }
+              : { id: true, username: true },
+          },
+          membershipPlan: true,
+          branch: { select: { id: true, name: true } },
         },
-        membershipPlan: true,
-        branch: { select: { id: true, name: true } },
-      },
-      orderBy: { joiningDate: 'desc' },
-      take: 1000,
-    });
+        orderBy: { joiningDate: 'desc' },
+        take: 1000,
+      }),
+    );
     res.json(members);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch members' });

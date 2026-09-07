@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { getOrSetJSON } from '../utils/cache';
 
 // Get enquiries for a gym
 export const getEnquiries = async (req: AuthRequest, res: Response) => {
@@ -12,10 +13,14 @@ export const getEnquiries = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const enquiries = await prisma.enquiry.findMany({
-      where: { gymId },
-      orderBy: { date: 'desc' }
-    });
+    // Frontend polls this every 30s — cache briefly so repeat polls hit
+    // Redis instead of the DB (same pattern as gym-stats).
+    const enquiries = await getOrSetJSON(`enquiries:${gymId}`, 15, () =>
+      prisma.enquiry.findMany({
+        where: { gymId },
+        orderBy: { date: 'desc' }
+      }),
+    );
     res.json(enquiries);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch enquiries' });

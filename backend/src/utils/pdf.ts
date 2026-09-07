@@ -78,46 +78,77 @@ export const buildFeeReceipt = (doc: PDFKit.PDFDocument, data: ReceiptData) => {
 
   const leftX = doc.page.margins.left;
   const rightX = pageWidth / 2 + doc.page.margins.left;
+  const colWidth = pageWidth / 2 - 10;
 
-  const row = (label: string, value: string, x: number) => {
+  // Single-column row: label then value, stacked line by line.
+  const row = (label: string, value: string, x: number = leftX, width: number = pageWidth) => {
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#6B7280').text(label, x, doc.y, { width: 150, continued: true });
-    doc.font('Helvetica').fillColor('#111827').text(value, { width: 180 });
+    doc.font('Helvetica').fillColor('#111827').text(value, { width: width - 150 });
     doc.moveDown(0.2);
   };
 
+  // True two-column grid: each pair of entries shares one line, left/right
+  // aligned at leftX/rightX, so labels don't zigzag down a single column.
+  const grid = (entries: Array<[string, string]>) => {
+    for (let i = 0; i < entries.length; i += 2) {
+      const rowY = doc.y;
+      const [l1, v1] = entries[i]!;
+      row(l1, v1, leftX, colWidth);
+      const right = entries[i + 1];
+      if (right) {
+        doc.y = rowY;
+        const [l2, v2] = right;
+        row(l2, v2, rightX, colWidth);
+      }
+    }
+  };
+
   doc.y += 4;
-  row('Receipt No.', data.feeId.slice(0, 8).toUpperCase(), leftX);
-  row('Status', data.status, rightX);
-  row('Amount', money(data.amount), leftX);
-  row('Payment Date', fmtDate(data.paymentDate), rightX);
-  row('Due Date', fmtDate(data.dueDate), leftX);
-  if (data.paymentMethod) row('Payment Method', data.paymentMethod, rightX);
-  if (data.transactionId) row('Transaction ID', data.transactionId, rightX);
-  if (data.notes) row('Notes', data.notes, leftX);
+  // Short fields pair up in the two-column grid; longer free-text fields
+  // (transaction ID, notes) get their own full-width row so they don't
+  // get squeezed into a half-width column and wrap awkwardly.
+  const paymentEntries: Array<[string, string]> = [
+    ['Receipt No.', data.feeId.slice(0, 8).toUpperCase()],
+    ['Status', data.status],
+    ['Amount', money(data.amount)],
+    ['Payment Date', fmtDate(data.paymentDate)],
+    ['Due Date', fmtDate(data.dueDate)],
+  ];
+  if (data.paymentMethod) paymentEntries.push(['Payment Method', data.paymentMethod]);
+  grid(paymentEntries);
+  if (data.transactionId) row('Transaction ID', data.transactionId);
+  if (data.notes) row('Notes', data.notes);
 
   doc.moveDown(0.8);
   doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text('Member Details');
   doc.moveDown(0.4);
   doc.y += 4;
-  row('Name', data.memberName, leftX);
-  if (data.memberEmail) row('Email', data.memberEmail, leftX);
-  if (data.memberPhone) row('Phone', data.memberPhone, leftX);
+  row('Name', data.memberName);
+  if (data.memberEmail) row('Email', data.memberEmail);
+  if (data.memberPhone) row('Phone', data.memberPhone);
 
   doc.moveDown(0.8);
   doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text('Gym Details');
   doc.moveDown(0.4);
   doc.y += 4;
-  row('Gym', data.gymName, leftX);
-  if (data.gymAddress) row('Address', data.gymAddress, leftX);
-  if (data.gymGst) row('GST No.', data.gymGst, leftX);
+  row('Gym', data.gymName);
+  if (data.gymAddress) row('Address', data.gymAddress);
+  if (data.gymGst) row('GST No.', data.gymGst);
 
   doc.moveDown(2);
   doc
     .rect(0, doc.page.height - 90, doc.page.width, 90)
     .fill('#F3F4F6');
+  // The footer band deliberately bleeds into the page's bottom margin, but
+  // pdfkit still checks new text against the margin box and silently starts
+  // a blank second page once a line's height crosses it — zero the bottom
+  // margin for these two lines so they stay pinned to page 1.
+  const savedBottomMargin = doc.page.margins.bottom;
+  doc.page.margins.bottom = 0;
   doc.fill('#6B7280').fontSize(9).font('Helvetica')
     .text('This is a computer-generated receipt and does not require a physical signature.', doc.page.margins.left, doc.page.height - 74, { width: pageWidth, align: 'center' });
   doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Vajra Fitness`, doc.page.margins.left, doc.page.height - 52, { width: pageWidth, align: 'center' });
+  doc.page.margins.bottom = savedBottomMargin;
 };
 
 type SlipData = {

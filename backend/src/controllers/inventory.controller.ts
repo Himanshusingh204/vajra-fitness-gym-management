@@ -212,15 +212,27 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    // Validate stock and calculate totals
+    // Fetch every product in the cart in one round trip instead of one per line.
+    const productIds = Array.from(new Set(items.map((item: { productId: string }) => item.productId))) as string[];
+    const products = await prisma.product.findMany({ where: { id: { in: productIds }, gymId } });
+    const productById = new Map(products.map((p) => [p.id, p]));
+
+    // Aggregate quantities per product so duplicate cart lines for the same
+    // product are validated against total demand, not checked independently.
+    const quantityByProduct = new Map<string, number>();
+    for (const item of items) {
+      quantityByProduct.set(item.productId, (quantityByProduct.get(item.productId) ?? 0) + item.quantity);
+    }
+
     let total = 0;
     const saleItems: Array<{ productId: string; quantity: number; unitPrice: number; total: number }> = [];
     for (const item of items) {
-      const product = await prisma.product.findUnique({ where: { id: item.productId } });
-      if (!product || product.gymId !== gymId) {
+      const product = productById.get(item.productId);
+      if (!product) {
         return res.status(400).json({ error: `Product ${item.productId} not found` });
       }
-      if (product.stock < item.quantity) {
+      const totalQuantity = quantityByProduct.get(item.productId)!;
+      if (product.stock < totalQuantity) {
         return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
       }
       const itemTotal = product.sellingPrice.toNumber() * item.quantity;
@@ -246,13 +258,15 @@ export const createSale = async (req: AuthRequest, res: Response) => {
         include: { items: { include: { product: true } } },
       });
 
-      // Deduct stock
-      for (const item of items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
-        });
-      }
+      // Deduct stock — one update per distinct product, aggregated above.
+      await Promise.all(
+        Array.from(quantityByProduct.entries()).map(([productId, quantity]) =>
+          tx.product.update({
+            where: { id: productId },
+            data: { stock: { decrement: quantity } },
+          }),
+        ),
+      );
 
       return sale;
     });

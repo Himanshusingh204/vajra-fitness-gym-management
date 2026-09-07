@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import argon2 from 'argon2';
 import { prisma } from '../utils/prisma';
+import { getOrSetJSON } from '../utils/cache';
 import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
 import { FRONTEND_URL } from '../utils/env';
 import { notifyGymOwner } from '../services/notification.service';
@@ -27,17 +28,23 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
       where.branchId = branchId;
     }
 
-    const trainers = await prisma.trainerDetails.findMany({
-      where,
-      include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
+    // Frontend polls this every 30s — cache briefly so repeat polls hit
+    // Redis instead of the DB (same pattern as gym-stats).
+    const result = await getOrSetJSON(`staff:${gymId}:${branchId ?? 'all'}`, 15, async () => {
+      const [trainers, staff] = await Promise.all([
+        prisma.trainerDetails.findMany({
+          where,
+          include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
+        }),
+        prisma.staffDetails.findMany({
+          where,
+          include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
+        }),
+      ]);
+      return { trainers, staff };
     });
 
-    const staff = await prisma.staffDetails.findMany({
-      where,
-      include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
-    });
-
-    res.json({ trainers, staff });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch staff' });
   }

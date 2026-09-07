@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { getOrSetJSON } from '../utils/cache';
 import { sendPdf, buildFeeReceipt } from '../utils/pdf';
 import { createNotification, notifyGymOwner } from '../services/notification.service';
 
@@ -15,15 +16,19 @@ export const getFees = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const fees = await prisma.fee.findMany({
-      where: { gymId },
-      include: {
-        member: {
-          include: { user: { select: { username: true, email: true } } }
-        }
-      },
-      orderBy: { dueDate: 'desc' }
-    });
+    // Frontend polls this every 30s — cache briefly so repeat polls hit
+    // Redis instead of the DB (same pattern as gym-stats).
+    const fees = await getOrSetJSON(`fees:${gymId}`, 15, () =>
+      prisma.fee.findMany({
+        where: { gymId },
+        include: {
+          member: {
+            include: { user: { select: { username: true, email: true } } }
+          }
+        },
+        orderBy: { dueDate: 'desc' }
+      }),
+    );
     res.json(fees);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch fees' });

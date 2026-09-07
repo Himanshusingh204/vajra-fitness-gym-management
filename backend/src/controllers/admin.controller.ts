@@ -176,30 +176,35 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     
-    // Basic counts
-    const totalGyms = await prisma.gym.count();
-    const activeGyms = await prisma.gym.count({ where: { isApproved: true } });
+    // Basic counts + SaaS data — independent reads, run concurrently instead
+    // of one round trip at a time (mirrors the gymAnalytics fix).
+    const [
+      totalGyms,
+      activeGyms,
+      totalMembers,
+      totalStaff,
+      totalTrainers,
+      revenueResult,
+      pendingMembers,
+      allSubscriptions,
+    ] = await Promise.all([
+      prisma.gym.count(),
+      prisma.gym.count({ where: { isApproved: true } }),
+      prisma.memberDetails.count(),
+      prisma.staffDetails.count(),
+      prisma.staffDetails.count({ where: { role: 'TRAINER' } }),
+      prisma.fee.aggregate({ _sum: { amount: true }, where: { status: 'PAID' } }),
+      prisma.memberDetails.count({ where: { status: 'PENDING' } }),
+      prisma.gymSubscription.findMany({
+        include: { plan: true, gym: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
     const pendingGyms = totalGyms - activeGyms;
-    const totalMembers = await prisma.memberDetails.count();
-    const totalStaff = await prisma.staffDetails.count();
-    const totalTrainers = await prisma.staffDetails.count({ where: { role: 'TRAINER' } });
-    
-    // Revenue
-    const revenueResult = await prisma.fee.aggregate({
-      _sum: { amount: true },
-      where: { status: 'PAID' },
-    });
     const platformRevenue = revenueResult._sum.amount ?? 0;
-    
-    const pendingMembers = await prisma.memberDetails.count({ where: { status: 'PENDING' } });
-    
+
     // ============ SAAS METRICS ============
-    // All subscriptions
-    const allSubscriptions = await prisma.gymSubscription.findMany({
-      include: { plan: true, gym: true },
-      orderBy: { createdAt: 'desc' }
-    });
-    
+
     // Active subscriptions
     const activeSubscriptions = allSubscriptions.filter(s => 
       s.status === 'ACTIVE' && 
@@ -263,49 +268,70 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
     ).length;
     const trialConversionRate = trialsLast30Days > 0 ? (convertedFromTrial / trialsLast30Days) * 100 : 0;
     
-    // Failed payments this month
-    const failedPayments = await prisma.paymentOrder.count({
-      where: {
-        status: 'FAILED',
-        createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), 1) }
-      }
-    });
-    
-    // Monthly platform revenue trend (last 6 months).
-    // This is SaaS subscription revenue only — gym-collected member fees belong to
-    // the gyms, not the platform, and mixing them in here would contradict the
-    // MRR/ARR figures above (which correctly count subscriptions only).
-    const monthlyRevenueTrend = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
-      const i = 5 - index;
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-
-      const monthSubscriptions = await prisma.gymSubscription.findMany({
+    // Failed payments, monthly revenue trend, active member count, and top
+    // gyms are all independent of each other and of the SaaS math above —
+    // run them concurrently rather than one round trip at a time.
+    const [failedPayments, monthlyRevenueTrend, activeMembers, topGyms] = await Promise.all([
+      // Failed payments this month
+      prisma.paymentOrder.count({
         where: {
-          createdAt: { gte: startOfMonth, lte: endOfMonth },
-          status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
+          status: 'FAILED',
+          createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), 1) }
+        }
+      }),
+
+      // Monthly platform revenue trend (last 6 months).
+      // This is SaaS subscription revenue only — gym-collected member fees belong to
+      // the gyms, not the platform, and mixing them in here would contradict the
+      // MRR/ARR figures above (which correctly count subscriptions only).
+      Promise.all(Array.from({ length: 6 }, async (_, index) => {
+        const i = 5 - index;
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+
+        const monthSubscriptions = await prisma.gymSubscription.findMany({
+          where: {
+            createdAt: { gte: startOfMonth, lte: endOfMonth },
+            status: { in: ['ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELLED'] }
+          },
+          include: { plan: true }
+        });
+
+        const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => sum + sub.amount.toNumber(), 0);
+
+        return {
+          month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+          total: subscriptionRevenue,
+        };
+      })),
+
+      // Active members across all gyms
+      prisma.memberDetails.count({ where: { status: 'ACTIVE' } }),
+
+      // Top performing gyms by member count
+      prisma.gym.findMany({
+        where: { isApproved: true },
+        include: {
+          _count: { select: { members: true } },
+          subscriptions: {
+            where: { status: 'ACTIVE' },
+            include: { plan: true },
+            take: 1,
+            orderBy: { createdAt: 'desc' }
+          }
         },
-        include: { plan: true }
-      });
+        orderBy: { members: { _count: 'desc' } },
+        take: 10
+      }),
+    ]);
 
-      const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => sum + sub.amount.toNumber(), 0);
-
-      return {
-        month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
-        total: subscriptionRevenue,
-      };
-    }));
-    
     // ARPU - Average Revenue Per User (gym)
     const arpu = activeGyms > 0 ? mrr / activeGyms : 0;
-    
+
     // CLTV - Customer Lifetime Value (simplified: ARPU / monthly churn rate)
     const monthlyChurnRate = churnRate / 100;
     const cltv = monthlyChurnRate > 0 ? arpu / monthlyChurnRate : 0;
-    
-    // Active members across all gyms
-    const activeMembers = await prisma.memberDetails.count({ where: { status: 'ACTIVE' } });
-    
+
     // Gyms by status
     const gymsByStatus = {
       active: activeGyms,
@@ -314,23 +340,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       past_due: pastDueSubscriptions.length,
       expired: expiredSubscriptions.length,
     };
-    
-    // Top performing gyms by member count
-    const topGyms = await prisma.gym.findMany({
-      where: { isApproved: true },
-      include: {
-        _count: { select: { members: true } },
-        subscriptions: { 
-          where: { status: 'ACTIVE' },
-          include: { plan: true },
-          take: 1,
-          orderBy: { createdAt: 'desc' }
-        }
-      },
-      orderBy: { members: { _count: 'desc' } },
-      take: 10
-    });
-    
+
     const payload = {
       // Basic metrics
       totalGyms,
