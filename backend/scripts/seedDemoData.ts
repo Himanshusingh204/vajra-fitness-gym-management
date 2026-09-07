@@ -224,7 +224,7 @@ async function main() {
 
     // ---- Trainers ----
     const trainerUsers: { id: string; detailsId: string; user: { id: string } }[] = [];
-    const trainerSpecializations = pickMany(rand, TRAINER_SPECIALIZATIONS, 5);
+    const trainerSpecializations = pickMany(rand, TRAINER_SPECIALIZATIONS, 2);
     for (let i = 0; i < trainerSpecializations.length; i++) {
       const spec = trainerSpecializations[i]!;
       const first = pick(rand, FIRST_NAMES);
@@ -254,7 +254,7 @@ async function main() {
 
     // ---- Staff ----
     const staffUsers: { id: string; user: { id: string } }[] = [];
-    const staffRoles = pickMany(rand, STAFF_ROLES, Math.min(4, STAFF_ROLES.length));
+    const staffRoles = pickMany(rand, STAFF_ROLES, Math.min(2, STAFF_ROLES.length));
     for (const role of staffRoles) {
       const first = pick(rand, FIRST_NAMES);
       const last = pick(rand, LAST_NAMES);
@@ -281,7 +281,7 @@ async function main() {
     }
 
     // ---- Members ----
-    const memberCountForGym = 25 + Math.floor(rand() * 15); // 25-40 members
+    const memberCountForGym = 3 + Math.floor(rand() * 2); // 3-4 members, per demo scope
     for (let i = 0; i < memberCountForGym; i++) {
       const first = pick(rand, FIRST_NAMES);
       const last = pick(rand, LAST_NAMES);

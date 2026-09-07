@@ -38,22 +38,6 @@ const GYMS = [
       { name: 'Annual', description: '12 months access + 2 PT sessions', duration: 365, price: 11999 },
     ],
   },
-  {
-    owner: { username: 'Peak Admin', email: 'owner@peakclub.com', password: 'gym123', phone: '9000000003' },
-    gym: {
-      name: 'Peak Performance Club',
-      address: '7, MG Road, Indiranagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      location: 'Bengaluru, KA',
-      imageUrl: 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&w=1200&q=80',
-      facilities: 'Olympic Lifting, CrossFit Box, Group Classes, Rooftop Gym, Cafe, Physio Support',
-    },
-    plans: [
-      { name: 'Monthly', description: 'Full club access for 1 month', duration: 30, price: 1999 },
-      { name: 'Annual', description: '12 months access + 4 PT sessions', duration: 365, price: 15999 },
-    ],
-  },
 ];
 
 async function main() {
