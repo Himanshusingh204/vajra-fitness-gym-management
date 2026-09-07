@@ -45,3 +45,11 @@ VajraFitness_AI_Implementation_Master_Plan.md
 *.tsbuildinfo
 backend/backups/
 frontend/dist-ssr/
+
+# Root-level lockfile intentionally not committed — a workspace-hoisted
+# install only fully resolves optional native binaries (tailwindcss oxide,
+# lightningcss, rolldown) for whatever platform generated it, which broke
+# the Linux Vercel build when generated on Windows. backend/package-lock.json
+# and frontend/package-lock.json (each a complete, standalone lockfile) are
+# what's actually used for installs/CI.
+/package-lock.json

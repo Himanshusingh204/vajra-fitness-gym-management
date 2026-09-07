@@ -39,15 +39,23 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
 
       # This repo is an npm workspaces monorepo (root package.json lists
-      # frontend + backend) — the lockfile lives at the root, so `npm ci`
-      # must run there too. Running it inside backend/ or frontend/ directly
-      # fails with EUSAGE ("no package-lock.json") because npm looks for the
-      # workspace root's lockfile, not a per-package one.
+      # frontend + backend), so `npm ci` inside backend/ or frontend/
+      # directly fails with EUSAGE — workspace mode looks for a lockfile at
+      # the root, not a per-package one. `npm install` at the root doesn't
+      # have that requirement (no root lockfile needed) and, critically,
+      # resolves optional native binaries (tailwindcss oxide, lightningcss,
+      # rolldown) correctly for whatever platform it's actually running on
+      # — unlike a *committed* root lockfile, which locks in only the
+      # platform it was generated on and broke the Linux Vercel build when
+      # generated from Windows. `npm install` here intentionally does not
+      # use/produce a committed root lockfile.
       - name: Install dependencies (workspace root)
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Validate backend TypeScript
         working-directory: backend
