@@ -39,12 +39,14 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install backend dependencies
-        working-directory: backend
+      # This repo is an npm workspaces monorepo (root package.json lists
+      # frontend + backend) — the lockfile lives at the root, so `npm ci`
+      # must run there too. Running it inside backend/ or frontend/ directly
+      # fails with EUSAGE ("no package-lock.json") because npm looks for the
+      # workspace root's lockfile, not a per-package one.
+      - name: Install dependencies (workspace root)
         run: npm ci
 
       - name: Validate backend TypeScript
@@ -58,10 +60,6 @@ jobs:
       - name: Run backend tests
         working-directory: backend
         run: npm test
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
 
       - name: Lint frontend
         working-directory: frontend
