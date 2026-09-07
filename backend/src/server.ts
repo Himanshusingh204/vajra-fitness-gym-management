@@ -1,13 +1,16 @@
 import { app } from './app';
 import { prisma } from './utils/prisma';
 import { logger } from './utils/logger';
-import { redis, isRedisAvailable } from './utils/redis';
+import { redis } from './utils/redis';
 import { runAllJobs, JOB_INTERVAL_MS } from './jobs/scheduler';
 
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
-  logger.info('server started', { service: 'vajra-fitness-backend', port: PORT, nodeEnv: process.env.NODE_ENV, redis: isRedisAvailable() ? 'connected' : 'fallback-in-memory' });
+  // Redis's own connect()/ready/error handlers (utils/redis.ts) log the actual
+  // outcome once it's known — reporting a status here would race the async
+  // handshake and be wrong more often than not, especially over TLS.
+  logger.info('server started', { service: 'vajra-fitness-backend', port: PORT, nodeEnv: process.env.NODE_ENV });
 
   // Background jobs: run once at boot, then hourly. All jobs are idempotent.
   // See backend/src/jobs/scheduler.ts for job definitions (expiry sync, reminders).

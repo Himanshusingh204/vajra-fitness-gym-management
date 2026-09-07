@@ -29,9 +29,11 @@ if (redis) {
     redisHealthy = false;
   });
   redis.on('ready', () => {
+    if (!redisHealthy) console.log('[Redis] connected');
     redisHealthy = true;
   });
   redis.connect().catch(() => {
+    console.log('[Redis] connection failed — falling back to in-memory rate limiting/caching');
     redisHealthy = false;
   });
 }
