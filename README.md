@@ -1,131 +1,86 @@
 <div align="center">
-  <img src="frontend/public/logo.png" alt="VajraFitness Logo" width="150" />
-  
-  <h1>VajraFitness Management System</h1>
+  <img src="frontend/public/logo.png" alt="VajraFitness Logo" width="120" />
+
+  <h1>VajraFitness</h1>
 
   <p>
-    <strong>Next-Generation SaaS platform for modern fitness centers, automating memberships, billing, and staff management in one unified experience.</strong>
+    <strong>Multi-tenant SaaS platform for gym and fitness-center management — memberships, billing, staff, and analytics in one system.</strong>
   </p>
 
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge&color=0052FF" />
-    <img alt="React" src="https://img.shields.io/badge/React-19-blue.svg?style=for-the-badge&logo=react&color=61DAFB&logoColor=black" />
-    <img alt="Node.js" src="https://img.shields.io/badge/Node.js-Express-green.svg?style=for-the-badge&logo=nodedotjs&color=339933" />
-    <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Prisma-blue.svg?style=for-the-badge&logo=postgresql&color=4169E1" />
+    <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-blue.svg?style=flat-square&color=0052FF" />
+    <img alt="React" src="https://img.shields.io/badge/React-19-blue.svg?style=flat-square&logo=react&color=61DAFB&logoColor=black" />
+    <img alt="Node.js" src="https://img.shields.io/badge/Node.js-Express-green.svg?style=flat-square&logo=nodedotjs&color=339933" />
+    <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Prisma-blue.svg?style=flat-square&logo=postgresql&color=4169E1" />
   </p>
 </div>
 
-<br />
-
-## 🌟 About The Project
-
-Managing a gym shouldn't mean drowning in spreadsheets. **VajraFitness** is a premium, multi-tenant SaaS application built to scale with your business. Whether you're running a single boutique studio or a nationwide franchise, VajraFitness provides the infrastructure to manage members, trainers, hardware, and finances all in one place.
-
 ---
 
-## ⚡ Core Features
+## Overview
 
-<details>
-  <summary><b>🏢 Multi-Branch & SaaS Management</b></summary>
-  <ul>
-    <li><b>Global SaaS Plans:</b> Define tier-based limits (members, trainers, staff) across the entire platform.</li>
-    <li><b>Branch Isolation:</b> Strict data separation ensures Gym A can never see Gym B's data.</li>
-    <li><b>Role-Based Access (RBAC):</b> Bulletproof JWT middleware routes for Super Admins, Gym Owners, Trainers, and Staff.</li>
-  </ul>
-</details>
+VajraFitness is a multi-tenant SaaS application for running a fitness business — from a single studio to a multi-branch chain. Each gym operates as an isolated tenant with its own members, staff, trainers, billing, and branch structure, while the platform layer handles subscriptions, plan entitlements, and cross-tenant administration.
 
-<details>
-  <summary><b>💵 Billing, Fees & Analytics</b></summary>
-  <ul>
-    <li><b>Smart Memberships:</b> Custom pricing tiers with automated expiration tracking.</li>
-    <li><b>Integrated Payments:</b> Track dues, generate dynamic PDF receipts, and process online transactions securely.</li>
-    <li><b>Revenue Reports:</b> Beautiful dashboard charts mapping real-time branch revenue and sign-ups.</li>
-  </ul>
-</details>
+## Features
 
-<details>
-  <summary><b>🧑‍💻 Member & Trainer Portals</b></summary>
-  <ul>
-    <li><b>Self-Service Dashboards:</b> Members can track their own attendance, payments, and membership lifecycles.</li>
-    <li><b>Digital Workouts:</b> Trainers assign rich workout slips directly to member accounts.</li>
-    <li><b>PT Bookings:</b> Seamless scheduling between members and personal trainers.</li>
-  </ul>
-</details>
+**Multi-branch & SaaS management**
+- Tiered SaaS plans with configurable member/trainer/staff limits per gym
+- Strict tenant isolation — no gym can access another gym's data
+- Role-based access control for Super Admin, Gym Owner, Trainer, and Staff
 
----
+**Billing & analytics**
+- Membership plans with automated expiry tracking
+- Online payments via Razorpay, PDF receipts, refund handling
+- Revenue, churn, and retention analytics per gym and platform-wide
 
-## 🛠️ Technology Stack
+**Member & trainer experience**
+- Self-service member dashboard for attendance, payments, and membership status
+- Structured workout plans and progress tracking
+- Personal-training session booking and scheduling
 
-VajraFitness is built on a robust, modern tech stack designed for speed, security, and scalability.
+## Tech stack
 
-### Client-Side
-* **React 19** & **TypeScript** - For a type-safe, lightning-fast UI.
-* **Tailwind CSS v4** - Premium, highly-customizable design system.
-* **Zustand** & **TanStack Query** - Efficient client-side state and data fetching.
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React 19, TypeScript, Tailwind CSS v4, TanStack Query, Zustand |
+| Backend | Node.js, Express 5, Prisma ORM |
+| Database | PostgreSQL |
+| Auth | JWT with rotating refresh tokens, Argon2 password hashing |
+| Infra | Redis (rate limiting, caching), Razorpay (payments) |
 
-### Server-Side
-* **Node.js** & **Express 5** - Scalable API architecture.
-* **Prisma ORM** - Type-safe database queries and schema management.
-* **PostgreSQL** - Relational data integrity.
-* **Argon2 & JWT** - Industry-standard secure authentication.
+## Getting started
 
----
+Requires Node.js 20+ and a PostgreSQL instance (local, or a free [Neon](https://neon.tech) project).
 
-## 🚀 Getting Started
+```bash
+# 1. Point at a database
+#    Set DATABASE_URL in backend/.env (see backend/.env.example)
 
-Want to run the platform locally? You can have it up and running in minutes.
+# 2. Backend
+cd backend
+npm install
+npx prisma db push
+npm run seed        # seeds demo data for local development
+npm run dev          # http://localhost:5000
 
-> **Requirement:** Ensure you have Node.js (v20+) and a PostgreSQL instance
-> (local install, or a free [Neon](https://neon.tech) project).
+# 3. Frontend
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
 
-<details>
-<summary><b>Click here to view setup instructions</b></summary>
+Running `npm run seed` prints the demo login credentials it creates directly to the console — they are intentionally not committed to this repository. See `backend/scripts/seed*.ts` for what gets created. **Rotate all seeded credentials before using this in anything beyond local development.**
 
-<br />
+## Documentation
 
-1. **Point at a database** — set `DATABASE_URL` in `backend/.env` to any
-   running Postgres instance (see `backend/.env.example`).
+Architecture, authentication, multi-tenancy, payments, security, and deployment details live in [`docs/detailed_overview.md`](docs/detailed_overview.md). Deployment instructions are in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
-2. **Start the Backend API**
-   ```bash
-   cd backend
-   npm install
-   npx prisma db push
-   npm run seed       # Injects realistic demo data!
-   npm run dev        # API running on http://localhost:5000
-   ```
+## Contributing
 
-3. **Start the Frontend UI**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev        # UI running on http://localhost:5173
-   ```
-</details>
-
----
-
-## 🔐 Sandbox Credentials
-
-If you ran `npm run seed` during setup, your database is already populated with demo users and realistic data. Try logging in!
-
-| Account Type | Email | Password |
-| :--- | :--- | :--- |
-| **Super Admin** *(Platform Owner)* | `admin@vajrafitness.com` | `admin123` |
-| **Gym Admin** *(Branch Owner)* | `owner@ironvalley.com` | `gym123` |
-| **Member** *(Gym Goer)* | `first.lastN@demo.in` | `Demo@1234` |
-
----
-
-## 📚 Technical Documentation
-
-If you are looking for advanced deployment guides, security models, or architectural blueprints, please refer to our legacy documentation file:
-
-👉 **[View Technical Documentation (docs/detailed_overview.md)](docs/detailed_overview.md)**
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
 <div align="center">
-  <p><strong>Propel your fitness business into the future.</strong></p>
-  <p>&copy; VajraFitness | Licensed under the MIT License.</p>
+  <sub>&copy; VajraFitness. All rights reserved.</sub>
 </div>

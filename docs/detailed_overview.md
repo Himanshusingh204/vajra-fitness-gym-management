@@ -27,23 +27,21 @@ control on top of a shared platform.
 
 ## Demo / Default Credentials
 
-These credentials are for **local development only** and must never be exposed on the public website, UI, or production builds.
+**The exact seed credentials are intentionally not documented here or anywhere else in this repository.** This is a public repo, and printing working login credentials in version-controlled docs means anyone can read them — including against any live database that was ever seeded with these scripts, not just a local one.
 
-| Role                              | Email / Username         | Password            | Source                                                                                                                                                 |
-| --------------------------------- | ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Super Admin                       | `admin@vajrafitness.com` | `admin123`          | `backend/scripts/seedSuperAdmin.ts`                                                                                                                    |
-| Gym Admin (Iron Valley Gym)       | `owner@ironvalley.com`   | `gym123`            | `backend/scripts/seedGyms.ts`                                                                                                                          |
-| Gym Admin (PowerHouse Fitness)    | `owner@powerhouse.com`   | `gym123`            | `backend/scripts/seedGyms.ts`                                                                                                                          |
-| Gym Admin (Peak Performance Club) | `owner@peakclub.com`     | `gym123`            | `backend/scripts/seedGyms.ts`                                                                                                                          |
-| Member                            | (any created member)     | _(activation link)_ | Gym admins generate a one-time activation link per member; the member sets their own password at `POST /auth/activate`. No default passwords are used. |
-| Demo member / trainer / staff     | `first.lastN@demo.in`    | `Demo@1234`         | `backend/scripts/seedDemoData.ts`                                                                                                                      |
+| Role                              | Source                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Super Admin                       | `backend/scripts/seedSuperAdmin.ts`                                                                                                                    |
+| Gym Admin (3 demo gyms)           | `backend/scripts/seedGyms.ts`                                                                                                                          |
+| Member                            | Gym admins generate a one-time activation link per member; the member sets their own password at `POST /auth/activate`. No default passwords are used. |
+| Demo member / trainer / staff     | `backend/scripts/seedDemoData.ts`                                                                                                                      |
 
-- The Super Admin is created by running `npx tsx scripts/seedSuperAdmin.ts` inside `backend/`.
+- The Super Admin is created by running `npx tsx scripts/seedSuperAdmin.ts` inside `backend/`. Read that file to see (and, ideally, change) the seeded password before running it against anything but a disposable local database.
 - Approved demo gyms (with membership plans) are seeded by running `npx tsx scripts/seedGyms.ts` inside `backend/`.
 - `npm run seed` runs all three seeders in order (idempotent).
 - **Realistic demo data**: `backend/scripts/seedDemoData.ts` populates every demo gym with 25–40 members, 5 trainers, 4 staff, membership history, fees (paid/pending/overdue), ~30 days of attendance per active member, PT bookings, workout slips, notifications, and walk-in enquiries — so dashboards and charts look fully operational immediately. It also seeds SaaS plans/subscriptions and CMS FAQs/testimonials.
-- Demo member/trainer/staff accounts **only** share the seed password `Demo@1234` so evaluators can log in and explore. Accounts created through the UI instead receive an `activationLink` (built from `FRONTEND_URL`) and have **no default password**.
-- In production, replace these defaults with randomly generated secrets and reset all seeded passwords.
+- Demo member/trainer/staff accounts share a single seed password defined in `seedDemoData.ts` so evaluators can log in and explore. Accounts created through the UI instead receive an `activationLink` (built from `FRONTEND_URL`) and have **no default password**.
+- **If any of these seed scripts have ever been run against a real/shared database, rotate every seeded password immediately** — the previous version of this documentation published the exact values in plaintext, in this repository's git history, which is public.
 
 ## Tech Stack
 

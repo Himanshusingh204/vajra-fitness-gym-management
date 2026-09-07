@@ -71,10 +71,10 @@ Requests to `/api` and `/api/*` go to the Express serverless function (`api/inde
 | Site | `https://<your-project>.vercel.app` |
 | API health | `https://<your-project>.vercel.app/api/health` |
 | Public gym list | `https://<your-project>.vercel.app/api/gym` |
-| Super Admin login | `admin@vajrafitness.com` / `admin123` (only if you ran the seed) |
-| Demo gym admin | `owner@ironvalley.com` / `gym123` |
+| Super Admin login | `admin@vajrafitness.com` (only if you ran the seed — password is set in `backend/scripts/seedSuperAdmin.ts`, not published here) |
+| Demo gym admin | `owner@ironvalley.com` (password set in `backend/scripts/seedGyms.ts`) |
 
-**Change the seeded passwords immediately after your first login** — they're for demo only.
+**Change the seeded passwords immediately after your first login** — they're for demo only, and their default values are visible to anyone who reads the seed scripts in this repo.
 
 ---
 
