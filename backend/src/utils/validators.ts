@@ -130,9 +130,35 @@ export const statusQuery = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'ACTIVE', 'INACTIVE', 'EXPIRED', 'SUSPENDED', 'PAID', 'OVERDUE', 'PARTIAL']).optional(),
 });
 
+// Blocks the most common disposable/throwaway email providers at signup —
+// doesn't stop a determined bad actor, but removes the near-zero-effort path
+// (10-minute-mail-style services) that most scripted fake signups actually use.
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+  'mailinator.com', 'guerrillamail.com', 'guerrillamail.info', '10minutemail.com',
+  'tempmail.com', 'temp-mail.org', 'throwawaymail.com', 'yopmail.com', 'trashmail.com',
+  'fakeinbox.com', 'getnada.com', 'maildrop.cc', 'sharklasers.com', 'dispostable.com',
+  'mintemail.com', 'mailnesia.com', 'discard.email', 'moakt.com', 'tempinbox.com',
+]);
+
+const registrationEmail = email.refine(
+  (v) => !DISPOSABLE_EMAIL_DOMAINS.has(v.split('@')[1] ?? ''),
+  { message: 'Disposable email addresses are not allowed — please use a permanent email address' },
+);
+
+// Indian GST number format: 2-digit state code, 10-char PAN, entity number,
+// literal 'Z', checksum char — rejects obviously fake/garbage input rather
+// than accepting any string up to 40 characters.
+const gstNumber = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Enter a valid 15-character GST number')
+  .optional()
+  .nullable();
+
 export const registerVendorSchema = z.object({
   username,
-  email,
+  email: registrationEmail,
   password,
   gymName: sanitize(120).pipe(z.string().min(2, 'Gym name must be at least 2 characters')),
   address: sanitize(300).pipe(z.string().min(3, 'Address must be at least 3 characters')),
@@ -140,13 +166,13 @@ export const registerVendorSchema = z.object({
   state: sanitize(80).pipe(z.string().min(2, 'State must be at least 2 characters')),
   pincode: pincode.optional().nullable(),
   location: sanitize(300).optional().nullable(),
-  gstNumber: z.string().trim().max(40).optional().nullable(),
+  gstNumber: z.union([gstNumber, z.literal('')]).optional().nullable(),
   phone: indianPhone().optional().or(z.literal('').transform(() => undefined)),
 });
 
 export const registerMemberSchema = z.object({
   username,
-  email,
+  email: registrationEmail,
   password,
   phone: optionalIndianPhone(),
   // Optional: a member can create an account without picking a gym yet and
@@ -239,6 +265,28 @@ export const subscriptionPurchaseSchema = z.object({
   billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
   paymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional(),
   gymId: uuid.optional(),
+});
+
+export const startTrialSchema = z.object({
+  planId: uuid,
+  trialDays: z.number().int().positive().max(90).optional(),
+});
+
+export const extendSubscriptionSchema = z.object({
+  days: z.number().int().positive().max(3650),
+});
+
+export const cancelSubscriptionSchema = z.object({
+  reason: z.string().trim().max(300).optional(),
+});
+
+export const subscriptionChangePlanSchema = z.object({
+  planId: uuid,
+  gymId: uuid.optional(),
+});
+
+export const generateInvoiceSchema = z.object({
+  subscriptionId: uuid,
 });
 
 const paymentMethod = z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable();

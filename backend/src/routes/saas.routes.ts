@@ -21,7 +21,7 @@ import {
 } from '../controllers/saas.controller';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { saasPlanSchema, saasPlanUpdateSchema, subscriptionSchema, subscriptionStatusSchema, subscriptionPurchaseSchema, verifyPaymentSchema, idParams } from '../utils/validators';
+import { saasPlanSchema, saasPlanUpdateSchema, subscriptionSchema, subscriptionStatusSchema, subscriptionPurchaseSchema, verifyPaymentSchema, idParams, startTrialSchema, extendSubscriptionSchema, cancelSubscriptionSchema, subscriptionChangePlanSchema, generateInvoiceSchema } from '../utils/validators';
 
 const router = Router();
 
@@ -55,11 +55,11 @@ router.post('/checkout', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), 
 router.post('/verify', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(verifyPaymentSchema), asyncHandler(verifySaaS));
 
 // Gym Admin: start free trial
-router.post('/trial', authenticate, authorize(['GYM_ADMIN']), asyncHandler(startTrialHandler));
+router.post('/trial', authenticate, authorize(['GYM_ADMIN']), validate(startTrialSchema), asyncHandler(startTrialHandler));
 
 // Gym Admin: upgrade/downgrade plan
-router.post('/upgrade', authenticate, authorize(['GYM_ADMIN']), asyncHandler(upgradeSubscriptionHandler));
-router.post('/downgrade', authenticate, authorize(['GYM_ADMIN']), asyncHandler(downgradeSubscriptionHandler));
+router.post('/upgrade', authenticate, authorize(['GYM_ADMIN']), validate(subscriptionChangePlanSchema), asyncHandler(upgradeSubscriptionHandler));
+router.post('/downgrade', authenticate, authorize(['GYM_ADMIN']), validate(subscriptionChangePlanSchema), asyncHandler(downgradeSubscriptionHandler));
 
 // Gym Admin: view invoices
 router.get('/invoices', authenticate, authorize(['GYM_ADMIN']), asyncHandler(getInvoices));
@@ -75,11 +75,11 @@ router.post('/subscriptions', authenticate, authorize(['SUPER_ADMIN']), validate
 router.patch('/subscriptions/:id', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), validate(subscriptionStatusSchema), asyncHandler(updateSubscriptionStatus));
 
 // Super Admin: extend / cancel subscription
-router.post('/subscriptions/:id/extend', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(extendSubscriptionHandler));
-router.post('/subscriptions/:id/cancel', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), asyncHandler(cancelSubscriptionHandler));
+router.post('/subscriptions/:id/extend', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), validate(extendSubscriptionSchema), asyncHandler(extendSubscriptionHandler));
+router.post('/subscriptions/:id/cancel', authenticate, authorize(['SUPER_ADMIN']), validate(idParams, ['params']), validate(cancelSubscriptionSchema), asyncHandler(cancelSubscriptionHandler));
 
 // Super Admin: generate invoice
-router.post('/invoices/generate', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(generateInvoiceHandler));
+router.post('/invoices/generate', authenticate, authorize(['SUPER_ADMIN']), validate(generateInvoiceSchema), asyncHandler(generateInvoiceHandler));
 
 // Super Admin: view all invoices
 router.get('/invoices/all', authenticate, authorize(['SUPER_ADMIN']), asyncHandler(getInvoices));

@@ -17,20 +17,20 @@ const VALUES = [
 
 const FAQS = [
   {
-    q: 'What are your operating hours?',
-    a: 'Most of our branches are open from 5:00 AM to 11:00 PM, seven days a week. Premium All-Access members can check exact timings for each branch from their dashboard.',
+    q: 'Is Vajra Fitness a gym, or software for gyms?',
+    a: 'Software. We don\'t run gyms ourselves — gym owners sign up, register their business, and run their day-to-day membership, billing, and staff operations on our platform.',
   },
   {
-    q: 'Do you offer personal training?',
-    a: 'Yes! We have certified personal trainers available. You can purchase PT sessions or view your assigned Workout Slips in your Member Dashboard.',
+    q: 'Does the platform support personal training?',
+    a: 'Yes — trainers can log Workout Slips, track member progress, and take session bookings, all from the platform, whether the gym has one location or several.',
   },
   {
-    q: 'Can I transfer my membership to another branch?',
-    a: 'Standard memberships are branch-specific. However, premium "All-Access" passes allow you to visit any Vajra Fitness location across India.',
+    q: 'Can a gym owner manage more than one branch?',
+    a: 'Yes, multi-branch is built in. Members, staff, and reporting can be scoped per branch while the owner sees everything from one account.',
   },
   {
-    q: 'Is there a joining fee?',
-    a: 'No hidden joining fees. You only pay for the membership plan you select. GST is applied transparently on every invoice.',
+    q: 'What does it cost to get started?',
+    a: 'Plans are billed to the gym, not its members — see Pricing for current plans. No hidden fees; GST is itemized on every invoice.',
   },
   {
     q: 'How do gym owners start using the platform?',

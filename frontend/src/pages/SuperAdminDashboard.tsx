@@ -7,10 +7,10 @@ import {
   Menu, X
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { useThemeStore } from '../store/useThemeStore';
 import api, { downloadFile } from '../services/api';
 import { getPendingBranches, approveBranch, rejectBranch, type PendingBranch } from '../api/branch.api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { LineChart } from '../components/charts';
 
 type AnalyticsData = {
   // Basic metrics
@@ -28,7 +28,7 @@ type AnalyticsData = {
   mrr: number;
   arr: number;
   arpu: number;
-  cltv: number;
+  cltv: number | null;
   churnRate: number;
   churnedCount: number;
   newSubscriptionsThisMonth: number;
@@ -180,7 +180,6 @@ const SuperAdminDashboard = () => {
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [userSearch, setUserSearch] = useState('');
   const user = useAuthStore((s) => s.user);
-  const theme = useThemeStore((s) => s.theme);
   const qc = useQueryClient();
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
@@ -242,114 +241,6 @@ const SuperAdminDashboard = () => {
     queryFn: () => api.get('/admin/audit-logs').then((r) => r.data),
     refetchInterval: 60000,
   });
-
-  // Chart rendering effect
-  React.useEffect(() => {
-    if (!analytics?.monthlyRevenueTrend || analyticsLoading) return;
-    
-    const canvas = document.getElementById('revenueChart') as HTMLCanvasElement;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const data = analytics.monthlyRevenueTrend;
-    const labels = data.map(d => d.month);
-    const totalData = data.map(d => d.total);
-
-    const isDark = theme === 'dark';
-    const axisColor = isDark ? '#aaa' : '#888';
-    const legendTextColor = isDark ? '#e5e5e5' : '#333';
-
-    const maxVal = Math.max(...totalData, 1);
-    const padding = 40;
-    const chartWidth = canvas.width - padding * 2;
-    const chartHeight = canvas.height - padding * 2;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw grid lines
-    ctx.strokeStyle = 'rgba(128, 128, 128, 0.1)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = padding + (chartHeight / 4) * i;
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(canvas.width - padding, y);
-      ctx.stroke();
-
-      // Y-axis labels
-      ctx.fillStyle = axisColor;
-      ctx.font = '11px system-ui';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${Math.round((maxVal * (4 - i)) / 4).toLocaleString('en-IN')}`, padding - 10, y + 4);
-    }
-
-    // Draw X-axis labels
-    ctx.fillStyle = axisColor;
-    ctx.font = '11px system-ui';
-    ctx.textAlign = 'center';
-    labels.forEach((label, i) => {
-      const x = padding + (chartWidth / (labels.length - 1)) * i;
-      ctx.fillText(label, x, canvas.height - 10);
-    });
-    
-    // Draw datasets
-    const drawLine = (values: number[], color: string, fillColor: string) => {
-      const points = values.map((val, i) => ({
-        x: padding + (chartWidth / (labels.length - 1)) * i,
-        y: padding + chartHeight - (val / maxVal) * chartHeight
-      }));
-      
-      // Fill area
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, padding + chartHeight);
-      points.forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.lineTo(points[points.length - 1].x, padding + chartHeight);
-      ctx.closePath();
-      ctx.fillStyle = fillColor;
-      ctx.fill();
-      
-      // Line
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-      
-      // Points
-      points.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-      });
-    };
-    
-    drawLine(totalData, 'rgba(1, 50, 32, 0.8)', 'rgba(1, 50, 32, 0.1)');
-
-    // Legend
-    const legendItems = [
-      { label: 'Subscription Revenue', color: 'rgba(1, 50, 32, 0.8)' }
-    ];
-
-    legendItems.forEach((item, i) => {
-      const x = canvas.width - 180;
-      const y = 20 + i * 20;
-      ctx.fillStyle = item.color;
-      ctx.fillRect(x, y, 12, 12);
-      ctx.fillStyle = legendTextColor;
-      ctx.font = '11px system-ui';
-      ctx.textAlign = 'left';
-      ctx.fillText(item.label, x + 18, y + 10);
-    });
-  }, [analytics?.monthlyRevenueTrend, analyticsLoading, theme]);
 
   const approve = useMutation({
     mutationFn: (id: string) => api.put(`/admin/gyms/${id}/approve`),
@@ -696,11 +587,11 @@ const SuperAdminDashboard = () => {
                     sub={`${analytics?.churnedCount ?? 0} churned this month`} 
                     color={((analytics?.churnRate ?? 0) > 5 ? 'text-red-500' : 'text-green-600')} 
                   />
-                  <StatCard 
-                    label="Customer Lifetime Value" 
-                    value={`₹${(analytics?.cltv ?? 0).toLocaleString('en-IN')}`} 
-                    sub="CLTV" 
-                    color="text-blue-500" 
+                  <StatCard
+                    label="Customer Lifetime Value"
+                    value={analytics?.cltv == null ? 'No churn yet' : `₹${analytics.cltv.toLocaleString('en-IN')}`}
+                    sub="CLTV"
+                    color="text-blue-500"
                   />
                 </div>
 
@@ -763,7 +654,12 @@ const SuperAdminDashboard = () => {
                 {/* Revenue Trend Chart */}
                 <Panel title="Subscription Revenue Trend (Last 6 Months)">
                   <div className="h-80">
-                    <canvas id="revenueChart" width="800" height="320" role="img" aria-label="Platform subscription revenue trend over the last six months">Revenue trend chart</canvas>
+                    <LineChart
+                      series={[
+                        { name: 'Subscription Revenue', data: (analytics?.monthlyRevenueTrend ?? []).map(d => ({ label: d.month, value: d.total })) },
+                      ]}
+                      config={{ height: 320, showArea: true }}
+                    />
                   </div>
                 </Panel>
 

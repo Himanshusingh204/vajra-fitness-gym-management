@@ -26,6 +26,15 @@
 
 VajraFitness is a multi-tenant SaaS application for running a fitness business â€” from a single studio to a multi-branch chain. Each gym operates as an isolated tenant with its own members, staff, trainers, billing, and branch structure, while the platform layer handles subscriptions, plan entitlements, and cross-tenant administration.
 
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Homepage](docs/screenshots/homepage.png) | ![Subscription plans](docs/screenshots/subscription.png) |
+| Homepage | Subscription plans & checkout |
+| ![About page](docs/screenshots/about.png) | ![Login](docs/screenshots/login.png) |
+| About | Login |
+
 ## Features
 
 **Multi-branch & SaaS management**
@@ -51,7 +60,7 @@ VajraFitness is a multi-tenant SaaS application for running a fitness business â
 | Backend | Node.js, Express 5, Prisma ORM |
 | Database | PostgreSQL |
 | Auth | JWT with rotating refresh tokens, Argon2 password hashing |
-| Infra | Redis (rate limiting, caching), Razorpay (payments) |
+| Infra | Redis (rate limiting, caching), Razorpay (payments), Vercel Analytics & Speed Insights |
 
 ## Getting started
 

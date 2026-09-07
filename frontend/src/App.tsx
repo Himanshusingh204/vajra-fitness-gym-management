@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import MainLayout from './layouts/MainLayout';
 import { useAuthStore } from './store/useAuthStore';
 import { NotificationManager } from './components/NotificationManager';
@@ -68,6 +69,7 @@ function App() {
       <ScrollToTop />
       <NotificationManager />
       <Analytics />
+      <SpeedInsights />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<MainLayout />}>

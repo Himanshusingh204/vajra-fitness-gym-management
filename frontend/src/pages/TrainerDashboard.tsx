@@ -11,6 +11,7 @@ import { Calendar, Users, Dumbbell, Clock, ClipboardList, CheckCircle, XCircle, 
 import { downloadFile } from '../services/api';
 import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
 import { LineChart } from '../components/charts';
+import { localDateString } from '../utils/format';
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: ClipboardList },
@@ -21,8 +22,7 @@ const tabs = [
 ];
 
 const isToday = (dateStr: string) => {
-  const today = new Date().toISOString().slice(0, 10);
-  return dateStr === today;
+  return dateStr === localDateString();
 };
 
 const TrainerDashboard = () => {
@@ -73,7 +73,7 @@ const TrainerDashboard = () => {
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
 
   const todayCount = bookings?.filter((b: any) => isToday(b.date) && b.status !== 'CANCELLED').length ?? 0;
-  const upcomingCount = bookings?.filter((b: any) => !isToday(b.date) && b.date >= new Date().toISOString().slice(0, 10) && b.status !== 'CANCELLED').length ?? 0;
+  const upcomingCount = bookings?.filter((b: any) => !isToday(b.date) && b.date >= localDateString() && b.status !== 'CANCELLED').length ?? 0;
   const completedCount = bookings?.filter((b: any) => b.status === 'COMPLETED').length ?? 0;
   const mySlipCount = slips?.filter((s: any) => s.trainer?.user?.username === user?.username).length ?? 0;
 
