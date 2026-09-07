@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Wallet, Receipt, TrendingDown, Plus, Trash2, Download, RotateCcw } from 'lucide-react';
 import { getExpenses, recordExpense, deleteExpense, getExpenseSummary, type Expense } from '../../api/expense.api';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { localDateString } from '../../utils/format';
 
 const CATEGORIES = [
   'RENT', 'ELECTRICITY', 'INTERNET', 'SALARIES', 'MAINTENANCE',
@@ -36,7 +37,7 @@ interface ExpenseSummary {
   byCategory: CategorySummaryRow[];
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateString();
 
 const emptyForm = {
   category: 'RENT' as string,

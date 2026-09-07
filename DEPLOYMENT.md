@@ -52,6 +52,11 @@ Requests to `/api` and `/api/*` go to the Express serverless function (`api/inde
    | `TRUST_PROXY` | `1` |
    | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | *(recommended)* so activation/reset emails send — see [Email](#email-activation--password-reset) below |
    | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | *(optional)* enables online fee payments; leave blank to keep payments offline-only |
+   | `REDIS_URL` | *(strongly recommended)* Upstash's free tier `rediss://...` string — without it, rate limiting and dashboard caching fall back to per-instance in-memory state, which is a much weaker DDoS floor on serverless (each cold start resets it) |
+
+   Vercel Analytics and Speed Insights (already wired into `frontend/src/App.tsx`) need
+   enabling separately: **Project → Analytics** and **Project → Speed Insights** tabs
+   in the Vercel dashboard — the code ships collecting nothing until you flip that on.
 
 4. Redeploy (**Deployments → ⋯ → Redeploy**) so the env vars take effect.
 5. Apply the database schema once, from your machine, using the **direct**
@@ -80,19 +85,22 @@ Requests to `/api` and `/api/*` go to the Express serverless function (`api/inde
 
 ## Before Going Live — Placeholder Content to Replace
 
-**Updated 2026-08-17**: phone/WhatsApp/address were set to real-for-now
+**Updated 2026-09-07**: phone/WhatsApp/address were set to real-for-now
 values across `MainLayout.tsx`, `ContactPage.tsx`, `HelpCenterPage.tsx`
 (`+91 78945 61230`, same number for WhatsApp, "Jodhpur, Rajasthan"). SaaS
-plan pricing was also set live in the database (Starter ₹2,000/mo,
-Professional ₹7,000/mo, Enterprise ₹12,000/mo — set via the Super Admin
-SaaS & Subscriptions panel / API, not hardcoded in source).
+plan pricing is live in the database — Starter ₹1,000/mo, Professional
+₹5,000/mo, Enterprise ₹10,000/mo, with quarterly/half-yearly/yearly set as
+plain multiples of the monthly price (no discount applied by default; the
+Subscription page lets buyers pick any of the four cycles). Adjust via the
+Super Admin SaaS & Subscriptions panel / API, not hardcoded in source.
 
 **Still worth a final pass before real marketing traffic**: confirm the
 phone number above is the one you actually want live (it was provided as
 a placeholder-replacement, not necessarily final), add a real street
-address if you want one beyond "Jodhpur, Rajasthan", and double check the
-quarterly/half-yearly/yearly SaaS prices (currently ₹0 — only monthly was
-set) if you plan to offer those billing cycles.
+address if you want one beyond "Jodhpur, Rajasthan", decide whether the
+longer billing cycles should carry a discount vs. paying monthly, and set
+real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` —
+online payments stay disabled (cash/bank only) until those are set.
 
 ### Also worth double-checking before launch
 
@@ -215,7 +223,21 @@ npm run dev
 Runs on every push/PR to `main`/`develop`: backend `tsc --noEmit`, Prisma
 validation, `npm test` (against a temporary Postgres service), frontend lint
 + build. This is a quality gate only — actual deployment happens via
-Vercel's own GitHub integration once the project is imported (step 2 above).
+Vercel's own GitHub integration once the project is imported (step 2 above),
+**independently of whether this workflow passes**. A type error still blocks
+deployment (Vercel's own build re-runs `tsc`), but a failing test suite would
+not. To make CI actually gate deploys, add a branch protection rule on `main`
+(repo **Settings → Branches**) requiring the "Type Check, Lint, Build &
+Tests" status check before merge.
+
+Install root dependencies with `npm install`, not `npm ci` — this is an npm
+workspaces monorepo with no committed root lockfile by design. A
+workspace-hoisted install only fully resolves platform-specific optional
+binaries (`@tailwindcss/oxide-*`, `lightningcss-*`) for whatever OS generated
+the lockfile, so a Windows-generated one breaks the Linux Vercel build. `npm
+install` resolves them fresh for whatever platform it's actually running on;
+`backend/package-lock.json` and `frontend/package-lock.json` are the real,
+platform-independent lockfiles used for caching.
 
 ## Troubleshooting
 

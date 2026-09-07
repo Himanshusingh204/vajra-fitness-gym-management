@@ -12,6 +12,7 @@ import { getBranches, createBranch, deleteBranch, type GymBranch } from '../api/
 import { getReferrals, createReferral, updateReferralStatus, getReferralStats } from '../api/referral.api';
 import { getGymAnalytics, getTrainerPerformance, type TrainerPerformance } from '../api/reports.api';
 import { getMyGymSubscription, getInvoices } from '../api/saas.api';
+import { localDateString } from '../utils/format';
 import { LineChart, BarChart, AreaChart, DonutChart, HeatmapChart } from '../components/charts';
 import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -85,7 +86,7 @@ const GymAdminDashboard = () => {
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel?: string; onConfirm: () => void } | null>(null);
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
 
   const { data: branch, isLoading: branchLoading } = useQuery({
     queryKey: ['my-branch'],
@@ -541,7 +542,7 @@ const GymAdminDashboard = () => {
   const monthlyRows = useMemo(() => {
     const monthly: Record<string, { collected: number; outstanding: number; count: number }> = {};
     fees.forEach((f: any) => {
-      const key = new Date(f.paymentDate).toISOString().slice(0, 7);
+      const key = localDateString(new Date(f.paymentDate)).slice(0, 7);
       if (!monthly[key]) monthly[key] = { collected: 0, outstanding: 0, count: 0 };
       monthly[key].count += 1;
       if (f.status === 'PAID') monthly[key].collected += f.amount;
@@ -555,12 +556,12 @@ const GymAdminDashboard = () => {
   };
 
   const feeStats = useMemo(() => {
-    const thisMonthKey = new Date().toISOString().slice(0, 7);
+    const thisMonthKey = localDateString().slice(0, 7);
     return fees.reduce(
       (acc: { collected: number; collectedThisMonth: number; pending: number; overdue: number; overdueCount: number }, f: any) => {
         if (f.status === 'PAID') {
           acc.collected += f.amount;
-          if (new Date(f.paymentDate).toISOString().slice(0, 7) === thisMonthKey) acc.collectedThisMonth += f.amount;
+          if (localDateString(new Date(f.paymentDate)).slice(0, 7) === thisMonthKey) acc.collectedThisMonth += f.amount;
         } else if (f.status === 'OVERDUE') {
           acc.overdue += f.amount;
           acc.overdueCount += 1;

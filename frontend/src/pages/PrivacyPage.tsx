@@ -32,7 +32,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="3. Data Security">
-        <p>All data is encrypted in transit via TLS 1.3 and stored within Indian data centers in compliance with the <strong>Digital Personal Data Protection (DPDP) Act, 2023</strong>. Access to production databases is restricted to authorised personnel only.</p>
+        <p>All data is encrypted in transit via TLS and access to production databases is restricted to authorised personnel only. Our database and infrastructure providers operate data centers in the Asia-Pacific region. We handle personal data in line with the <strong>Digital Personal Data Protection (DPDP) Act, 2023</strong>.</p>
       </Section>
 
       <Section title="4. Data Retention">
@@ -44,7 +44,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="6. Third-Party Services">
-        <p>We integrate with Razorpay (payments), Fast2SMS (OTP delivery), AWS (cloud infrastructure), and Vercel Analytics (cookieless, privacy-friendly page-view analytics — no personal data or cross-site tracking). Each operates under its own privacy policy.</p>
+        <p>We integrate with Razorpay (payments), Neon (database hosting), Upstash (caching), Vercel (application hosting), and Vercel Analytics and Speed Insights (cookieless, privacy-friendly page-view and performance analytics — no personal data or cross-site tracking). Each operates under its own privacy policy.</p>
       </Section>
 
       <Section title="7. Contact">

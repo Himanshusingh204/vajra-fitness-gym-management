@@ -9,6 +9,7 @@ import { logger } from './utils/logger';
 import { requestContextMiddleware } from './middlewares/requestContext.middleware';
 import { metricsMiddleware, metricsHandler } from './utils/metrics';
 import { requireValidSubscription, requireWriteAccess } from './middlewares/subscription.middleware';
+import { RedisRateLimitStore } from './utils/redisRateLimitStore';
 
 export const app = express();
 
@@ -118,11 +119,15 @@ app.use(express.urlencoded({ extended: true }));
 
 const isTest = process.env.NODE_ENV === 'test';
 
+// Redis-backed so the limit is shared across serverless invocations/instances
+// instead of resetting every cold start (the default in-memory store would
+// make this a no-op in production and leave the API with no real DDoS floor).
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  store: new RedisRateLimitStore('global'),
   message: { error: 'Too many requests, please try again later.' },
 });
 

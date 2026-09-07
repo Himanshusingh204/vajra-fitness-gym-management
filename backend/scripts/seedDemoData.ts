@@ -169,16 +169,9 @@ async function seedCMS() {
     });
   }
 
-  const testimonialCount = await prisma.testimonial.count();
-  if (testimonialCount === 0) {
-    await prisma.testimonial.createMany({
-      data: [
-        { name: 'Arjun Mehta', role: 'Gym Owner, Indore', content: 'Vajra Fitness cut our paperwork in half. Members, fees and attendance are all in one place now.', rating: 5 },
-        { name: 'Priya Sharma', role: 'Fitness Coach, Mumbai', content: 'Booking PT sessions and tracking my clients has never been easier. My clients love the portal too.', rating: 5 },
-        { name: 'Rohan Iyer', role: 'Member, Bengaluru', content: 'Checking in, seeing my workouts and renewing my membership takes seconds. Worth every rupee.', rating: 4 },
-      ],
-    });
-  }
+  // Testimonials are intentionally NOT seeded here — fabricated customer
+  // quotes shown publicly as if real is misleading, not just placeholder
+  // filler. Add real ones through the admin panel once you have them.
 }
 
 async function main() {

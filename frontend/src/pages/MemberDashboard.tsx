@@ -15,7 +15,7 @@ import { ExercisePlanView } from '../components/ExercisePlan';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreditCard, Dumbbell, Calendar, Activity, ChevronRight, MapPin, Building2, BadgeCheck, Download, Users, XCircle, Clock, Bell, CalendarDays, KeyRound, UserCircle, Megaphone, ExternalLink, Loader2, TrendingUp, Salad, Trash2, Dumbbell as DumbbellIcon } from 'lucide-react';
 import { Link } from 'react-router';
-import { formatPrice } from '../utils/format';
+import { formatPrice, localDateString } from '../utils/format';
 import { downloadFile } from '../services/api';
 
 const statusStyles: Record<string, string> = {
@@ -1095,7 +1095,7 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="pt-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-            <input id="pt-date" type="date" required className="input-field" min={new Date().toISOString().split('T')[0]} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+            <input id="pt-date" type="date" required className="input-field" min={localDateString()} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
           </div>
           <div>
             <label htmlFor="pt-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time</label>

@@ -19,51 +19,6 @@ const requireSuperAdmin = (req: AuthRequest, res: Response): boolean => {
   return true;
 };
 
-// Helper function to calculate monthly revenue
-async function calculateMonthlyRevenue() {
-  const now = new Date();
-  const months = [];
-  for (let i = 5; i >= 0; i--) {
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-    months.push({ startOfMonth, endOfMonth, label: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }) });
-  }
-  return months;
-}
-
-// Helper to calculate churn rate
-async function calculateChurnRate() {
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  
-  // Get subscriptions that were active 30 days ago
-  const subscriptions30DaysAgo = await prisma.gymSubscription.findMany({
-    where: {
-      startDate: { lte: thirtyDaysAgo },
-      endDate: { gte: thirtyDaysAgo }
-    },
-    include: { plan: true }
-  });
-  
-  // Get subscriptions that are currently active
-  const activeSubscriptions = await prisma.gymSubscription.findMany({
-    where: {
-      status: 'ACTIVE',
-      startDate: { lte: now },
-      endDate: { gte: now }
-    },
-    include: { plan: true }
-  });
-  
-  const previousCount = subscriptions30DaysAgo.length;
-  const currentCount = activeSubscriptions.length;
-  const churnedCount = Math.max(0, previousCount - currentCount);
-  const churnRate = previousCount > 0 ? (churnedCount / previousCount) * 100 : 0;
-  
-  return { churnRate, churnedCount, previousCount, currentCount };
-}
-
-// Get all gym registrations (pending/approved)
 export const getGyms = async (req: AuthRequest, res: Response) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
@@ -259,13 +214,17 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       new Date(s.createdAt) >= new Date(now.getFullYear(), now.getMonth(), 1)
     ).length;
     
-    // Trial to paid conversion
-    const trialsLast30Days = allSubscriptions.filter(s => 
-      s.status === 'TRIAL' && new Date(s.createdAt) >= thirtyDaysAgo
-    ).length;
-    const convertedFromTrial = allSubscriptions.filter(s => 
-      s.status === 'ACTIVE' && s.trialEndsAt && new Date(s.trialEndsAt) >= thirtyDaysAgo && new Date(s.trialEndsAt) <= now
-    ).length;
+    // Trial to paid conversion — cohort is every subscription that STARTED a
+    // trial in the last 30 days (trialEndsAt implies it went through TRIAL at
+    // some point), regardless of what status it's in today. Conversions are
+    // the subset of that same cohort now ACTIVE. Using two differently-scoped
+    // filters here previously produced a rate that wasn't a real percentage
+    // of any single group.
+    const trialCohort = allSubscriptions.filter(s =>
+      s.trialEndsAt && new Date(s.createdAt) >= thirtyDaysAgo
+    );
+    const trialsLast30Days = trialCohort.length;
+    const convertedFromTrial = trialCohort.filter(s => s.status === 'ACTIVE').length;
     const trialConversionRate = trialsLast30Days > 0 ? (convertedFromTrial / trialsLast30Days) * 100 : 0;
     
     // Failed payments, monthly revenue trend, active member count, and top
@@ -297,7 +256,16 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
           include: { plan: true }
         });
 
-        const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => sum + sub.amount.toNumber(), 0);
+        // Normalize to a monthly figure the same way MRR/ARR above do — a raw
+        // sum of sub.amount would spike 12x in whatever month a yearly plan
+        // was sold, contradicting the MRR chart shown right next to this one.
+        const subscriptionRevenue = monthSubscriptions.reduce((sum, sub) => {
+          let monthlyAmount = sub.amount.toNumber();
+          if (sub.billingCycle === 'QUARTERLY') monthlyAmount /= 3;
+          else if (sub.billingCycle === 'HALF_YEARLY') monthlyAmount /= 6;
+          else if (sub.billingCycle === 'YEARLY') monthlyAmount /= 12;
+          return sum + monthlyAmount;
+        }, 0);
 
         return {
           month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
@@ -328,9 +296,11 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
     // ARPU - Average Revenue Per User (gym)
     const arpu = activeGyms > 0 ? mrr / activeGyms : 0;
 
-    // CLTV - Customer Lifetime Value (simplified: ARPU / monthly churn rate)
+    // CLTV - Customer Lifetime Value (simplified: ARPU / monthly churn rate).
+    // Zero churn means an undefined (not zero) lifetime — null lets the UI
+    // show "no churn yet" instead of a misleading ₹0.
     const monthlyChurnRate = churnRate / 100;
-    const cltv = monthlyChurnRate > 0 ? arpu / monthlyChurnRate : 0;
+    const cltv = monthlyChurnRate > 0 ? arpu / monthlyChurnRate : null;
 
     // Gyms by status
     const gymsByStatus = {
@@ -357,7 +327,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       mrr: Math.round(mrr * 100) / 100,
       arr: Math.round(arr * 100) / 100,
       arpu: Math.round(arpu * 100) / 100,
-      cltv: Math.round(cltv * 100) / 100,
+      cltv: cltv === null ? null : Math.round(cltv * 100) / 100,
       churnRate: Math.round(churnRate * 100) / 100,
       churnedCount,
       newSubscriptionsThisMonth,

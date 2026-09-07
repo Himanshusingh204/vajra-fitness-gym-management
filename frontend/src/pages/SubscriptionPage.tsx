@@ -12,6 +12,13 @@ import { getPublicGyms } from '../api/gym.api';
 import { getPaymentConfig, loadRazorpayScript } from '../api/payment.api';
 import { formatPrice } from '../utils/format';
 
+const BILLING_CYCLES: { id: 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY'; label: string; priceKey: 'monthlyPrice' | 'quarterlyPrice' | 'halfYearlyPrice' | 'yearlyPrice'; months: number; savingsLabel?: string }[] = [
+  { id: 'MONTHLY', label: 'Monthly', priceKey: 'monthlyPrice', months: 1 },
+  { id: 'QUARTERLY', label: 'Quarterly', priceKey: 'quarterlyPrice', months: 3 },
+  { id: 'HALF_YEARLY', label: 'Half-Yearly', priceKey: 'halfYearlyPrice', months: 6 },
+  { id: 'YEARLY', label: 'Yearly', priceKey: 'yearlyPrice', months: 12 },
+];
+
 const PAYMENT_METHODS = [
   {
     id: 'CASH',
@@ -44,6 +51,7 @@ const SubscriptionPage = () => {
   const user = useAuthStore((s) => s.user);
 
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY'>('MONTHLY');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [gymId, setGymId] = useState('');
   const [success, setSuccess] = useState('');
@@ -90,6 +98,8 @@ const SubscriptionPage = () => {
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
   const alreadySubscribed = !!mySub?.hasSubscription;
+  const activeCycle = BILLING_CYCLES.find((c) => c.id === billingCycle)!;
+  const cyclePrice = (plan: (typeof plans)[number]) => plan[activeCycle.priceKey];
 
   const handleCheckout = async () => {
     setInlineError('');
@@ -116,6 +126,7 @@ const SubscriptionPage = () => {
       const checkout = await checkoutSubscription({
         planId: selectedPlanId,
         paymentMethod,
+        billingCycle,
         ...(isSuperAdmin ? { gymId } : {}),
       });
 
@@ -212,7 +223,19 @@ const SubscriptionPage = () => {
         ) : (
           <div className="grid lg:grid-cols-5 gap-10 items-start">
             {/* Plan cards */}
-            <div className="lg:col-span-3 grid md:grid-cols-3 gap-6 stagger">
+            <div className="lg:col-span-3">
+              <div className="inline-flex flex-wrap gap-1 p-1 rounded-xl bg-[var(--color-base-dark)]/60 dark:bg-white/[0.04] mb-6">
+                {BILLING_CYCLES.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setBillingCycle(c.id)}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${billingCycle === c.id ? 'bg-[var(--color-primary)] text-white shadow' : 'text-[var(--color-muted)] hover:text-[var(--color-charcoal)] dark:hover:text-white'}`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid md:grid-cols-3 gap-6 stagger">
               {isLoading ? (
                 <div className="col-span-3 flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" /></div>
               ) : plans.length === 0 ? (
@@ -232,11 +255,17 @@ const SubscriptionPage = () => {
                         )}
                         <h3 className={`text-xl font-extrabold ${highlight ? 'text-white' : 'dark:text-white'}`}>{plan.name}</h3>
                         <p className={`text-sm mt-1 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>{plan.description}</p>
-                        <div className="flex items-end gap-1 mt-5 mb-6">
+                        <div className="flex items-end gap-1 mt-5 mb-1">
                           <span className={`text-sm font-semibold mb-1.5 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>₹</span>
-                          <span className="text-4xl font-extrabold tracking-tight">{plan.monthlyPrice.toLocaleString('en-IN')}</span>
-                          <span className={`text-sm font-semibold mb-1.5 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>/month</span>
+                          <span className="text-4xl font-extrabold tracking-tight">{cyclePrice(plan).toLocaleString('en-IN')}</span>
+                          <span className={`text-sm font-semibold mb-1.5 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>/{activeCycle.label.toLowerCase()}</span>
                         </div>
+                        {activeCycle.months > 1 && (
+                          <p className={`text-xs mb-6 ${highlight ? 'text-white/60' : 'text-[var(--color-muted)]'}`}>
+                            ≈ ₹{Math.round(cyclePrice(plan) / activeCycle.months).toLocaleString('en-IN')}/month billed {activeCycle.label.toLowerCase()}
+                          </p>
+                        )}
+                        {activeCycle.months === 1 && <div className="mb-6" />}
                         <ul className="space-y-2.5">
                           {features.map((f) => (
                             <li key={f} className={`flex items-start gap-2.5 text-sm ${highlight ? 'text-white/85' : 'text-[var(--color-charcoal)] dark:text-gray-300'}`}>
@@ -254,6 +283,7 @@ const SubscriptionPage = () => {
                   );
                 })
               )}
+              </div>
             </div>
 
             {/* Checkout summary */}
@@ -268,11 +298,11 @@ const SubscriptionPage = () => {
                   </div>
                   <div className="flex justify-between mt-2">
                     <span className="text-[var(--color-muted)]">Billing</span>
-                    <span className="font-bold dark:text-white">Monthly</span>
+                    <span className="font-bold dark:text-white">{activeCycle.label}</span>
                   </div>
                   <div className="flex justify-between mt-2 pt-3 border-t border-[var(--color-border)]">
                     <span className="font-semibold text-[var(--color-muted)]">Total</span>
-                    <span className="font-extrabold text-[var(--color-primary)] text-xl">{selectedPlan ? formatPrice(selectedPlan.monthlyPrice) : '—'}</span>
+                    <span className="font-extrabold text-[var(--color-primary)] text-xl">{selectedPlan ? formatPrice(cyclePrice(selectedPlan)) : '—'}</span>
                   </div>
                 </div>
 

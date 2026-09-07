@@ -157,7 +157,6 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     const now = new Date();
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // This endpoint fires ~14 independent read queries. Against a remote DB
     // (Neon, connection round-trip dominates over query cost), awaiting them

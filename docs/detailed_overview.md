@@ -39,7 +39,7 @@ control on top of a shared platform.
 - The Super Admin is created by running `npx tsx scripts/seedSuperAdmin.ts` inside `backend/`. Read that file to see (and, ideally, change) the seeded password before running it against anything but a disposable local database.
 - Approved demo gyms (with membership plans) are seeded by running `npx tsx scripts/seedGyms.ts` inside `backend/`.
 - `npm run seed` runs all three seeders in order (idempotent).
-- **Realistic demo data**: `backend/scripts/seedDemoData.ts` populates every demo gym with 25–40 members, 5 trainers, 4 staff, membership history, fees (paid/pending/overdue), ~30 days of attendance per active member, PT bookings, workout slips, notifications, and walk-in enquiries — so dashboards and charts look fully operational immediately. It also seeds SaaS plans/subscriptions and CMS FAQs/testimonials.
+- **Realistic demo data**: `backend/scripts/seedDemoData.ts` populates every demo gym with a small handful of members/trainers/staff, membership history, fees (paid/pending/overdue), ~30 days of attendance per active member, PT bookings, workout slips, notifications, and walk-in enquiries — so dashboards and charts look operational without inflating a public demo with hundreds of fake accounts. It also seeds SaaS plans/subscriptions and CMS FAQs. Testimonials are intentionally **not** seeded — fabricated customer quotes shown publicly as if real is misleading, not just placeholder filler; add real ones through the admin panel once you have them.
 - Demo member/trainer/staff accounts share a single seed password defined in `seedDemoData.ts` so evaluators can log in and explore. Accounts created through the UI instead receive an `activationLink` (built from `FRONTEND_URL`) and have **no default password**.
 - **If any of these seed scripts have ever been run against a real/shared database, rotate every seeded password immediately** — the previous version of this documentation published the exact values in plaintext, in this repository's git history, which is public.
 
@@ -356,8 +356,8 @@ need attention as traffic grows:
 - `public/og-image.png` (1200×630), `apple-touch-icon.png` (180×180), `manifest.webmanifest`, `sitemap.xml`, `robots.txt`, and `llms.txt` ship with the build.
 - Core Web Vitals (LCP, CLS, INP, FCP, TTFB) are collected without dependencies via `frontend/src/utils/reportWebVitals.ts`. Set `VITE_WEB_VITALS_ENDPOINT` to enable.
 - A one-time cookie-consent notice (`CookieConsent`) and a full Cookie Policy page (`/cookies`) explain that only essential cookies (httpOnly sign-in + theme) are used.
-- To enable Plausible analytics, set `VITE_PLAUSIBLE_DOMAIN` and uncomment the script tag in `frontend/index.html` (kept opt-in so no tracking cookie is set by default).
+- Vercel Analytics and Speed Insights are wired into `frontend/src/App.tsx` (`@vercel/analytics/react`, `@vercel/speed-insights/react`) — cookieless, no personal data collected. Collection itself still needs enabling per-project in the Vercel dashboard (Analytics / Speed Insights tabs).
 
 ## License
 
-This project is licensed under the MIT License.
+This project is proprietary — All Rights Reserved. See [`LICENSE`](../LICENSE).

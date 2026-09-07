@@ -5,6 +5,7 @@ import { getMe } from '../api/auth.api';
 import { getGymMembers } from '../api/member.api';
 import { getGymAttendance, markAttendance } from '../api/staff.api';
 import { CalendarDays, Users, UserPlus, Search, CheckCircle2, Loader2, Menu, X } from 'lucide-react';
+import { localDateString } from '../utils/format';
 
 const StaffDashboard = () => {
   const user = useAuthStore(state => state.user);
@@ -20,7 +21,7 @@ const StaffDashboard = () => {
 
   const gymId = me?.staffDetails?.gym?.id;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const todayFormatted = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const { data: attendance, isLoading: attendanceLoading } = useQuery({

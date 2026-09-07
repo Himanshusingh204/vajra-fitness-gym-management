@@ -40,9 +40,9 @@ const NotificationsBell = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await getMyNotifications({ limit: 15 });
-      setItems(data.notifications);
-      setUnread(data.unreadCount);
+      const res = await getMyNotifications({ limit: 15 });
+      setItems(res.notifications);
+      setUnread(res.unreadCount);
     } catch {
       /* notification failures are non-critical */
     } finally {
@@ -64,7 +64,7 @@ const NotificationsBell = () => {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const handleClick = async (n: AppNotification) => {
+  const handleNotificationClick = async (n: AppNotification) => {
     if (!n.isRead) {
       try {
         await markNotificationRead(n.id);
@@ -142,7 +142,7 @@ const NotificationsBell = () => {
             {items.map((n) => (
               <button
                 key={n.id}
-                onClick={() => handleClick(n)}
+                onClick={() => handleNotificationClick(n)}
                 className={`w-full text-left px-4 py-3 transition-colors hover:bg-[var(--color-primary)]/5 ${
                   !n.isRead ? 'bg-[var(--color-primary)]/5' : ''
                 }`}
