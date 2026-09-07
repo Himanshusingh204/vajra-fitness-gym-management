@@ -3,6 +3,8 @@ import { createNotification } from '../services/notification.service';
 import { syncExpiredMemberships, EXPIRING_SOON_DAYS, DAY_MS } from '../services/membership.service';
 import { processExpiredSubscriptions } from '../services/subscription.service';
 import { backgroundJobsRun, backgroundJobsErrors } from '../utils/metrics';
+import { sendMembershipExpiryEmail } from '../utils/email';
+import { logger } from '../utils/logger';
 
 export const JOB_INTERVAL_MS = 60 * 60 * 1000; // run hourly
 
@@ -23,7 +25,7 @@ export const runExpiryReminders = async () => {
       expiryReminderSentAt: null,
     },
     include: {
-      member: { include: { user: { select: { id: true, username: true } } } },
+      member: { include: { user: { select: { id: true, username: true, email: true } } } },
       plan: { select: { name: true } },
     },
     take: 200,
@@ -31,13 +33,22 @@ export const runExpiryReminders = async () => {
 
   for (const membership of memberships) {
     const daysLeft = Math.max(1, Math.ceil((membership.endDate.getTime() - Date.now()) / DAY_MS));
+    const planName = membership.plan?.name ?? 'membership';
+    const expiryDateStr = membership.endDate.toLocaleDateString('en-IN');
     await createNotification({
       userId: membership.member.userId,
       type: 'WARNING',
       title: 'Membership expiring soon',
-      message: `Your ${membership.plan?.name ?? 'membership'} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} on ${membership.endDate.toLocaleDateString('en-IN')}. Renew to stay active.`,
+      message: `Your ${planName} expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} on ${expiryDateStr}. Renew to stay active.`,
       link: '/dashboard',
     });
+    // Best-effort, like every other transactional email — a failed send must
+    // never stop the reminder loop or leave expiryReminderSentAt unset.
+    try {
+      await sendMembershipExpiryEmail(membership.member.user.email, membership.member.user.username, daysLeft, expiryDateStr, planName);
+    } catch (err) {
+      logger.errorWith('Failed to send membership expiry email', err);
+    }
     await prisma.membership.update({
       where: { id: membership.id },
       data: { expiryReminderSentAt: new Date() },

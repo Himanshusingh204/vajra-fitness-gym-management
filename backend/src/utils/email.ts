@@ -85,6 +85,26 @@ export const sendPasswordResetEmail = async (to: string, link: string) => {
   );
 };
 
+export const sendMembershipExpiryEmail = async (
+  to: string,
+  username: string,
+  daysLeft: number,
+  expiryDate: string,
+  planName: string,
+) => {
+  const safeName = escapeHtml(username);
+  const safePlan = escapeHtml(planName);
+  await sendMail(
+    to,
+    `Your membership expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+    shell(
+      'Membership expiring soon',
+      `<p>Hi ${safeName}, your <strong>${safePlan}</strong> membership expires on <strong>${expiryDate}</strong> — ${daysLeft} day${daysLeft === 1 ? '' : 's'} from now.</p>
+       <p>Renew soon to keep your access uninterrupted. Log in to your dashboard to renew or contact your gym's front desk.</p>`,
+    ),
+  );
+};
+
 export const sendActivationEmail = async (to: string, username: string, link: string) => {
   const safeName = escapeHtml(username);
   const safe = escapeHtml(link);
