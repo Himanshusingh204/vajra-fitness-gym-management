@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { setRedisClientForTesting } from '../src/utils/redis';
+import { getOrSetJSON } from '../src/utils/cache';
 
 // utils/redis wraps a real ioredis connection keyed off REDIS_URL. There's
 // no ioredis-mock release compatible with the ioredis v6 this app uses
@@ -42,16 +44,14 @@ class FakeRedis {
 
 const fakeRedis = new FakeRedis();
 
-vi.mock('../src/utils/redis', () => ({
-  redis: fakeRedis,
-  isRedisAvailable: () => true,
-}));
-
-const { getOrSetJSON } = await import('../src/utils/cache');
-
 describe('getOrSetJSON', () => {
   beforeEach(() => {
     fakeRedis.clear();
+    setRedisClientForTesting(fakeRedis, true);
+  });
+
+  afterAll(() => {
+    setRedisClientForTesting(null, false);
   });
 
   it('calls fetchFn and caches the result on a miss', async () => {

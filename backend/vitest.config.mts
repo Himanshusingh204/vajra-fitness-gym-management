@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
+process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING = 'true';
+
 const TEST_DB = process.env.TEST_DATABASE_URL || 'postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public';
 
 export default defineConfig({
