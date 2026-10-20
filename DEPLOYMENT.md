@@ -220,24 +220,23 @@ npm run dev
 
 ## CI (`.github/workflows/deploy.yml`)
 
-Runs on every push/PR to `main`/`develop`: backend `tsc --noEmit`, Prisma
-validation, `npm test` (against a temporary Postgres service), frontend lint
-+ build. This is a quality gate only — actual deployment happens via
-Vercel's own GitHub integration once the project is imported (step 2 above),
-**independently of whether this workflow passes**. A type error still blocks
-deployment (Vercel's own build re-runs `tsc`), but a failing test suite would
-not. To make CI actually gate deploys, add a branch protection rule on `main`
-(repo **Settings → Branches**) requiring the "Type Check, Lint, Build &
-Tests" status check before merge.
+Runs on every push/PR to `main`/`develop`: Node.js 22 LTS runner, Prisma schema
+validation (`prisma validate`), Prisma client generation (`prisma generate`),
+backend `tsc --noEmit`, automated test suite (`npm test` against a dedicated
+PostgreSQL 16 service container), frontend linting (`oxlint`), and frontend
+production build (`vite build`).
 
-Install root dependencies with `npm install`, not `npm ci` — this is an npm
-workspaces monorepo with no committed root lockfile by design. A
-workspace-hoisted install only fully resolves platform-specific optional
-binaries (`@tailwindcss/oxide-*`, `lightningcss-*`) for whatever OS generated
-the lockfile, so a Windows-generated one breaks the Linux Vercel build. `npm
-install` resolves them fresh for whatever platform it's actually running on;
-`backend/package-lock.json` and `frontend/package-lock.json` are the real,
-platform-independent lockfiles used for caching.
+Actual deployment is handled via Vercel's GitHub integration (step 2 above) on
+every push to `main`. To collaborate or develop safely:
+- Use the **`staging`** branch for testing and feature development so that
+  in-progress commits never disrupt live Vercel deployments.
+- Submit Pull Requests into `staging`, verify CI checks, and merge to `main`
+  only when ready to publish to production.
+
+Install root dependencies using `npm install --legacy-peer-deps`, not `npm ci` —
+this is an npm workspaces monorepo with no committed root lockfile by design. A
+workspace-hoisted install resolves platform-specific optional binaries fresh
+for whatever platform it's actually running on.
 
 ## Troubleshooting
 
