@@ -29,41 +29,41 @@ jobs:
           --health-retries 10
 
     env:
+      DATABASE_URL: postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public
       TEST_DATABASE_URL: postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public
+      NODE_ENV: test
+      JWT_SECRET: test_jwt_secret_for_ci_pipeline_at_least_32_chars
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
 
-      # This repo is an npm workspaces monorepo (root package.json lists
-      # frontend + backend), so `npm ci` inside backend/ or frontend/
-      # directly fails with EUSAGE — workspace mode looks for a lockfile at
-      # the root, not a per-package one. `npm install` at the root doesn't
-      # have that requirement (no root lockfile needed) and, critically,
-      # resolves optional native binaries (tailwindcss oxide, lightningcss,
-      # rolldown) correctly for whatever platform it's actually running on
-      # — unlike a *committed* root lockfile, which locks in only the
-      # platform it was generated on and broke the Linux Vercel build when
-      # generated from Windows. `npm install` here intentionally does not
-      # use/produce a committed root lockfile.
+      # Remove nested package-locks before workspace install so npm Arborist
+      # builds a single consistent workspace dependency graph without edgesOut crashes.
       - name: Install dependencies (workspace root)
-        run: npm install --no-audit --no-fund
-
-      - name: Validate backend TypeScript
-        working-directory: backend
-        run: npx tsc --noEmit
+        run: |
+          rm -f backend/package-lock.json frontend/package-lock.json
+          npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Validate Prisma schema
         working-directory: backend
         run: npx prisma validate
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Validate backend TypeScript
+        working-directory: backend
+        run: npx tsc --noEmit
 
       - name: Run backend tests
         working-directory: backend
