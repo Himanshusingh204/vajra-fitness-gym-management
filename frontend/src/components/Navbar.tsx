@@ -1,43 +1,20 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Menu, X, LogOut, LayoutDashboard, ChevronDown } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { ThemeSelector } from './ThemeSelector';
 import NotificationsBell from './NotificationsBell';
-
-const ABOUT_LINKS = [
-  { label: 'Company', slug: 'company' },
-  { label: 'Mission & Vision', slug: 'mission-vision' },
-  { label: 'Team', slug: 'team' },
-  { label: 'Careers', slug: 'careers' },
-  { label: 'Partners', slug: 'partners' },
-  { label: 'Awards', slug: 'awards' },
-  { label: 'FAQ', slug: 'faq' },
-];
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const aboutRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const queryClient = useQueryClient();
-
-  // Close the About dropdown when clicking/tapping outside of it.
-  useEffect(() => {
-    const onClickOutside = (e: MouseEvent) => {
-      if (aboutRef.current && !aboutRef.current.contains(e.target as Node)) {
-        setAboutOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
 
   useEffect(() => {
     let lastY = window.scrollY;
@@ -64,7 +41,6 @@ const Navbar = () => {
 
   useEffect(() => {
     setMobileOpen(false);
-    setAboutOpen(false);
   }, [location.pathname, location.hash]);
 
   const dashboardPath =
@@ -136,66 +112,14 @@ const Navbar = () => {
                 Membership
               </Link>
 
-              {/* About Dropdown: clicking "About" goes to the page; the chevron (or hover) opens the section menu */}
-              <div
-                className="relative"
-                ref={aboutRef}
-                onMouseEnter={() => setAboutOpen(true)}
-                onMouseLeave={() => setAboutOpen(false)}
+              <Link
+                to="/about"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                  isActive('/about') ? 'text-[var(--color-primary)]' : 'text-[var(--color-charcoal)] hover:text-[var(--color-primary)]'
+                }`}
               >
-                <div className="flex items-center">
-                  <Link
-                    to="/about"
-                    className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                      isActive('/about') ? 'text-[var(--color-primary)]' : 'text-[var(--color-charcoal)] hover:text-[var(--color-primary)]'
-                    }`}
-                    aria-haspopup="menu"
-                    aria-expanded={aboutOpen}
-                  >
-                    About
-                  </Link>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setAboutOpen((o) => !o);
-                    }}
-                    aria-label="Toggle About menu"
-                    aria-expanded={aboutOpen}
-                    className={`p-2 -ml-2 rounded-lg transition-colors ${
-                      isActive('/about') ? 'text-[var(--color-primary)]' : 'text-[var(--color-charcoal)] hover:text-[var(--color-primary)]'
-                    }`}
-                  >
-                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${aboutOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                </div>
-                <div
-                  role="menu"
-                  className={`absolute top-full left-0 mt-2 w-56 glass-strong rounded-xl overflow-hidden transition-all duration-200 ${
-                    aboutOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible translate-y-2 pointer-events-none'
-                  }`}
-                >
-                  <div className="py-2 flex flex-col">
-                    <Link
-                      to="/about"
-                      className="px-4 py-2.5 text-sm font-semibold text-[var(--color-charcoal)] hover:bg-[var(--color-primary)]/5 hover:text-[var(--color-primary)] hover:pl-5 transition-all duration-200"
-                    >
-                      Overview
-                    </Link>
-                    {ABOUT_LINKS.map(({ label, slug }) => (
-                      <Link
-                        key={slug}
-                        to={`/about#${slug}`}
-                        role="menuitem"
-                        className={`px-4 py-2.5 text-sm text-[var(--color-charcoal)] hover:bg-[var(--color-primary)]/5 hover:text-[var(--color-primary)] hover:pl-5 transition-all duration-200 ${
-                          location.hash === `#${slug}` ? 'text-[var(--color-primary)] font-semibold' : ''
-                        }`}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                About
+              </Link>
 
               <Link
                 to="/contact"
@@ -299,30 +223,16 @@ const Navbar = () => {
             Membership
           </Link>
 
-          <p className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-widest text-[var(--color-muted)]">About</p>
           <Link
             to="/about"
-            className={`block pl-6 pr-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive('/about') && !location.hash
+            className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              isActive('/about')
                 ? 'text-[var(--color-primary)] bg-[var(--color-primary)]/5'
                 : 'text-[var(--color-charcoal)] hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]'
             }`}
           >
-            Overview
+            About
           </Link>
-          {ABOUT_LINKS.map(({ label, slug }) => (
-            <Link
-              key={slug}
-              to={`/about#${slug}`}
-              className={`block pl-6 pr-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.hash === `#${slug}`
-                  ? 'text-[var(--color-primary)] bg-[var(--color-primary)]/5'
-                  : 'text-[var(--color-charcoal)] hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]'
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
 
           <Link
             to="/contact"
