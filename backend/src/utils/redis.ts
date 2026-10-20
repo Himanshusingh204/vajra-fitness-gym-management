@@ -5,7 +5,7 @@ import Redis from 'ioredis';
 // falls back to in-memory storage, so the app keeps working on a single box.
 const REDIS_URL = process.env.REDIS_URL || null;
 
-export const redis: Redis | null = REDIS_URL
+export let redis: Redis | null = REDIS_URL
   ? new Redis(REDIS_URL, {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
@@ -39,3 +39,12 @@ if (redis) {
 }
 
 export const isRedisAvailable = () => redis !== null && redisHealthy;
+
+/**
+ * Testing helper: injects a mock Redis instance and marks health state without
+ * depending on Vitest module-isolation / vi.mock hoisting.
+ */
+export function setRedisClientForTesting(client: any, healthy: boolean = true) {
+  redis = client;
+  redisHealthy = healthy;
+}
