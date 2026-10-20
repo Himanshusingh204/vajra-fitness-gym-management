@@ -21,6 +21,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Run backup
+        id: backup
         working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
@@ -32,6 +33,12 @@ jobs:
         run: |
           chmod +x scripts/backup.sh
           ./scripts/backup.sh
+          for f in backups/*.sql.gz.gpg; do
+            if [ -f "$f" ]; then
+              echo "has_encrypted=true" >> "$GITHUB_OUTPUT"
+              break
+            fi
+          done
 
       # GitHub Actions artifacts on a PUBLIC repo are downloadable by any
       # authenticated GitHub user — read access to the repo is all it takes,
@@ -42,7 +49,7 @@ jobs:
       # plaintext dump immediately after) — this step deliberately only
       # globs *.gpg so an unencrypted dump can never be picked up by mistake.
       - name: Upload encrypted backup as workflow artifact
-        if: ${{ secrets.BACKUP_ENCRYPTION_KEY != '' }}
+        if: steps.backup.outputs.has_encrypted == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: db-backup-${{ github.run_id }}
