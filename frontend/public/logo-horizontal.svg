@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 100" fill="none">
+  <defs>
+    <linearGradient id="hBurgundy" x1="15%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%" stop-color="#E11D48" />
+      <stop offset="50%" stop-color="#9F1239" />
+      <stop offset="100%" stop-color="#4C0519" />
+    </linearGradient>
+
+    <linearGradient id="hGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="40%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+  </defs>
+
+  <!-- Icon Mark on the Left (Scale 0.72) -->
+  <g transform="translate(10, 5) scale(0.75)">
+    <!-- Left Wing -->
+    <polygon points="18,24 45,24 36,44 14,40" fill="url(#hBurgundy)" />
+    <polygon points="14,40 36,44 48,58 24,74" fill="#881337" />
+    <polygon points="24,74 48,58 56,92 46,110" fill="url(#hBurgundy)" />
+
+    <!-- Right Wing -->
+    <polygon points="75,24 102,24 106,40 84,44" fill="url(#hGold)" />
+    <polygon points="84,44 106,40 96,74 72,58" fill="#D97706" />
+    <polygon points="72,58 96,74 74,110 64,92" fill="url(#hGold)" />
+
+    <!-- Center Thunderbolt -->
+    <polygon points="63,10 39,56 58,56 46,114 80,49 60,49" fill="url(#hGold)" />
+    <polygon points="61,16 45,53 58,53 52,94 72,51 59,51" fill="#FFFFFF" opacity="0.65" />
+  </g>
+
+  <!-- Typography -->
+  <text x="110" y="52" font-family="'Outfit', 'Bebas Neue', ui-sans-serif, system-ui, sans-serif" font-size="36" font-weight="900" letter-spacing="1.5" fill="#FFFFFF">
+    VAJRA
+  </text>
+  <text x="245" y="52" font-family="'Outfit', 'Bebas Neue', ui-sans-serif, system-ui, sans-serif" font-size="36" font-weight="900" letter-spacing="1.5" fill="url(#hGold)">
+    FITNESS
+  </text>
+  <text x="112" y="76" font-family="'Outfit', ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="600" letter-spacing="4.5" fill="#9CA3AF">
+    GYM MANAGEMENT PLATFORM
+  </text>
+</svg>

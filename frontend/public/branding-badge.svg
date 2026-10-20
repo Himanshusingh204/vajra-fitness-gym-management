@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <linearGradient id="badgeBurgundy" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E11D48" />
+      <stop offset="50%" stop-color="#9F1239" />
+      <stop offset="100%" stop-color="#4C0519" />
+    </linearGradient>
+
+    <linearGradient id="badgeGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="40%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+
+    <path id="textCircle" d="M 100, 100 m -70, 0 a 70,70 0 1,1 140,0 a 70,70 0 1,1 -140,0" />
+  </defs>
+
+  <!-- Outer Ring with Dash Effect -->
+  <circle cx="100" cy="100" r="94" stroke="url(#badgeGold)" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.75" />
+  <circle cx="100" cy="100" r="88" stroke="#FFFFFF" stroke-width="1" opacity="0.2" />
+
+  <!-- Inner Dark Background Disc -->
+  <circle cx="100" cy="100" r="84" fill="#0D0E10" />
+
+  <!-- Curved Text Around Circle -->
+  <text font-family="'Outfit', ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="700" fill="#E5E7EB" letter-spacing="3.2">
+    <textPath href="#textCircle" startOffset="50%" text-anchor="middle">
+      VAJRA FITNESS • STRENGTH &amp; POWER • EST 2026 •
+    </textPath>
+  </text>
+
+  <!-- Centered Icon Mark -->
+  <g transform="translate(56, 52) scale(0.72)">
+    <polygon points="18,24 45,24 36,44 14,40" fill="url(#badgeBurgundy)" />
+    <polygon points="14,40 36,44 48,58 24,74" fill="#881337" />
+    <polygon points="24,74 48,58 56,92 46,110" fill="url(#badgeBurgundy)" />
+
+    <polygon points="75,24 102,24 106,40 84,44" fill="url(#badgeGold)" />
+    <polygon points="84,44 106,40 96,74 72,58" fill="#D97706" />
+    <polygon points="72,58 96,74 74,110 64,92" fill="url(#badgeGold)" />
+
+    <polygon points="63,10 39,56 58,56 46,114 80,49 60,49" fill="url(#badgeGold)" />
+    <polygon points="61,16 45,53 58,53 52,94 72,51 59,51" fill="#FFFFFF" opacity="0.65" />
+  </g>
+</svg>

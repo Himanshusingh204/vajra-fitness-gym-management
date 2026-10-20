@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <!-- Primary Burgundy to Crimson Gradient -->
+    <linearGradient id="vajraBurgundy" x1="15%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%" stop-color="#A81238" />
+      <stop offset="50%" stop-color="#800020" />
+      <stop offset="100%" stop-color="#4A0012" />
+    </linearGradient>
+
+    <!-- Electric Amber Gold Gradient -->
+    <linearGradient id="vajraGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFE082" />
+      <stop offset="35%" stop-color="#FFB300" />
+      <stop offset="70%" stop-color="#F57C00" />
+      <stop offset="100%" stop-color="#D84315" />
+    </linearGradient>
+
+    <!-- Metallic Edge Highlight -->
+    <linearGradient id="vajraHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#FFFFFF" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Deep Shadow Filter for Depth -->
+    <filter id="vajraShadow" x="-10%" y="-10%" width="125%" height="130%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+
+    <!-- Subtle Outer Glow -->
+    <filter id="vajraGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <g filter="url(#vajraShadow)">
+    <!-- Left Wing / Diamond Wing (Burgundy/Crimson) -->
+    <!-- Top-Left Crest -->
+    <polygon points="20,24 45,24 36,44 14,40" fill="url(#vajraBurgundy)" />
+    <!-- Left Mid Facet -->
+    <polygon points="14,40 36,44 48,58 26,72" fill="#5E0018" />
+    <!-- Left Lower Facet tapering to V apex -->
+    <polygon points="26,72 48,58 56,92 46,108" fill="url(#vajraBurgundy)" />
+
+    <!-- Right Wing / Diamond Wing (Gold/Amber) -->
+    <!-- Top-Right Crest -->
+    <polygon points="75,24 100,24 106,40 84,44" fill="url(#vajraGold)" />
+    <!-- Right Mid Facet -->
+    <polygon points="84,44 106,40 94,72 72,58" fill="#F57C00" />
+    <!-- Right Lower Facet tapering to V apex -->
+    <polygon points="72,58 94,72 74,108 64,92" fill="url(#vajraGold)" />
+
+    <!-- Central Vajra Thunderbolt (The Cutting Energy Beam) -->
+    <polygon points="62,12 40,56 58,56 46,112 78,50 60,50" fill="url(#vajraGold)" filter="url(#vajraGlow)" />
+    <!-- Inner Thunderbolt Specular Core -->
+    <polygon points="61,16 45,53 58,53 50,96 72,52 59,52" fill="url(#vajraHighlight)" opacity="0.65" />
+    <polygon points="62,12 52,40 60,50" fill="#FFF8E1" opacity="0.8" />
+  </g>
+</svg>

@@ -68,7 +68,7 @@ const MainLayout = () => {
 
           <div>
             <Link to="/" className="flex items-center gap-3 mb-4 w-fit">
-              <img src="/logo.webp" alt="Vajra Fitness" width="36" height="36" className="h-8 w-auto" />
+              <img src="/logo.svg" alt="Vajra Fitness" width="36" height="36" className="h-8 w-auto drop-shadow-[0_2px_6px_rgba(225,29,72,0.25)]" />
               <span className="text-xl font-extrabold tracking-tight">
                 Vajra<span className="text-[var(--color-primary)]">Fitness</span>
               </span>
