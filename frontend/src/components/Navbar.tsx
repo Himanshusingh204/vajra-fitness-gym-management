@@ -77,7 +77,7 @@ const Navbar = () => {
 
             {/* Brand */}
             <Link to="/" className="flex items-center gap-3 group">
-              <img src="/logo.webp" alt="Vajra Fitness" width="40" height="40" className="h-9 w-auto group-hover:scale-105 transition-transform duration-300" />
+              <img src="/logo.svg" alt="Vajra Fitness" width="40" height="40" className="h-9 w-auto group-hover:scale-105 transition-transform duration-300 drop-shadow-[0_2px_8px_rgba(225,29,72,0.3)]" />
               <span className="text-xl font-extrabold tracking-tight text-[var(--color-deepgray)] dark:text-white">
                 Vajra<span className="text-[var(--color-primary)]">Fitness</span>
               </span>
