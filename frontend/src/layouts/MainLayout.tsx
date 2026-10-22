@@ -74,8 +74,8 @@ const MainLayout = () => {
               </span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed">
-              Premium gym management platform for Indian fitness businesses. Based in Jodhpur,
-              Rajasthan.
+              Premium gym management platform for Indian fitness businesses. Building the modern
+              operating system for gyms.
             </p>
             <div className="flex gap-3 mt-6">
               {SOCIALS.map(({ label, href, icon: Icon }) => (
@@ -114,11 +114,11 @@ const MainLayout = () => {
             <ul className="space-y-3 text-sm text-gray-400">
               <li className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[var(--color-primary)]" />
-                Jodhpur, Rajasthan
+                India
               </li>
               <li className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 shrink-0 text-[var(--color-primary)]" />
-                <a href="tel:+917894561230" className="hover:text-white transition-colors">+91 78945 61230</a>
+                <a href="tel:+919876543210" className="hover:text-white transition-colors">+91 98765 43210</a>
               </li>
               <li className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 shrink-0 text-[var(--color-primary)]" />

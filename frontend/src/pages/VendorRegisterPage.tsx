@@ -107,7 +107,7 @@ const VendorRegisterPage = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">City</label>
-            <input name="city" type="text" className="input-field" placeholder="e.g. Jodhpur" onChange={handleChange} required />
+            <input name="city" type="text" className="input-field" placeholder="e.g. Mumbai" onChange={handleChange} required />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-charcoal)] mb-1">Pincode</label>
