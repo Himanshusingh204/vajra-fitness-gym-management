@@ -6,7 +6,7 @@ a public GitHub issue.
 
 ## Reporting a vulnerability
 
-Email **himanshuyt21361@gmail.com** with:
+Please report vulnerabilities privately via [GitHub Security Advisories](https://github.com/Himanshusingh204/vajra-fitness-gym-management/security/advisories) or by email to **security@vajrafitness.com** with:
 
 - A description of the vulnerability and its potential impact.
 - Steps to reproduce (a minimal proof-of-concept if possible).

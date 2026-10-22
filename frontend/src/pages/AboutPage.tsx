@@ -141,7 +141,7 @@ const AboutPage = () => {
               <span className="eyebrow">Our Story</span>
               <h2 className="section-title mt-4">Built by gym operators, for gym operators</h2>
               <p className="section-lead text-left!">
-                Vajra Fitness started in Jodhpur, Rajasthan with a simple frustration: gym owners were
+                Vajra Fitness started with a simple frustration: gym owners were
                 running multi-crore businesses on WhatsApp groups, paper registers, and Excel sheets.
               </p>
               <p className="mt-4 text-[var(--color-muted)] leading-relaxed">

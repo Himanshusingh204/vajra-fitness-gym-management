@@ -85,19 +85,17 @@ Requests to `/api` and `/api/*` go to the Express serverless function (`api/inde
 
 ## Before Going Live — Placeholder Content to Replace
 
-**Updated 2026-09-07**: phone/WhatsApp/address were set to real-for-now
-values across `MainLayout.tsx`, `ContactPage.tsx`, `HelpCenterPage.tsx`
-(`+91 78945 61230`, same number for WhatsApp, "Jodhpur, Rajasthan"). SaaS
+**Contact details & placeholders**: contact placeholders are configured
+across `MainLayout.tsx`, `ContactPage.tsx`, and `HelpCenterPage.tsx`
+(`+91 98765 43210`, generic WhatsApp link, "India"). SaaS
 plan pricing is live in the database — Starter ₹1,000/mo, Professional
 ₹5,000/mo, Enterprise ₹10,000/mo, with quarterly/half-yearly/yearly set as
 plain multiples of the monthly price (no discount applied by default; the
 Subscription page lets buyers pick any of the four cycles). Adjust via the
 Super Admin SaaS & Subscriptions panel / API, not hardcoded in source.
 
-**Still worth a final pass before real marketing traffic**: confirm the
-phone number above is the one you actually want live (it was provided as
-a placeholder-replacement, not necessarily final), add a real street
-address if you want one beyond "Jodhpur, Rajasthan", decide whether the
+**Still worth a final pass before real marketing traffic**: update the
+contact details to your actual registered business phone and address, decide whether the
 longer billing cycles should carry a discount vs. paying monthly, and set
 real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` —
 online payments stay disabled (cash/bank only) until those are set.

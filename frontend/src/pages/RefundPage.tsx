@@ -41,7 +41,7 @@ const RefundPage = () => {
       </Section>
 
       <Section title="5. Contact for Disputes">
-        <p>Raise a ticket at <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact Us</Link> or email <a href="mailto:billing@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">billing@vajrafitness.in</a>. All disputes are subject to the jurisdiction of courts in Jodhpur, Rajasthan.</p>
+        <p>Raise a ticket at <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact Us</Link> or email <a href="mailto:billing@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">billing@vajrafitness.in</a>. All disputes are subject to applicable legal jurisdiction in India.</p>
       </Section>
     </div>
   </div>
