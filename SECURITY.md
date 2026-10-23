@@ -1,39 +1,39 @@
-# Security Policy
+# Security policy
 
-VajraFitness handles member PII and payment data for real gyms. If you
-find a security vulnerability, please report it privately — do not open
-a public GitHub issue.
+VajraFitness stores member contact details and payment records for gyms. Please report vulnerabilities privately. Do not open a public issue.
 
-## Reporting a vulnerability
+## How to report
 
-Please report vulnerabilities privately via [GitHub Security Advisories](https://github.com/Himanshusingh204/vajra-fitness-gym-management/security/advisories) or by email to **security@vajrafitness.com** with:
+- Preferred: a private report through GitHub Security Advisories on this repository (Security tab, "Report a vulnerability").
+- Email: `<security contact address, to be added by the maintainer>`
 
-- A description of the vulnerability and its potential impact.
-- Steps to reproduce (a minimal proof-of-concept if possible).
-- Any affected endpoint(s), file(s), or user role(s).
+Include what you found, the impact, steps to reproduce (a minimal proof of concept helps), and the affected endpoint, file or role.
 
-You should receive an acknowledgement within 48 hours. We'll keep you
-updated as the issue is triaged and fixed, and we ask that you give us a
-reasonable window to patch before any public disclosure.
+There is no committed response time yet. The maintainer will acknowledge reports as soon as practical and asks for reasonable time to fix an issue before it is disclosed.
 
 ## Scope
 
-In scope: the application code in this repository (frontend, backend,
-API, database schema/migrations, deployment configuration).
+In scope: the code in this repository, which covers the frontend, backend API, database schema and migrations, the mobile app, and deployment configuration.
 
-Out of scope: third-party services this app integrates with (Razorpay,
-Neon, Vercel, SMTP providers) — report issues in those directly to the
-provider.
+Out of scope: third-party services the app depends on (Vercel, Neon, Upstash, Razorpay, SMTP providers). Report problems in those to the provider.
 
 ## Supported versions
 
-This project does not yet publish tagged releases; the `main` branch is
-the only supported version. Fixes land there directly.
+There are no tagged releases. Only the `main` branch is supported, and fixes land there.
 
-## Known limitations (not vulnerabilities to report)
+## What is in place
 
-- Rate limiting and brute-force lockout fall back to in-memory,
-  per-instance state when `REDIS_URL` is not configured — a documented
-  tradeoff for single-instance/local deployments, not a bug.
-- Seeded demo accounts (see `backend/scripts/seed*.ts`) use known
-  passwords by design and must be rotated before production use.
+A summary of the controls, for reviewers. Details are in [docs/architecture.md](docs/architecture.md).
+
+- Passwords are hashed with Argon2. Failed logins lock an account after repeated attempts.
+- Access tokens are JWTs that expire after 15 minutes. Refresh tokens last 7 days, are stored hashed, rotate on use, and reuse of an old token revokes the session.
+- Every tenant query is scoped to the caller's gym on the server, and the test suite checks cross-tenant access.
+- Request bodies are validated with Zod. Database access goes through Prisma.
+- Rate limits apply to the whole API and more tightly to auth and write routes.
+- Razorpay payments and webhooks are verified by signature on the server.
+- CI runs CodeQL, dependency review, `npm audit` (report only) and a gitleaks secret scan.
+
+## Known limitations, not vulnerabilities
+
+- Without `REDIS_URL`, rate limiting and login lockout use in-memory state per instance. This is expected for local and single-instance runs.
+- Seed scripts create demo accounts with known passwords. They are for development and must not be used in production.

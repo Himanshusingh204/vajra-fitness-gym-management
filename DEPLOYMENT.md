@@ -1,248 +1,121 @@
-# Deploying VajraFitness
+# Deployment
 
-This app deploys as **one Vercel project** — frontend and backend together,
-one dashboard, one URL. The root [`vercel.json`](./vercel.json) configures this:
+VajraFitness deploys as one Vercel project that serves both the frontend and the API, backed by a Neon PostgreSQL database. Redis (Upstash) and an SMTP provider are optional but recommended.
 
-```json
-{
-  "version": 2,
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    { "source": "/api", "destination": "/api/index.ts" },
-    { "source": "/api/(.*)", "destination": "/api/index.ts" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
+How the single project is wired:
+
+- `package.json` has `vercel-build`, which generates the Prisma client, compiles the backend and builds the frontend.
+- `vercel.json` sets the output directory to `frontend/dist` and rewrites `/api` and `/api/*` to the serverless function in `api/index.ts`, which re-exports the Express app. Every other path serves `index.html`, so client-side routes work on refresh.
+- The frontend calls `/api` on its own origin, so no CORS is involved on the web.
+
+## 1. Database (Neon)
+
+1. Create a Neon project and note both connection strings from the Connect dialog: the pooled one and the direct one.
+2. Use the **pooled** string as `DATABASE_URL` in Vercel. Serverless functions open many short connections and the pooler keeps Postgres from running out.
+3. Use the **direct** string for migrations, `pg_dump` and the backup workflow. They do not work reliably through the pooler.
+
+Keep a separate Neon branch or project for development. Do not use the production database for local work.
+
+## 2. Vercel project
+
+1. Import the GitHub repository into Vercel. The root `vercel.json` and `package.json` are enough; no root directory or build command needs to be set.
+2. Production branch: `main`. Other branches, including `staging`, get preview deployments.
+3. Add environment variables under Project, Settings, Environment Variables. Names only here; generate values yourself.
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Neon pooled connection string |
+| `JWT_SECRET` | At least 32 random characters. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `NODE_ENV` | `production` |
+| `FRONTEND_URL` | The public site URL; used in emailed links and for CORS |
+| `CORS_ORIGINS` | Extra allowed origins, comma separated |
+| `TRUST_PROXY` | `1`, so rate limits key on the real client IP |
+| `PUBLIC_SITE_URL` | Base URL used in the sitemap, if different from the default |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Needed for activation and password reset mail |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Optional. Online payments stay disabled until the key pair is set |
+| `REDIS_URL` | Recommended. Without it, rate limits, lockout counters and caches are per instance and reset on cold starts |
+| `CRON_SECRET` | Required to call `/api/internal/cron`, which runs the background jobs. The endpoint answers 401 without it |
+| `METRICS_TOKEN` | Optional. When set, `/metrics` requires `Authorization: Bearer <token>` |
+| `VITE_API_URL` | Leave unset for this single-project setup |
+
+Vercel Analytics and Speed Insights are wired into `frontend/src/App.tsx`, but collect nothing until enabled in the Vercel dashboard.
+
+## 3. Migrations
+
+Schema changes are committed as Prisma migrations in `backend/prisma/migrations/` and applied with `prisma migrate deploy`. **Vercel does not run migrations.** Run them yourself, against the direct Neon string:
+
+```bash
+cd backend
+DATABASE_URL="<neon direct string>" npm run db:migrate
 ```
 
-Requests to `/api` and `/api/*` go to the Express serverless function (`api/index.ts`); everything else serves the frontend (Vite SPA). You still need a database, since Vercel doesn't host Postgres — the free option below is Neon.
+Order of operations for any pull request that changes `schema.prisma`:
 
----
+1. Commit the migration folder with the schema change.
+2. Test it on a throwaway database first: `prisma migrate deploy`, then `prisma migrate diff` against `schema.prisma` should report no difference.
+3. **Run `prisma migrate deploy` against production before merging to `main`.** The new code is deployed by the merge; if the column or table is not there yet, requests that use it fail.
+4. Merge `staging` into `main`.
 
-## 1. Database — Neon (free PostgreSQL)
+Keep migrations additive (new nullable columns, new tables, new indexes) so the old code keeps working during the window between the migration and the deploy. Do not drop or rename columns in the same release that stops using them.
 
-1. Sign up at <https://neon.tech> (GitHub login, no credit card).
-2. Create a project named `vajra-fitness`, pick a region close to you.
-3. Open **Connect** → copy the **Direct** (non-pooled) connection string:
-   ```
-   postgresql://user:password@ep-xxxx.region.aws.neon.tech/vajra_fitness?sslmode=require
-   ```
-4. Keep it — you'll paste it into Vercel's environment variables next.
+Seeding production is not needed. If you want the platform super admin and demo gyms in a new environment, run `npm run seed` with the target `DATABASE_URL`; the seed scripts refuse to run when `NODE_ENV` is `production` unless `ALLOW_PRODUCTION_SEED=1`. Change every seeded password immediately.
 
----
+## 4. Verify a deployment
 
-## 2. Deploy — Vercel
-
-1. Push this repo to GitHub (see [CONTRIBUTING.md](./CONTRIBUTING.md) if you haven't set up git yet).
-2. Go to <https://vercel.com> → **Add New → Project** → import the repo.
-   Vercel reads the root `vercel.json` and creates both the `frontend` and
-   `backend` services automatically — you don't need to configure a root
-   directory or build command manually.
-3. Before the first deploy finishes, open **Project → Settings → Environment
-   Variables** and add (Production scope):
-
-   | Key | Value |
-   | --- | --- |
-   | `DATABASE_URL` | the Neon **pooled** connection string (not "Direct") — Vercel runs the backend as multiple serverless instances, and pooling avoids exhausting Postgres's connection limit under load |
-   | `JWT_SECRET` | random ≥32 chars — generate with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
-   | `NODE_ENV` | `production` |
-   | `FRONTEND_URL` | `https://vajra-fitness-gym-management.vercel.app` |
-   | `CORS_ORIGINS` | `https://vajra-fitness-gym-management.vercel.app` |
-   | `VITE_API_URL` | *(leave unset for this one-project Vercel deployment)* — the frontend uses `/api` on the same domain. Set it only when deliberately hosting the API on a separate origin. |
-   | `TRUST_PROXY` | `1` |
-   | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | *(recommended)* so activation/reset emails send — see [Email](#email-activation--password-reset) below |
-   | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | *(optional)* enables online fee payments; leave blank to keep payments offline-only |
-   | `REDIS_URL` | *(strongly recommended)* Upstash's free tier `rediss://...` string — without it, rate limiting and dashboard caching fall back to per-instance in-memory state, which is a much weaker DDoS floor on serverless (each cold start resets it) |
-
-   Vercel Analytics and Speed Insights (already wired into `frontend/src/App.tsx`) need
-   enabling separately: **Project → Analytics** and **Project → Speed Insights** tabs
-   in the Vercel dashboard — the code ships collecting nothing until you flip that on.
-
-4. Redeploy (**Deployments → ⋯ → Redeploy**) so the env vars take effect.
-5. Apply the database schema once, from your machine, using the **direct**
-   (non-pooled) Neon string — schema migrations don't go through the pooler:
-   ```bash
-   cd backend
-   DATABASE_URL="<neon direct string>" npm run db:migrate
-   DATABASE_URL="<neon direct string>" npm run seed   # optional: Super Admin + demo gyms
-   ```
-
----
-
-## 3. Verify
-
-| What | URL |
+| Check | URL |
 | --- | --- |
-| Site | `https://<your-project>.vercel.app` |
-| API health | `https://<your-project>.vercel.app/api/health` |
-| Public gym list | `https://<your-project>.vercel.app/api/gym` |
-| Super Admin login | `admin@vajrafitness.com` (only if you ran the seed — password is set in `backend/scripts/seedSuperAdmin.ts`, not published here) |
-| Demo gym admin | `owner@ironvalley.com` (password set in `backend/scripts/seedGyms.ts`) |
+| Site loads | `https://<project>.vercel.app` |
+| API and database | `https://<project>.vercel.app/api/health` returns `status: "OK"` and `dependencies.database: "up"`, or 503 if the database is unreachable |
+| Readiness | `/api/ready` |
+| Public gym list | `/api/gym` |
 
-**Change the seeded passwords immediately after your first login** — they're for demo only, and their default values are visible to anyone who reads the seed scripts in this repo.
+## Branching and CI/CD
 
----
+- Work on feature branches cut from `staging` and open pull requests into `staging`.
+- When `staging` is verified, merge it into `main`. Vercel deploys `main` to production.
+- `.github/workflows/deploy.yml` (job `quality`) runs on pushes to `main`, `staging` and `develop` and on pull requests to `main` and `staging`. It installs the workspaces on Node 22, runs `prisma validate`, `prisma generate`, `tsc --noEmit`, the backend build, the backend tests against a Postgres 16 service container, frontend lint and the frontend build. It does not deploy; Vercel's GitHub integration does.
+- `.github/workflows/security.yml` runs CodeQL (pull requests, pushes and weekly), dependency review on pull requests, `npm audit` for production dependencies (report only) and a gitleaks scan.
+- `.github/workflows/e2e-audit.yml` builds the app, applies migrations, seeds a throwaway database, starts the API and a Vite preview, then runs the frontend's `test:e2e`, `audit:seo`, `audit:a11y` and `lighthouse` scripts if they are defined.
+- Required status check for branch protection: `quality`. Add `e2e-audit` and `codeql` once they pass reliably.
+- If CodeQL default setup is turned on in repository settings, turn it off; it conflicts with the workflow.
 
-## Before Going Live — Placeholder Content to Replace
+CI installs with `npm install --legacy-peer-deps` after deleting the nested `backend/package-lock.json` and `frontend/package-lock.json`, because npm's workspace resolution fails with them present. Do the same locally if a clean install fails.
 
-**Contact details & placeholders**: contact placeholders are configured
-across `MainLayout.tsx`, `ContactPage.tsx`, and `HelpCenterPage.tsx`
-(`+91 98765 43210`, generic WhatsApp link, "India"). SaaS
-plan pricing is live in the database — Starter ₹1,000/mo, Professional
-₹5,000/mo, Enterprise ₹10,000/mo, with quarterly/half-yearly/yearly set as
-plain multiples of the monthly price (no discount applied by default; the
-Subscription page lets buyers pick any of the four cycles). Adjust via the
-Super Admin SaaS & Subscriptions panel / API, not hardcoded in source.
+## Background jobs
 
-**Still worth a final pass before real marketing traffic**: update the
-contact details to your actual registered business phone and address, decide whether the
-longer billing cycles should carry a discount vs. paying monthly, and set
-real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` —
-online payments stay disabled (cash/bank only) until those are set.
+`backend/src/jobs/scheduler.ts` expires memberships, sends expiry and fee reminders, reconciles payments and handles subscription dunning. All jobs are safe to run repeatedly.
 
-### Also worth double-checking before launch
-
-- **Social links** in `frontend/src/layouts/MainLayout.tsx` (lines 47–49) — Instagram/Facebook/YouTube handles.
-- **Careers mailbox**: `frontend/src/pages/AboutPage.tsx` line 253 (`mailto:careers@vajrafitness.in`) — confirm it's monitored.
-
----
+- On a long-running host, `server.ts` runs them at boot and then on an hourly interval.
+- On Vercel, functions do not stay alive. Call `GET /api/internal/cron` on a schedule with `Authorization: Bearer <CRON_SECRET>`. `vercel.json` does not currently define a cron entry, so add one (Vercel Cron sends that header when `CRON_SECRET` is set) or call the endpoint from another scheduler.
+- `npm run jobs` in `backend` runs them once from the command line.
 
 ## Backups
 
-Neon's own automatic backups are a dashboard toggle, not something this repo
-controls — and the **free tier only retains ~1 day of point-in-time
-restore**, which isn't enough for a paying gym's member/payment data. This
-repo also ships a real, portable backup path that doesn't depend on your
-Neon plan:
+Neon's free plan keeps about a day of point-in-time history, which is not enough for member and payment data. The repository includes its own backup path.
 
-- `backend/scripts/backup.sh` — runs `pg_dump` against `DATABASE_URL` (use
-  the Neon **direct** string) and writes a timestamped, gzip-compressed
-  `.sql.gz` file to `backend/backups/` (git-ignored). Run it locally any
-  time with `cd backend && npm run backup`. Set `AWS_S3_BACKUP_BUCKET` (plus
-  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`) to also push the
-  dump to S3-compatible storage (AWS S3, Cloudflare R2, Backblaze B2 all
-  work via the AWS CLI).
-- `.github/workflows/backup.yml` — runs the same script on a daily schedule
-  (02:00 UTC). To turn it on:
-  1. Repo Settings → Secrets and variables → Actions → **Secrets**: add
-     `PROD_DATABASE_URL` (Neon direct string) and, if using S3 upload,
-     `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
-  2. Same page → **Variables**: add `BACKUPS_ENABLED = true` (the workflow
-     no-ops until this is set, so it doesn't fail nightly on forks/clones
-     that haven't configured it) and, if using S3, `AWS_S3_BACKUP_BUCKET` /
-     `AWS_REGION`.
+- `backend/scripts/backup.sh` runs `pg_dump` against `DATABASE_URL` (direct string) and writes a timestamped `.sql.gz` to `backend/backups/` (git-ignored). Run it with `cd backend && npm run backup`. Set `AWS_S3_BACKUP_BUCKET` with the usual `AWS_*` credentials to also upload to S3-compatible storage.
+- `.github/workflows/backup.yml` runs it daily at 02:00 UTC. It does nothing until you set the repository variable `BACKUPS_ENABLED` to `true` and the secret `PROD_DATABASE_URL`. For S3 upload, add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as secrets and `AWS_S3_BACKUP_BUCKET` and `AWS_REGION` as variables.
+- On a public repository, workflow artifacts can be downloaded by any GitHub user. Set the secret `BACKUP_ENCRYPTION_KEY`; the workflow then uploads only a GPG-encrypted `.sql.gz.gpg` artifact and skips the artifact step when the key is missing. Decrypt with `gpg --batch --yes --decrypt --passphrase "$BACKUP_ENCRYPTION_KEY" backup.sql.gz.gpg > backup.sql.gz`.
+- Test a restore into a scratch database before you need one: `gunzip -c backup.sql.gz | psql "$DATABASE_URL"`, then compare row counts.
 
-  ⚠️ **If this repository is public** (as it is at the time of writing),
-  **do not skip this step**: also add secret `BACKUP_ENCRYPTION_KEY` (any
-  long random string). GitHub Actions workflow artifacts on a public repo
-  are downloadable by *any* GitHub user, not just collaborators — a raw
-  production dump (member PII, payment records) must never be uploaded
-  unencrypted. Without `BACKUP_ENCRYPTION_KEY` set, the workflow simply
-  skips the artifact-upload step entirely rather than uploading it in the
-  clear; the S3 path (if configured) is unaffected either way, since a
-  private S3 bucket doesn't have this exposure. With the key set, the
-  workflow uploads a GPG-encrypted `.sql.gz.gpg` artifact — decrypt it with:
-  `gpg --batch --yes --decrypt --passphrase "$BACKUP_ENCRYPTION_KEY" backup.sql.gz.gpg > backup.sql.gz`.
-  If this repo is private, or you're running `npm run backup` locally
-  (which never touches GitHub Actions artifacts), this doesn't apply.
-- **Test a restore before you need one**: `gunzip -c backup.sql.gz | psql "$DATABASE_URL"`
-  against a scratch database, and confirm row counts match. A backup nobody
-  has ever restored from is not a verified backup.
+## Production checklist
 
-## Scaling to real traffic
-
-The app is stateless at the request layer — JWTs for access, hashed refresh
-tokens in Postgres for sessions — so it scales horizontally without code
-changes. As traffic grows past what a single instance handles:
-
-- **Database**: use the Neon **pooled** connection string for `DATABASE_URL`
-  (already the default above). If you outgrow Neon's free tier, upgrading
-  compute size or moving to a dedicated Postgres instance requires no app
-  changes — just swap the connection string.
-- **Rate limiting / login lockout**: set `REDIS_URL` (Upstash has a free
-  tier that works well with Vercel) to move brute-force lockout and rate
-  limiting from in-memory to Redis — required once you run more than one
-  backend instance, otherwise limits can be bypassed by hitting different
-  instances.
-- **Background jobs**: `backend/src/jobs/scheduler.ts` (expiry sync, fee/expiry
-  reminders) runs hourly per instance. At scale, run it as a single separate
-  worker (e.g. a Vercel Cron Job hitting an internal endpoint) instead of
-  inside every serverless instance, to avoid duplicate reminder notifications.
-- **Static assets**: the frontend build is served from Vercel's CDN/edge
-  network automatically — no extra configuration needed.
-- **Monitoring**: watch `/api/health` and set up alerting (Vercel integrates
-  with most APM/monitoring providers) before you need it, not after.
-
-## Production hardening checklist
-
-- [ ] Custom domain on Vercel (free TLS, automatic HTTPS).
-- [ ] `JWT_SECRET` ≥ 32 random chars (never a repo default).
-- [ ] `TRUST_PROXY=1` so rate limiting keys on real client IPs.
-- [ ] Real SMTP credentials so activation/reset emails deliver.
-- [ ] Replace seeded demo credentials after first login.
-- [ ] `npm audit` before each release.
-- [ ] Enable Neon automatic backups (or a higher-retention plan) **and** turn on `.github/workflows/backup.yml` (see "Backups" above) so recovery doesn't depend solely on Neon's free-tier 1-day retention; test a restore.
-- [x] Schema changes ship as committed Prisma migrations under `backend/prisma/migrations/`, applied via `npm run db:migrate` (`prisma migrate deploy`).
-- [x] Automated tests run in CI (`.github/workflows/deploy.yml`): auth, authorization/IDOR, membership lifecycle, entitlements, notices.
-- [ ] For multi-instance scaling, set `REDIS_URL` and move background jobs to a single worker (see "Scaling to real traffic" above).
-
-## Email (activation & password reset)
-
-Member/staff accounts get a one-time activation link; without SMTP it's never
-emailed (check server logs for the link instead, useful for testing). Free
-SMTP providers that work with nodemailer:
-
-- **Brevo** (Sendinblue) — 300 emails/day free.
-- **Gmail** — enable 2-Step Verification → create an App Password.
-- **Mailtrap** — testing only, doesn't actually deliver.
-
----
-
-## Local development
-
-```bash
-# Backend (needs a local Postgres — see backend/.env.example)
-cd backend
-npm install
-npm run db:push        # or `npm run db:migrate` for committed migrations
-npm run seed
-npm run dev
-
-npm test                # run the automated test suite
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
-
-## CI (`.github/workflows/deploy.yml`)
-
-Runs on every push/PR to `main`/`develop`: Node.js 22 LTS runner, Prisma schema
-validation (`prisma validate`), Prisma client generation (`prisma generate`),
-backend `tsc --noEmit`, automated test suite (`npm test` against a dedicated
-PostgreSQL 16 service container), frontend linting (`oxlint`), and frontend
-production build (`vite build`).
-
-Actual deployment is handled via Vercel's GitHub integration (step 2 above) on
-every push to `main`. To collaborate or develop safely:
-- Use the **`staging`** branch for testing and feature development so that
-  in-progress commits never disrupt live Vercel deployments.
-- Submit Pull Requests into `staging`, verify CI checks, and merge to `main`
-  only when ready to publish to production.
-
-Install root dependencies using `npm install --legacy-peer-deps`, not `npm ci` —
-this is an npm workspaces monorepo with no committed root lockfile by design. A
-workspace-hoisted install resolves platform-specific optional binaries fresh
-for whatever platform it's actually running on.
+- [ ] `JWT_SECRET` is a fresh random value, not one from an example file.
+- [ ] `TRUST_PROXY=1`.
+- [ ] SMTP configured, and an activation email actually arrives.
+- [ ] `REDIS_URL` set.
+- [ ] `CRON_SECRET` set and a scheduler calling `/api/internal/cron`.
+- [ ] Seeded demo passwords changed or the seed never run against production.
+- [ ] Razorpay keys and webhook secret set if online payments are wanted. The webhook URL is `/api/payments/webhook`.
+- [ ] Backups enabled and one restore tested.
+- [ ] Contact details, social links and legal pages in the frontend replaced with real ones. Check `MainLayout`, `ContactPage`, `HelpCenterPage` and the footer.
+- [ ] Alerting on `/api/health`.
+- [ ] `npm audit` reviewed before a release.
 
 ## Troubleshooting
 
-- **`/api/health` or `/api/gym` returns 500** → check `DATABASE_URL` is the
-  Neon *direct* string, and that `npm run db:migrate` was run against it.
-- **Frontend can't fetch / CORS error** → `FRONTEND_URL` / `CORS_ORIGINS` /
-  `VITE_API_URL` must all point at the same Vercel domain.
-- **Cookie/session not persisting** → confirm `TRUST_PROXY=1` is set.
-- **No Super Admin at login** → the seed step wasn't run against the
-  production `DATABASE_URL`; run `npm run seed` per step 2.5 above.
-
+- `/api/health` returns 503 or 500: check that `DATABASE_URL` is set and reachable, and that migrations were applied.
+- Requests fail right after a deploy with errors about a missing column or table: the migration was not applied before the merge. Run `npm run db:migrate` against production.
+- CORS errors or cookies not sticking: confirm `FRONTEND_URL` and `CORS_ORIGINS` match the site origin and `TRUST_PROXY=1`.
+- Rate limits behave oddly across requests: `REDIS_URL` is not set, so each instance keeps its own counters.
+- Activation or reset emails never arrive: SMTP variables are missing. Without SMTP, the links are written to the server log.

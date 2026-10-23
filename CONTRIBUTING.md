@@ -1,32 +1,48 @@
 # Contributing
 
-VajraFitness is a commercial product (see [`LICENSE`](./LICENSE)). This
-repository is public for portfolio, evaluation, and team collaboration purposes.
+VajraFitness is proprietary software (see [LICENSE](LICENSE)). The repository is public for portfolio and evaluation, and team members work in it through pull requests.
 
-## Development & Branching Workflow
+## Branches
 
-To prevent breaking live production deployments on Vercel:
+- `main` is production. Vercel deploys it on every push.
+- `staging` is where work is integrated and tested.
+- Cut feature branches from `staging` and open pull requests into `staging`:
 
-- **`main`**: Protected production branch. Deploys live automatically to Vercel upon merge.
-- **`staging`**: Primary collaboration and integration branch.
-- **Feature Branches**: Contributors and team members should branch off `staging`:
   ```bash
   git checkout staging
   git pull origin staging
-  git checkout -b feature/your-feature-name
+  git checkout -b feature/short-description
   ```
-- **Pull Requests**: Open Pull Requests targeting the `staging` branch. Once reviewed and validated through CI, `staging` is merged into `main`.
 
-## Local Environment & Secret Protection
+- When `staging` is verified, it is merged into `main`.
 
-- **Never commit `.env` or credential files.** Use `.env.example` as a template for your local `.env.local` or `backend/.env`.
-- Test against a local PostgreSQL database or an isolated personal development instance on Neon.
+## Local setup
 
-## Found a bug or security issue?
+Follow "Local setup" in the [README](README.md). In short: Node 22, `npm install --legacy-peer-deps` at the root, then either `node scripts/dev-db.mjs` with a local Postgres or `docker compose up --build`.
 
-- **Security vulnerabilities**: see [`SECURITY.md`](./SECURITY.md) — please report privately.
-- **Bug reports**: open a GitHub Issue with reproduction steps and logs.
+Do not point a local `.env` at the production database. Use localhost, or a separate Neon branch.
 
-## Licensing or partnership inquiries
+## Before opening a pull request
 
-Contact <legal@vajrafitness.in>.
+Run the same checks CI runs:
+
+```bash
+cd backend && npx prisma validate && npx tsc --noEmit && npm test
+cd frontend && npx tsc -b && npm run lint && npm run build
+```
+
+The pull request template lists the rest: screenshots for UI changes (light and dark, mobile width), a test for new behavior, and no secrets or personal data in the diff.
+
+## Database changes
+
+Schema changes ship as a Prisma migration under `backend/prisma/migrations/` in the same pull request. Keep them additive. Mention the migration in the description. Whoever merges to `main` must run `prisma migrate deploy` against production first; see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Secrets
+
+Never commit `.env` files, tokens, database URLs or real personal data. `.env*` is git-ignored except `.env.example`. A gitleaks scan runs on every pull request.
+
+## Reporting problems
+
+- Bugs: open a GitHub issue with steps to reproduce and relevant logs.
+- Security issues: do not open a public issue. Follow [SECURITY.md](SECURITY.md).
+- Licensing or partnership questions: contact the repository owner through GitHub.
