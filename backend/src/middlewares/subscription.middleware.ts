@@ -1,241 +1,90 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../utils/prisma';
+import { JWT_SECRET } from '../utils/env';
 import { AuthRequest } from './auth.middleware';
-import { DEFAULT_TRIAL, DEFAULT_TRIAL_FEATURES } from '../services/entitlements.service';
+import { loadSubscriptionInfo, SubscriptionInfo } from '../services/entitlements.service';
 
-// Centralized subscription access control. Every protected tenant API request
-// must pass through this middleware to verify the gym's subscription is valid.
+export type { SubscriptionInfo, SubscriptionStatus } from '../services/entitlements.service';
 
-export type SubscriptionStatus = 'PENDING' | 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'EXPIRED' | 'SUSPENDED' | 'CANCELLED';
-
-// Subscription states that grant access
-const ACCESSIBLE_STATES: SubscriptionStatus[] = ['ACTIVE', 'TRIAL', 'PAST_DUE', 'GRACE_PERIOD'];
-
-// Subscription states that restrict to read-only
-const RESTRICTED_STATES: SubscriptionStatus[] = ['EXPIRED', 'SUSPENDED', 'CANCELLED'];
-
-export interface SubscriptionInfo {
-  subscriptionId: string;
-  status: SubscriptionStatus;
-  planId: string;
-  planCode: string;
-  planName: string;
-  features: string[];
-  maxMembers: number | null;
-  maxTrainers: number | null;
-  maxStaff: number | null;
-  maxBranches: number;
-  maxClasses: number | null;
-  endDate: Date;
-  gracePeriodEnd: Date | null;
-  isReadonly: boolean;
-}
+// Centralized subscription access control. Every tenant API request passes
+// through this middleware before the router, so it works out the caller and
+// their gym itself.
 
 export interface SubscriptionRequest extends AuthRequest {
+  callerId?: string;
   gymId?: string;
   subscription?: SubscriptionInfo | null;
 }
 
-// Resolves the gym ID from the request (params, body, or user's owned gym).
-// Only SUPER_ADMIN may pass an arbitrary gymId in params; everyone else is
-// pinned to their own gym so a tenant can never gate/inspect another tenant.
-const resolveGymId = async (req: SubscriptionRequest): Promise<string | null> => {
-  // Explicit gymId in params (most routes) — only trusted for SUPER_ADMIN.
-  if (req.params.gymId) {
-    if (req.user?.role === 'SUPER_ADMIN') return req.params.gymId as string;
-
-    // Non-super-admins must match the passed gymId against their own gym.
-    const ownGymId = await resolveOwnGymId(req);
-    if (ownGymId && ownGymId === req.params.gymId) return ownGymId;
+// This runs before the routers' own authenticate, so it reads the bearer
+// token itself. A missing or bad token is left for the router to reject.
+const identifyCaller = async (req: SubscriptionRequest): Promise<{ userId: string; role: string } | null> => {
+  if (req.user) return req.user;
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string; tokenVersion: number };
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, role: true, isActive: true, tokenVersion: true },
+    });
+    if (!user || !user.isActive || user.tokenVersion !== decoded.tokenVersion) return null;
+    return { userId: user.id, role: user.role };
+  } catch {
     return null;
   }
-
-  return resolveOwnGymId(req);
 };
 
-// Resolves the caller's own gym from their role binding.
-const resolveOwnGymId = async (req: SubscriptionRequest): Promise<string | null> => {
-  // Gym admin: find their owned gym
-  if (req.user?.role === 'GYM_ADMIN') {
-    const gym = await prisma.gym.findFirst({
-      where: { ownerId: req.user.userId },
-      select: { id: true },
-    });
-    return gym?.id ?? null;
+const resolveOwnGymId = async (user: { userId: string; role: string }): Promise<string | null> => {
+  const where = { userId: user.userId };
+  switch (user.role) {
+    case 'GYM_ADMIN':
+      return (await prisma.gym.findFirst({ where: { ownerId: user.userId }, select: { id: true } }))?.id ?? null;
+    case 'MEMBER':
+      return (await prisma.memberDetails.findFirst({ where, select: { gymId: true } }))?.gymId ?? null;
+    case 'TRAINER':
+      return (await prisma.trainerDetails.findFirst({ where, select: { gymId: true } }))?.gymId ?? null;
+    case 'STAFF':
+      return (await prisma.staffDetails.findFirst({ where, select: { gymId: true } }))?.gymId ?? null;
+    default:
+      return null;
   }
-
-  // Member / Trainer / Staff: find their gym
-  if (req.user?.role === 'MEMBER') {
-    const details = await prisma.memberDetails.findFirst({
-      where: { userId: req.user.userId },
-      select: { gymId: true },
-    });
-    return details?.gymId ?? null;
-  }
-
-  if (req.user?.role === 'TRAINER') {
-    const details = await prisma.trainerDetails.findFirst({
-      where: { userId: req.user.userId },
-      select: { gymId: true },
-    });
-    return details?.gymId ?? null;
-  }
-
-  if (req.user?.role === 'STAFF') {
-    const details = await prisma.staffDetails.findFirst({
-      where: { userId: req.user.userId },
-      select: { gymId: true },
-    });
-    return details?.gymId ?? null;
-  }
-
-  return null;
 };
 
-// Fetches and caches the subscription info for a gym. Uses a short-lived
-// in-memory cache to avoid hitting the DB on every request in burst scenarios.
-const subscriptionCache = new Map<string, { data: SubscriptionInfo; expiresAt: number }>();
-const CACHE_TTL_MS = 30_000; // 30 seconds
+// Short-lived in-memory cache so a burst of requests does not hit the DB for
+// the same gym every time. Cleared whenever a subscription changes.
+const subscriptionCache = new Map<string, { data: SubscriptionInfo | null; expiresAt: number }>();
+const CACHE_TTL_MS = 30_000;
 
 const getSubscriptionInfo = async (gymId: string): Promise<SubscriptionInfo | null> => {
   const cached = subscriptionCache.get(gymId);
   if (cached && Date.now() < cached.expiresAt) return cached.data;
 
-  const subscription = await prisma.gymSubscription.findFirst({
-    where: {
-      gymId,
-      status: { notIn: ['CANCELLED'] },
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      plan: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          features: true,
-          maxMembers: true,
-          maxTrainers: true,
-          maxStaff: true,
-          maxBranches: true,
-          maxClasses: true,
-        },
-      },
-    },
-  });
-
-  if (!subscription) {
-    // No subscription record at all → default free/trial tier. This replaces the
-    // former fail-open behavior (no subscription = unrestricted access) with a
-    // bounded entitlement so a gym can't run without limits before paying.
-    const trial: SubscriptionInfo = {
-      subscriptionId: '',
-      status: 'TRIAL',
-      planId: '',
-      planCode: 'FREE',
-      planName: 'Free Trial',
-      features: DEFAULT_TRIAL_FEATURES,
-      maxMembers: DEFAULT_TRIAL.maxMembers,
-      maxTrainers: DEFAULT_TRIAL.maxTrainers,
-      maxStaff: DEFAULT_TRIAL.maxStaff,
-      maxBranches: DEFAULT_TRIAL.maxBranches,
-      maxClasses: DEFAULT_TRIAL.maxClasses,
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      gracePeriodEnd: null,
-      isReadonly: false,
-    };
-    subscriptionCache.set(gymId, { data: trial, expiresAt: Date.now() + CACHE_TTL_MS });
-    return trial;
-  }
-
-  const now = new Date();
-  let effectiveStatus: SubscriptionStatus = subscription.status as SubscriptionStatus;
-
-  // Auto-detect expired or past-due subscriptions
-  if (effectiveStatus === 'ACTIVE') {
-    if (subscription.endDate < now) {
-      // Subscription has expired; check if still within grace period
-      if (subscription.gracePeriodEnd && subscription.gracePeriodEnd > now) {
-        effectiveStatus = 'GRACE_PERIOD';
-      } else {
-        effectiveStatus = 'EXPIRED';
-      }
-      // Update status in DB (fire and forget) for consistency
-      prisma.gymSubscription.update({
-        where: { id: subscription.id },
-        data: { status: effectiveStatus },
-      }).catch(() => {});
-    }
-  }
-
-  const features: string[] = (() => {
-    try {
-      return JSON.parse(subscription.plan.features || '[]');
-    } catch {
-      return [];
-    }
-  })();
-
-  const isReadonly = RESTRICTED_STATES.includes(effectiveStatus);
-
-  const info: SubscriptionInfo = {
-    subscriptionId: subscription.id,
-    status: effectiveStatus,
-    planId: subscription.plan.id,
-    planCode: subscription.plan.code,
-    planName: subscription.plan.name,
-    features,
-    maxMembers: subscription.plan.maxMembers,
-    maxTrainers: subscription.plan.maxTrainers,
-    maxStaff: subscription.plan.maxStaff,
-    maxBranches: subscription.plan.maxBranches,
-    maxClasses: subscription.plan.maxClasses,
-    endDate: subscription.endDate,
-    gracePeriodEnd: subscription.gracePeriodEnd,
-    isReadonly,
-  };
-
+  const info = await loadSubscriptionInfo(gymId);
   subscriptionCache.set(gymId, { data: info, expiresAt: Date.now() + CACHE_TTL_MS });
   return info;
 };
 
-// Clear cache when subscription changes
 export const clearSubscriptionCache = (gymId: string) => {
   subscriptionCache.delete(gymId);
 };
 
-// Middleware: Verify subscription is valid for the gym.
 // Super Admins bypass subscription checks (platform management).
 export const requireValidSubscription = async (req: SubscriptionRequest, res: Response, next: NextFunction) => {
   try {
-    // Super Admins bypass subscription checks
-    if (req.user?.role === 'SUPER_ADMIN') {
-      return next();
-    }
+    const caller = await identifyCaller(req);
+    if (!caller) return next();
+    req.callerId = caller.userId;
+    if (caller.role === 'SUPER_ADMIN') return next();
 
-    const gymId = await resolveGymId(req);
-    if (!gymId) {
-      return next(); // No gym context = public route, continue
-    }
+    const gymId = await resolveOwnGymId(caller);
+    if (!gymId) return next();
 
-    // Attach gymId to request for downstream handlers
     req.gymId = gymId;
-
-    // getSubscriptionInfo always returns a value (real subscription or the
-    // default free/trial tier), so access is never fail-open. Defensive guard:
     const info = await getSubscriptionInfo(gymId);
-    if (!info) {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: 'SUBSCRIPTION_UNAVAILABLE',
-          message: 'Unable to verify your gym subscription. Please contact support.',
-        },
-      });
-    }
 
-    // Block access for suspended/cancelled
-    if (info.status === 'SUSPENDED' || info.status === 'CANCELLED') {
+    if (info && (info.status === 'SUSPENDED' || info.status === 'CANCELLED')) {
       return res.status(403).json({
         success: false,
         error: {
@@ -245,24 +94,11 @@ export const requireValidSubscription = async (req: SubscriptionRequest, res: Re
       });
     }
 
-    // Expired: allow read-only access
-    if (info.status === 'EXPIRED') {
-      req.subscription = { ...info, isReadonly: true };
-      return next();
-    }
-
-    // Grace period: limited access
-    if (info.status === 'GRACE_PERIOD') {
-      req.subscription = { ...info, isReadonly: false };
-      return next();
-    }
-
-    // Active / Trial / Past Due: full access
+    // null (gym without any plan) is read-only, like an expired plan.
     req.subscription = info;
     next();
   } catch (error) {
-    console.error('[Subscription] middleware error:', error);
-    next(); // Fail open for subscription checks to avoid blocking legitimate users
+    next(error);
   }
 };
 
@@ -275,12 +111,15 @@ export const requireWriteAccess = (req: SubscriptionRequest, res: Response, next
   const method = req.method.toUpperCase();
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next();
 
-  if (req.subscription?.isReadonly) {
+  const noPlan = !!req.gymId && !req.subscription;
+  if (noPlan || req.subscription?.isReadonly) {
     return res.status(403).json({
       success: false,
       error: {
         code: 'SUBSCRIPTION_READONLY',
-        message: 'Your subscription has expired. Renew your subscription to restore full access.',
+        message: noPlan
+          ? 'Your gym has no active plan. Choose a plan to restore full access.'
+          : 'Your subscription has expired. Renew your subscription to restore full access.',
       },
     });
   }
@@ -294,9 +133,9 @@ export const requireFeature = (featureCode: string) => {
     if (req.user?.role === 'SUPER_ADMIN') return next();
 
     // No gym context (public route) → nothing to gate.
-    if (!req.subscription) return next();
+    if (!req.gymId) return next();
 
-    if (!req.subscription.features.includes(featureCode)) {
+    if (!isFeatureEnabled(req.subscription, featureCode)) {
       return res.status(403).json({
         success: false,
         error: {
@@ -311,9 +150,5 @@ export const requireFeature = (featureCode: string) => {
 };
 
 // Helper: Check if a subscription allows a specific feature (for use in controllers).
-// Gyms on the default free/trial tier get DEFAULT_TRIAL features via the
-// subscription object, so this is accurate for every gym with a gymId.
-export const isFeatureEnabled = (subscription: SubscriptionInfo | null | undefined, featureCode: string): boolean => {
-  if (!subscription) return DEFAULT_TRIAL_FEATURES.includes(featureCode);
-  return subscription.features.includes(featureCode);
-};
+export const isFeatureEnabled = (subscription: SubscriptionInfo | null | undefined, featureCode: string): boolean =>
+  !!subscription && !subscription.isReadonly && subscription.features.includes(featureCode);

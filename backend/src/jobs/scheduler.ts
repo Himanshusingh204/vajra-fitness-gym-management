@@ -214,7 +214,7 @@ const runTracked = async <T>(job: string, fn: () => Promise<T>): Promise<T> => {
 };
 
 // Runs every background job. Safe to call repeatedly (idempotent).
-export const runAllJobs = async () => {
+export const runScheduledJobs = async () => {
   const [expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning] = await Promise.all([
     runTracked('expirySync', runExpirySync),
     runTracked('expiryReminders', runExpiryReminders),
@@ -225,3 +225,6 @@ export const runAllJobs = async () => {
   ]);
   return { expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning };
 };
+
+// Old name, still used by tests/membership.test.ts.
+export const runAllJobs = runScheduledJobs;

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -10,6 +11,9 @@ import { requestContextMiddleware } from './middlewares/requestContext.middlewar
 import { metricsMiddleware, metricsHandler } from './utils/metrics';
 import { requireValidSubscription, requireWriteAccess } from './middlewares/subscription.middleware';
 import { RedisRateLimitStore } from './utils/redisRateLimitStore';
+import { redis, isRedisAvailable } from './utils/redis';
+import { tenantWriteLimiter } from './middlewares/rateLimit.middleware';
+import { runScheduledJobs } from './jobs/scheduler';
 
 export const app = express();
 
@@ -107,7 +111,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Client'],
 }));
 
 // Razorpay webhooks must receive the RAW body so the signature can be verified
@@ -139,17 +143,33 @@ app.use('/api', isTest ? (_req, _res, next) => next() : limiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/payments', paymentRoutes);
-app.use('/api/health', (_req, res) => {
-  // Health endpoint with dependency status checks
-  res.json({
-    status: 'OK',
+const DB_CHECK_TIMEOUT_MS = 2000;
+
+const checkDatabase = async (): Promise<'up' | 'down'> => {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), DB_CHECK_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([prisma.$queryRaw`SELECT 1`, timeout]);
+    return 'up';
+  } catch {
+    return 'down';
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+// 'memory' means no REDIS_URL, so rate limits and cache live in this instance.
+const cacheStatus = () => (redis === null ? 'memory' : isRedisAvailable() ? 'up' : 'down');
+
+app.get('/api/health', async (_req, res) => {
+  const database = await checkDatabase();
+  res.status(database === 'up' ? 200 : 503).json({
+    status: database === 'up' ? 'OK' : 'DEGRADED',
     timestamp: new Date().toISOString(),
     version: '2.0.0',
-    environment: process.env.NODE_ENV || 'development',
-    dependencies: {
-      database: 'connected',
-      subscriptionCache: 'active',
-    },
+    dependencies: { database, cache: cacheStatus() },
   });
 });
 
@@ -164,16 +184,40 @@ app.use('/api/ready', async (_req, res) => {
   }
 });
 
+// Constant-time check of an "Authorization: Bearer <secret>" header. Hashing
+// first keeps the comparison length-independent.
+const hasBearer = (header: string | undefined, secret: string) => {
+  const given = crypto.createHash('sha256').update(header ?? '').digest();
+  const expected = crypto.createHash('sha256').update(`Bearer ${secret}`).digest();
+  return crypto.timingSafeEqual(given, expected);
+};
+
 // Prometheus metrics for scraping (Grafana/Prometheus). Optional bearer-token
 // protection via METRICS_TOKEN when set.
 app.use('/metrics', async (req, res, next) => {
   const token = process.env.METRICS_TOKEN;
-  if (token) {
-    const auth = req.headers.authorization ?? '';
-    if (auth !== `Bearer ${token}`) return res.status(401).json({ error: 'Unauthorized' });
+  if (token && !hasBearer(req.headers.authorization, token)) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
   return metricsHandler(req, res);
 });
+
+// Scheduled jobs for hosts without a long-running process. Vercel Cron sends
+// a GET with "Authorization: Bearer $CRON_SECRET".
+const runCron = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || !hasBearer(req.headers.authorization, secret)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const result = await runScheduledJobs();
+    res.json({ ok: true, result });
+  } catch (err) {
+    next(err);
+  }
+};
+app.get('/api/internal/cron', runCron);
+app.post('/api/internal/cron', runCron);
 
 // ========================================
 // PLATFORM ADMIN ROUTES (Super Admin only, no subscription check)
@@ -186,32 +230,34 @@ app.use('/api/saas', saasRoutes);
 // ========================================
 // Apply subscription check to all tenant routes. Super Admins bypass it.
 // requireWriteAccess blocks mutations once a subscription is read-only
-// (expired/suspended) while still letting GETs render the dashboard.
-app.use('/api/members', requireValidSubscription, requireWriteAccess, memberRoutes);
-app.use('/api/plans', requireValidSubscription, requireWriteAccess, membershipPlanRoutes);
-app.use('/api/staff', requireValidSubscription, requireWriteAccess, staffRoutes);
-app.use('/api/fees', requireValidSubscription, requireWriteAccess, feeRoutes);
-app.use('/api/attendance', requireValidSubscription, requireWriteAccess, attendanceRoutes);
-app.use('/api/workouts', requireValidSubscription, requireWriteAccess, workoutRoutes);
-app.use('/api/enquiries', requireValidSubscription, requireWriteAccess, enquiryRoutes);
-app.use('/api/gym', requireValidSubscription, requireWriteAccess, gymRoutes);
-app.use('/api/support', requireValidSubscription, requireWriteAccess, supportRoutes);
-app.use('/api/bookings', requireValidSubscription, requireWriteAccess, bookingRoutes);
-app.use('/api/progress', requireValidSubscription, requireWriteAccess, progressRoutes);
-app.use('/api/nutrition', requireValidSubscription, requireWriteAccess, nutritionRoutes);
-app.use('/api/memberships', requireValidSubscription, requireWriteAccess, membershipRoutes);
-app.use('/api/notifications', requireValidSubscription, requireWriteAccess, notificationRoutes);
-app.use('/api/reports', requireValidSubscription, requireWriteAccess, reportsRoutes);
-app.use('/api/notices', requireValidSubscription, requireWriteAccess, noticeRoutes);
+// (expired, suspended or no plan) while still letting GETs render the dashboard.
+const tenant = [requireValidSubscription, tenantWriteLimiter, requireWriteAccess];
+// A read-only gym can still dismiss notifications and contact support.
+const tenantAlwaysWritable = [requireValidSubscription, tenantWriteLimiter];
 
-// New modules with subscription + write access checks
-app.use('/api/expenses', requireValidSubscription, requireWriteAccess, expenseRoutes);
-app.use('/api/inventory', requireValidSubscription, requireWriteAccess, inventoryRoutes);
-app.use('/api/equipment', requireValidSubscription, requireWriteAccess, equipmentRoutes);
-app.use('/api/classes', requireValidSubscription, requireWriteAccess, classRoutes);
-app.use('/api/payslips', requireValidSubscription, requireWriteAccess, payslipRoutes);
-app.use('/api/referrals', requireValidSubscription, requireWriteAccess, referralRoutes);
-app.use('/api/branches', requireValidSubscription, requireWriteAccess, branchRoutes);
+app.use('/api/members', ...tenant, memberRoutes);
+app.use('/api/plans', ...tenant, membershipPlanRoutes);
+app.use('/api/staff', ...tenant, staffRoutes);
+app.use('/api/fees', ...tenant, feeRoutes);
+app.use('/api/attendance', ...tenant, attendanceRoutes);
+app.use('/api/workouts', ...tenant, workoutRoutes);
+app.use('/api/enquiries', ...tenant, enquiryRoutes);
+app.use('/api/gym', ...tenant, gymRoutes);
+app.use('/api/support', ...tenantAlwaysWritable, supportRoutes);
+app.use('/api/bookings', ...tenant, bookingRoutes);
+app.use('/api/progress', ...tenant, progressRoutes);
+app.use('/api/nutrition', ...tenant, nutritionRoutes);
+app.use('/api/memberships', ...tenant, membershipRoutes);
+app.use('/api/notifications', ...tenantAlwaysWritable, notificationRoutes);
+app.use('/api/reports', ...tenant, reportsRoutes);
+app.use('/api/notices', ...tenant, noticeRoutes);
+app.use('/api/expenses', ...tenant, expenseRoutes);
+app.use('/api/inventory', ...tenant, inventoryRoutes);
+app.use('/api/equipment', ...tenant, equipmentRoutes);
+app.use('/api/classes', ...tenant, classRoutes);
+app.use('/api/payslips', ...tenant, payslipRoutes);
+app.use('/api/referrals', ...tenant, referralRoutes);
+app.use('/api/branches', ...tenant, branchRoutes);
 
 // 404 handler
 app.use((_req, res) => {

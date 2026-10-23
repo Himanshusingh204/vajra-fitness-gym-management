@@ -9,6 +9,7 @@ import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
 import { isLocked, registerFailure, clearFailures } from '../utils/bruteForce';
 import { createNotification } from '../services/notification.service';
 import { generateRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllUserTokens } from '../services/refreshToken.service';
+import { startAutomaticTrial } from '../services/subscription.service';
 import { sendPasswordResetEmail, sendActivationEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 
@@ -34,6 +35,23 @@ const setRefreshCookie = (res: Response, refreshToken: string) => {
     sameSite: 'strict',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+};
+
+// The mobile app has no cookie jar, so it identifies itself with this header
+// and keeps the refresh token in secure storage instead.
+const isMobileClient = (req: Request) => req.get('x-client')?.toLowerCase() === 'mobile';
+
+// Web gets the refresh token as an httpOnly cookie, mobile gets it in the body.
+// Spread the result into the JSON response.
+const handOverRefreshToken = (req: Request, res: Response, refreshToken: string) => {
+  if (isMobileClient(req)) return { refreshToken };
+  setRefreshCookie(res, refreshToken);
+  return {};
+};
+
+const readRefreshToken = (req: Request): string | undefined => {
+  const raw = isMobileClient(req) ? req.body?.refreshToken : req.cookies?.refreshToken;
+  return typeof raw === 'string' && raw.length > 0 && raw.length <= 256 ? raw : undefined;
 };
 
 // Allowed browser origins for cookie-bearing requests (defense-in-depth for CSRF
@@ -102,14 +120,18 @@ export const registerVendor = async (req: Request, res: Response) => {
           },
         },
       },
+      include: { ownedGyms: { select: { id: true } } },
     });
 
+    const gym = vendor.ownedGyms[0];
+    if (gym) await startAutomaticTrial(gym.id);
+
     const refreshRaw = await generateRefreshToken(vendor.id);
-    setRefreshCookie(res, refreshRaw);
 
     res.status(201).json({
       message: 'Vendor registered successfully, pending approval.',
       token: issueAccessToken(vendor),
+      ...handOverRefreshToken(req, res, refreshRaw),
       user: { id: vendor.id, username: vendor.username, email: vendor.email, role: vendor.role },
     });
   } catch (error) {
@@ -164,7 +186,6 @@ export const registerMember = async (req: Request, res: Response) => {
     });
 
     const refreshRaw = await generateRefreshToken(member.id);
-    setRefreshCookie(res, refreshRaw);
 
     if (gym) {
       await createNotification({
@@ -181,7 +202,65 @@ export const registerMember = async (req: Request, res: Response) => {
         ? 'Member registered successfully, pending gym approval.'
         : 'Account created. Browse gyms any time to send a membership request.',
       token: issueAccessToken(member),
+      ...handOverRefreshToken(req, res, refreshRaw),
       user: { id: member.id, username: member.username, email: member.email, role: member.role },
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Trainer self-signup. The account works straight away but stays PENDING (no
+// access to gym data) until the gym admin approves it from staff management.
+export const registerTrainer = async (req: Request, res: Response) => {
+  try {
+    const { username, email, password, phone, gymId, specialization, experienceYears, city, bio } = req.body;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) return res.status(409).json({ error: 'An account with this email already exists' });
+
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, name: true, ownerId: true, isApproved: true } });
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    if (!gym.isApproved) return res.status(403).json({ error: 'This gym is not accepting trainer applications yet' });
+
+    const hashedPassword = await argon2.hash(password);
+
+    const trainer = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+        role: 'TRAINER',
+        phone,
+        trainerDetails: {
+          create: {
+            gymId: gym.id,
+            status: 'PENDING',
+            specialization: specialization || null,
+            experienceYears: experienceYears ?? null,
+            city: city || null,
+            bio: bio || null,
+          },
+        },
+      },
+    });
+
+    const refreshRaw = await generateRefreshToken(trainer.id);
+
+    await createNotification({
+      userId: gym.ownerId,
+      type: 'INFO',
+      title: 'New trainer application',
+      message: `${username} applied to join ${gym.name} as a trainer. Review the application in staff management.`,
+      link: '/admin/gym',
+    });
+
+    res.status(201).json({
+      message: 'Application sent. The gym will review it soon.',
+      token: issueAccessToken(trainer),
+      ...handOverRefreshToken(req, res, refreshRaw),
+      user: { id: trainer.id, username: trainer.username, email: trainer.email, role: trainer.role },
+      trainerStatus: 'PENDING',
     });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -219,12 +298,12 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const refreshRaw = await generateRefreshToken(user.id);
-    setRefreshCookie(res, refreshRaw);
 
     res.json({
       message: 'Logged in successfully',
       token: issueAccessToken(user),
-      user: { id: user.id, username: user.username, email: user.email, role: user.role },
+      ...handOverRefreshToken(req, res, refreshRaw),
+      user:{ id: user.id, username: user.username, email: user.email, role: user.role },
     });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -233,7 +312,7 @@ export const login = async (req: Request, res: Response) => {
 
 export const logout = async (req: Request, res: Response) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken = readRefreshToken(req);
     if (refreshToken) {
       await revokeRefreshToken(refreshToken).catch(() => {});
     }
@@ -250,12 +329,12 @@ export const refresh = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Cross-origin refresh denied' });
     }
 
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken = readRefreshToken(req);
     if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
 
     const result = await rotateRefreshToken(refreshToken);
     if (!result.ok) {
-      res.clearCookie('refreshToken');
+      if (!isMobileClient(req)) res.clearCookie('refreshToken');
       const reason = (result as any).reason;
       return res.status(401).json({ error: reason === 'reuse' ? 'Session reuse detected. Please log in again.' : 'Session expired. Please log in again.' });
     }
@@ -264,8 +343,7 @@ export const refresh = async (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Invalid user' });
     if (user.isActive === false) return res.status(403).json({ error: 'Account suspended. Contact support.' });
 
-    setRefreshCookie(res, result.raw);
-    res.json({ token: issueAccessToken(user) });
+    res.json({ token: issueAccessToken(user), ...handOverRefreshToken(req, res, result.raw) });
   } catch (error) {
     res.status(401).json({ error: 'Invalid refresh token' });
   }
@@ -339,9 +417,71 @@ export const me = async (req: AuthRequest, res: Response) => {
       },
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    res.json(user.role === 'TRAINER' ? { ...user, trainerStatus: user.trainerDetails?.status ?? 'ACTIVE' } : user);
   } catch {
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+};
+
+const profileSelect = {
+  id: true,
+  username: true,
+  email: true,
+  phone: true,
+  role: true,
+  isActive: true,
+  createdAt: true,
+  memberDetails: { select: { gym: { select: { id: true, name: true } } } },
+  trainerDetails: { select: { status: true, gym: { select: { id: true, name: true } } } },
+  staffDetails: { select: { gym: { select: { id: true, name: true } } } },
+  ownedGyms: { select: { id: true, name: true }, take: 1 },
+} as const;
+
+const findProfile = (userId: string) => prisma.user.findUnique({ where: { id: userId }, select: profileSelect });
+
+type ProfileRow = NonNullable<Awaited<ReturnType<typeof findProfile>>>;
+
+const toProfile = (user: ProfileRow) => {
+  const { memberDetails, trainerDetails, staffDetails, ownedGyms, ...base } = user;
+  const gym = ownedGyms[0] ?? memberDetails?.gym ?? trainerDetails?.gym ?? staffDetails?.gym ?? null;
+  return {
+    ...base,
+    gym,
+    ...(user.role === 'TRAINER' ? { trainerStatus: trainerDetails?.status ?? 'ACTIVE' } : {}),
+  };
+};
+
+export const getProfile = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const user = await findProfile(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(toProfile(user));
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+};
+
+export const updateProfile = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const { username, phone } = req.body as { username?: string; phone?: string | null };
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(username !== undefined ? { username } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+      },
+    });
+    const user = await findProfile(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(toProfile(user));
+  } catch {
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 };
 

@@ -48,6 +48,17 @@ const shell = (title: string, body: string) => `
 </html>
 `;
 
+const looksLikeEmail = (value: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value);
+
+// The sender must be an address the SMTP account owns, so there is no
+// hardcoded fallback: SMTP_FROM, else SMTP_USER when it is an address.
+const senderAddress = (): string | null => {
+  if (process.env.SMTP_FROM) return process.env.SMTP_FROM;
+  const user = process.env.SMTP_USER;
+  if (user && looksLikeEmail(user)) return `Vajra Fitness <${user}>`;
+  return null;
+};
+
 const sendMail = async (to: string, subject: string, html: string) => {
   // Never hit a real SMTP server from the test suite, even if .env has live
   // credentials configured for local dev — mirrors the isTest bypass already
@@ -63,12 +74,14 @@ const sendMail = async (to: string, subject: string, html: string) => {
     }
     return;
   }
-  await transport.sendMail({
-    from: process.env.SMTP_FROM || 'Vajra Fitness <no-reply@vajrafitness.in>',
-    to,
-    subject,
-    html,
-  });
+
+  const from = senderAddress();
+  if (!from) {
+    console.warn(`[Email] set SMTP_FROM (or an email address as SMTP_USER), NOT sent to ${to}: ${subject}`);
+    return;
+  }
+
+  await transport.sendMail({ from, to, subject, html });
 };
 
 export const sendPasswordResetEmail = async (to: string, link: string) => {
@@ -99,7 +112,7 @@ export const sendMembershipExpiryEmail = async (
     `Your membership expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
     shell(
       'Membership expiring soon',
-      `<p>Hi ${safeName}, your <strong>${safePlan}</strong> membership expires on <strong>${expiryDate}</strong> — ${daysLeft} day${daysLeft === 1 ? '' : 's'} from now.</p>
+      `<p>Hi ${safeName}, your <strong>${safePlan}</strong> membership expires on <strong>${expiryDate}</strong>, ${daysLeft} day${daysLeft === 1 ? '' : 's'} from now.</p>
        <p>Renew soon to keep your access uninterrupted. Log in to your dashboard to renew or contact your gym's front desk.</p>`,
     ),
   );

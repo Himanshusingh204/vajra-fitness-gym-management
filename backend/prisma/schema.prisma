@@ -195,6 +195,11 @@ model TrainerDetails {
   commissionRate Decimal? @db.Decimal(5, 2) // percentage commission on PT revenue
   hourlyRate     Decimal? @db.Decimal(10, 2)
   joiningDate    DateTime @default(now())
+  // Self-registered trainers start PENDING until the gym admin approves them.
+  // Trainers added by a gym admin are ACTIVE straight away.
+  status          String  @default("ACTIVE") // ACTIVE, PENDING, REJECTED
+  experienceYears Int?
+  city            String?
 
   userId      String        @unique
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)

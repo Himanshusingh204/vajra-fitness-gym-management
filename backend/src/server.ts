@@ -2,7 +2,7 @@ import { app } from './app';
 import { prisma } from './utils/prisma';
 import { logger } from './utils/logger';
 import { redis } from './utils/redis';
-import { runAllJobs, JOB_INTERVAL_MS } from './jobs/scheduler';
+import { runScheduledJobs, JOB_INTERVAL_MS } from './jobs/scheduler';
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,7 +14,7 @@ const server = app.listen(PORT, () => {
 
   // Background jobs: run once at boot, then hourly. All jobs are idempotent.
   // See backend/src/jobs/scheduler.ts for job definitions (expiry sync, reminders).
-  runAllJobs()
+  runScheduledJobs()
     .then((r) => logger.info('background jobs completed', {
       expiredMemberships: r.expired,
       expiryReminders: r.expiryNudges,
@@ -28,7 +28,7 @@ const server = app.listen(PORT, () => {
     }))
     .catch((err) => logger.errorWith('background jobs boot run failed', err));
   setInterval(() => {
-    runAllJobs().catch((err) => logger.errorWith('background jobs interval run failed', err));
+    runScheduledJobs().catch((err) => logger.errorWith('background jobs interval run failed', err));
   }, JOB_INTERVAL_MS);
 
   // Neon (and similar serverless Postgres) auto-suspends the compute after a

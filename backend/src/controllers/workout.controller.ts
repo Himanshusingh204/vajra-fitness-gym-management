@@ -14,7 +14,7 @@ export const getWorkoutSlips = async (req: AuthRequest, res: Response) => {
     let isTrainerAtGym = false;
     if (req.user?.role === 'TRAINER') {
       const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: member.gymId },
+        where: { userId: req.user.userId, gymId: member.gymId, status: 'ACTIVE' },
       });
       isTrainerAtGym = !!trainer;
     }
@@ -67,7 +67,7 @@ export const createWorkoutSlip = async (req: AuthRequest, res: Response) => {
       }
     } else if (req.user?.role === 'TRAINER') {
       const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: member.gymId },
+        where: { userId: req.user.userId, gymId: member.gymId, status: 'ACTIVE' },
       });
       if (!trainer) {
         return res.status(403).json({ error: 'Unauthorized' });
@@ -104,7 +104,7 @@ export const getGymWorkoutSlips = async (req: AuthRequest, res: Response) => {
     let isTrainerAtGym = false;
     if (req.user?.role === 'TRAINER') {
       const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId },
+        where: { userId: req.user.userId, gymId, status: 'ACTIVE' },
       });
       isTrainerAtGym = !!trainer;
     }
@@ -145,7 +145,7 @@ export const getWorkoutSlipPDF = async (req: AuthRequest, res: Response) => {
     let isTrainerAtGym = false;
     if (req.user?.role === 'TRAINER') {
       const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: slip.gymId },
+        where: { userId: req.user.userId, gymId: slip.gymId, status: 'ACTIVE' },
       });
       isTrainerAtGym = !!trainer;
     }

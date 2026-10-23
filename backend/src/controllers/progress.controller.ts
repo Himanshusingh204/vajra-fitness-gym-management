@@ -67,7 +67,7 @@ export const getMemberProgress = async (req: AuthRequest, res: Response) => {
     let isTrainerAtGym = false;
     if (req.user?.role === 'TRAINER') {
       const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: member.gymId },
+        where: { userId: req.user.userId, gymId: member.gymId, status: 'ACTIVE' },
       });
       isTrainerAtGym = !!trainer;
     }

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { seedAdmin, seedMember, seedSubscription, seedPlan, login, authPost } from './helpers';
-import { DEFAULT_TRIAL } from '../src/services/entitlements.service';
+import { seedAdmin, seedMember, seedSubscription, login, authGet, authPost } from './helpers';
 
 describe('SaaS entitlement limits', () => {
   it('blocks adding a member beyond the plan cap (402)', async () => {
@@ -25,22 +24,16 @@ describe('SaaS entitlement limits', () => {
     expect(res.status).toBe(201);
   });
 
-  it('bounds a gym with no subscription to the default trial member cap', async () => {
-    const { user: admin, gym } = await seedAdmin();
+  it('makes a gym with no subscription read-only: writes 403, reads 200', async () => {
+    const { user: admin, gym } = await seedAdmin({ subscription: false });
     const token = await login(admin.email).then((r) => r.body.token as string);
 
-    for (let i = 0; i < DEFAULT_TRIAL.maxMembers; i += 1) {
-      const res = await authPost(token, `/api/members/gym/${gym.id}`, { username: `Trial Member ${i}`, email: `trial${i}@test.local`, status: 'ACTIVE' });
-      expect(res.status).toBe(201);
-    }
+    const write = await authPost(token, `/api/members/gym/${gym.id}`, { username: 'No Plan', email: `noplan@test.local`, status: 'ACTIVE' });
+    expect(write.status).toBe(403);
+    expect(write.body.error.code).toBe('SUBSCRIPTION_READONLY');
 
-    const over = await authPost(token, `/api/members/gym/${gym.id}`, {
-      username: 'Over Trial Cap',
-      email: `overcap@test.local`,
-      status: 'ACTIVE',
-    });
-    expect(over.status).toBe(402);
-    expect(over.body.error).toMatch(/limit/i);
+    const read = await authGet(token, `/api/members/gym/${gym.id}`);
+    expect(read.status).toBe(200);
   });
 
   it('blocks adding a trainer beyond the plan cap', async () => {

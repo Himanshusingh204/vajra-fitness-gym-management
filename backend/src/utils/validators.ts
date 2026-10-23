@@ -182,6 +182,35 @@ export const registerMemberSchema = z.object({
   preferredPaymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable(),
 });
 
+export const registerTrainerSchema = z.object({
+  username,
+  email: registrationEmail,
+  password,
+  phone: indianPhone().transform((v) => normalizeIndianMobile(v)!),
+  gymId: uuid,
+  specialization: sanitize(80).optional().nullable(),
+  experienceYears: z.number().int().min(0).max(60).optional().nullable(),
+  city: sanitize(80).optional().nullable(),
+  bio: sanitize(600).optional().nullable(),
+});
+
+// Only the fields a user may change about themselves. strict() turns any
+// extra key (role, email, isActive...) into a 400 instead of silently dropping it.
+export const updateProfileSchema = z
+  .object({
+    username: username.optional(),
+    // An empty string or null clears the number.
+    phone: z
+      .union([
+        indianPhone().transform((v) => normalizeIndianMobile(v)!),
+        z.literal('').transform(() => null),
+        z.null(),
+      ])
+      .optional(),
+  })
+  .strict()
+  .refine((v) => v.username !== undefined || v.phone !== undefined, { message: 'Nothing to update' });
+
 export const loginSchema = z.object({
   email: email,
   password: z.string().min(1).max(128),
@@ -439,6 +468,16 @@ export const gymUpdateSchema = z.object({
     .optional()
     .nullable(),
 });
+
+export const trainerApplicationsQuery = z.object({
+  status: z.enum(['PENDING', 'REJECTED']).optional(),
+});
+
+export const trainerRejectSchema = z
+  .object({
+    reason: sanitize(500).optional().nullable(),
+  })
+  .default({});
 
 export const userStatusSchema = z.object({
   isActive: z.boolean(),

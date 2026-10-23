@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { FRONTEND_URL } from '../utils/env';
+import { getOrSetJSON } from '../utils/cache';
 
 export const getPublicFaqs = async (_req: Request, res: Response) => {
   try {
@@ -47,13 +48,131 @@ export const getPublicStats = async (_req: Request, res: Response) => {
       prisma.gym.count({ where: { isApproved: true } }),
       prisma.memberDetails.count({ where: { status: 'ACTIVE', gym: { isApproved: true } } }),
       prisma.user.count({
-        where: { role: 'TRAINER', isActive: true, trainerDetails: { gym: { isApproved: true } } },
+        where: { role: 'TRAINER', isActive: true, trainerDetails: { status: 'ACTIVE', gym: { isApproved: true } } },
       }),
       prisma.gym.groupBy({ by: ['city'], where: { isApproved: true, city: { not: '' } } }),
     ]);
     res.json({ gyms, members, trainers, cities: cityGroups.length });
   } catch {
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+};
+
+// Public gym page. Approved gyms only, and only what a visitor should see:
+// no owner details, no GSTIN, no trainer contact details.
+export const getPublicGym = async (req: Request, res: Response) => {
+  try {
+    const gymId = req.params.gymId as string;
+    const gym = await getOrSetJSON(`public-gym:${gymId}`, 60, async () => {
+      const row = await prisma.gym.findFirst({
+        where: { id: gymId, isApproved: true },
+        select: {
+          id: true,
+          name: true,
+          tagline: true,
+          address: true,
+          city: true,
+          state: true,
+          location: true,
+          facilities: true,
+          brandColor: true,
+          imageUrl: true,
+          logoUrl: true,
+          membershipPlans: {
+            where: { isActive: true },
+            orderBy: { price: 'asc' },
+            select: { id: true, name: true, description: true, price: true, duration: true },
+          },
+          trainers: {
+            where: { status: 'ACTIVE', user: { isActive: true } },
+            orderBy: { joiningDate: 'asc' },
+            select: { specialization: true, experienceYears: true, user: { select: { username: true } } },
+          },
+          branches: {
+            where: { status: 'APPROVED', isActive: true },
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, city: true },
+          },
+        },
+      });
+      if (!row) return null;
+
+      const { membershipPlans, trainers, ...rest } = row;
+      return {
+        ...rest,
+        plans: membershipPlans.map((p) => ({ ...p, price: Number(p.price) })),
+        trainerCount: trainers.length,
+        trainers: trainers.map((t) => ({
+          name: t.user.username,
+          specialization: t.specialization,
+          experienceYears: t.experienceYears,
+        })),
+      };
+    });
+
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    res.json(gym);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch gym' });
+  }
+};
+
+const SITEMAP_PAGES = [
+  '/',
+  '/about',
+  '/gyms',
+  '/membership',
+  '/subscription',
+  '/contact',
+  '/help',
+  '/faq',
+  '/tools',
+  '/tools/bmi-calculator',
+  '/tools/calorie-calculator',
+  '/tools/one-rep-max-calculator',
+  '/tools/protein-calculator',
+  '/register',
+  '/register/member',
+  '/register/trainer',
+  '/register/partner',
+  '/login',
+  '/terms',
+  '/privacy',
+  '/refund',
+  '/cookies',
+];
+
+const escapeXml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+export const getSitemap = async (_req: Request, res: Response) => {
+  try {
+    const base = (process.env.PUBLIC_SITE_URL || 'https://vajra-fitness-gym-management.vercel.app').replace(/\/+$/, '');
+    const gyms = await prisma.gym.findMany({
+      where: { isApproved: true },
+      select: { id: true, updatedAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const urls = [
+      ...SITEMAP_PAGES.map((path) => `  <url><loc>${escapeXml(base + path)}</loc></url>`),
+      ...gyms.map(
+        (g) => `  <url><loc>${escapeXml(`${base}/gyms/${g.id}`)}</loc><lastmod>${g.updatedAt.toISOString()}</lastmod></url>`,
+      ),
+    ];
+    const xml = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      ...urls,
+      '</urlset>',
+      '',
+    ].join('\n');
+
+    res.set('Content-Type', 'application/xml; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(xml);
+  } catch {
+    res.status(500).json({ error: 'Failed to build sitemap' });
   }
 };
 

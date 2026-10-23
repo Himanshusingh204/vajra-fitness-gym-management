@@ -5,12 +5,27 @@ import { getOrSetJSON } from '../utils/cache';
 
 export const listPublicGyms = async (_req: Request, res: Response) => {
   try {
+    // Public endpoint: an explicit allow-list so owner ids, GSTIN and domain
+    // settings never leave the server.
     const gyms = await prisma.gym.findMany({
       where: { isApproved: true },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        city: true,
+        state: true,
+        location: true,
+        logoUrl: true,
+        imageUrl: true,
+        facilities: true,
+        tagline: true,
+        brandColor: true,
+        isApproved: true,
         membershipPlans: {
           where: { isActive: true },
           orderBy: { price: 'asc' },
+          select: { id: true, name: true, description: true, duration: true, price: true, isActive: true },
         },
       },
       orderBy: { createdAt: 'asc' },

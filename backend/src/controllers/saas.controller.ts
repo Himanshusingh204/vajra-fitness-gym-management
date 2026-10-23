@@ -11,7 +11,6 @@ import {
 } from '../services/payment.service';
 import {
   activateSubscription,
-  startTrial,
   extendSubscription,
   cancelSubscription,
   upgradeSubscription,
@@ -318,8 +317,13 @@ const getSaaSQuote = async (input: {
     cycle === 'QUARTERLY' ? plan.quarterlyPrice :
     plan.monthlyPrice).toNumber();
 
+  // A gym on a trial, in grace or expired may buy a plan. A paid plan that is
+  // still running or an open checkout blocks a second one.
   const active = await prisma.gymSubscription.findFirst({
-    where: { gymId: gym.id, status: { in: ['ACTIVE', 'PENDING', 'TRIAL'] } },
+    where: {
+      gymId: gym.id,
+      OR: [{ status: 'PENDING' }, { status: 'ACTIVE', endDate: { gt: new Date() } }],
+    },
   });
   if (active) throw quoteError(409, 'This gym already has an active or pending subscription');
 
@@ -428,29 +432,6 @@ export const verifySaaS = async (req: AuthRequest, res: Response) => {
 };
 
 // ========================================
-// GYM ADMIN: TRIAL & LIFECYCLE
-// ========================================
-
-export const startTrialHandler = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const gym = await prisma.gym.findFirst({ where: { ownerId: userId } });
-    if (!gym) return res.status(404).json({ error: 'Gym not found' });
-
-    const { planId, trialDays } = req.body;
-    const subscription = await startTrial(gym.id, planId, trialDays || 7);
-    res.status(201).json(subscription);
-  } catch (error: any) {
-    const message = error?.message || '';
-    if (message.includes('NOT_FOUND')) return res.status(404).json({ error: message.replace('_', ' ') });
-    console.error('[saas] startTrial failed:', error);
-    res.status(500).json({ error: 'Failed to start trial' });
-  }
-};
-
-// ========================================
 // SUPER ADMIN: EXTEND / CANCEL / UPGRADE
 // ========================================
 
@@ -481,17 +462,15 @@ export const cancelSubscriptionHandler = async (req: AuthRequest, res: Response)
 };
 
 export const upgradeSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { gymId, planId } = req.body as { gymId?: string; planId: string };
+    if (!gymId) return res.status(400).json({ error: 'gymId is required' });
 
-    const gym = req.user!.role === 'SUPER_ADMIN'
-      ? await prisma.gym.findUnique({ where: { id: req.body.gymId } })
-      : await prisma.gym.findFirst({ where: { ownerId: userId } });
-
+    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
 
-    const result = await upgradeSubscription(gym.id, req.body.planId, userId);
+    const result = await upgradeSubscription(gym.id, planId, req.user!.userId);
     res.json(result);
   } catch (error: any) {
     const message = error?.message || '';
@@ -501,17 +480,15 @@ export const upgradeSubscriptionHandler = async (req: AuthRequest, res: Response
 };
 
 export const downgradeSubscriptionHandler = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
   try {
-    const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { gymId, planId } = req.body as { gymId?: string; planId: string };
+    if (!gymId) return res.status(400).json({ error: 'gymId is required' });
 
-    const gym = req.user!.role === 'SUPER_ADMIN'
-      ? await prisma.gym.findUnique({ where: { id: req.body.gymId } })
-      : await prisma.gym.findFirst({ where: { ownerId: userId } });
-
+    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
 
-    const result = await downgradeSubscription(gym.id, req.body.planId, userId);
+    const result = await downgradeSubscription(gym.id, planId, req.user!.userId);
     res.json(result);
   } catch (error: any) {
     const message = error?.message || '';

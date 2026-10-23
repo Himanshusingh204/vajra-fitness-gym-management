@@ -8,39 +8,61 @@ export interface AuthRequest extends Request {
   user?: { userId: string; role: string };
 }
 
-export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
+const verifyUser = (opts: { allowUnapprovedTrainer: boolean }) =>
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string; role: string; tokenVersion: number };
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string; role: string; tokenVersion: number };
 
-    // Validate against the database on every request so suspensions, role changes,
-    // and password resets take effect immediately — never trust a stale token alone.
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, role: true, isActive: true, tokenVersion: true },
-    });
+      // Validate against the database on every request so suspensions, role changes,
+      // and password resets take effect immediately — never trust a stale token alone.
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, role: true, isActive: true, tokenVersion: true },
+      });
 
-    if (!user || user.isActive === false) {
-      return res.status(403).json({ error: 'Account suspended or no longer active.' });
+      if (!user || user.isActive === false) {
+        return res.status(403).json({ error: 'Account suspended or no longer active.' });
+      }
+      if (user.tokenVersion !== decoded.tokenVersion) {
+        return res.status(401).json({ error: 'Session invalidated. Please log in again.' });
+      }
+
+      // A self-registered trainer can sign in and manage their own account, but
+      // touches nothing in the gym until the gym admin approves the application.
+      if (user.role === 'TRAINER' && !opts.allowUnapprovedTrainer) {
+        const details = await prisma.trainerDetails.findUnique({
+          where: { userId: user.id },
+          select: { status: true },
+        });
+        if (details?.status === 'PENDING') {
+          return res.status(403).json({ error: 'Your trainer application is awaiting approval', code: 'TRAINER_PENDING' });
+        }
+        if (details?.status === 'REJECTED') {
+          return res.status(403).json({ error: 'Your trainer application was not approved', code: 'TRAINER_REJECTED' });
+        }
+      }
+
+      req.user = { userId: user.id, role: user.role };
+      // Enrich the request's correlation context so downstream logs include the actor.
+      const ctx = requestContext.getStore();
+      if (ctx) {
+        ctx.userId = user.id;
+        ctx.role = user.role;
+      }
+      next();
+    } catch (error) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
-    if (user.tokenVersion !== decoded.tokenVersion) {
-      return res.status(401).json({ error: 'Session invalidated. Please log in again.' });
-    }
+  };
 
-    req.user = { userId: user.id, role: user.role };
-    // Enrich the request's correlation context so downstream logs include the actor.
-    const ctx = requestContext.getStore();
-    if (ctx) {
-      ctx.userId = user.id;
-      ctx.role = user.role;
-    }
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-};
+export const authenticate = verifyUser({ allowUnapprovedTrainer: false });
+
+// For the account routes (me, profile, password) that a pending or rejected
+// trainer still needs.
+export const authenticateAccount = verifyUser({ allowUnapprovedTrainer: true });
 
 // Role guard. SUPER_ADMIN always passes (platform-wide access), except on
 // routes explicitly restricted to a different single role via isStrict.

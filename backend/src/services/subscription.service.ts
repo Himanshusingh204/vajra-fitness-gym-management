@@ -2,14 +2,16 @@ import { prisma } from '../utils/prisma';
 import { createNotification, notifyGymOwner } from './notification.service';
 import { logAudit } from '../utils/audit';
 import { clearSubscriptionCache } from '../middlewares/subscription.middleware';
+import { DAY_MS, GRACE_PERIOD_DAYS, getGraceEnd } from './entitlements.service';
 
-export const DAY_MS = 24 * 60 * 60 * 1000;
-export const GRACE_PERIOD_DAYS = 3; // Default grace period
+export { DAY_MS, GRACE_PERIOD_DAYS };
+export const TRIAL_DAYS = 14;
+const TRIAL_PLAN_CODE = 'PROFESSIONAL';
 
 // ========================================
 // SUBSCRIPTION LIFECYCLE MANAGEMENT
 // ========================================
-// Functions: activateSubscription, startTrial, processExpiredSubscriptions, extendSubscription, cancelSubscription, upgradeSubscription, downgradeSubscription, generateSaaSInvoice
+// Functions: activateSubscription, startAutomaticTrial, processExpiredSubscriptions, extendSubscription, cancelSubscription, upgradeSubscription, downgradeSubscription, generateSaaSInvoice
 
 /**
  * Activate a pending subscription after payment verification.
@@ -61,127 +63,143 @@ export const activateSubscription = async (subscriptionId: string) => {
   return { alreadyActive: false, subscription: updated };
 };
 
-// Start a trial subscription (7 or 14 days free).
-export const startTrial = async (gymId: string, planId: string, trialDays: number = 7) => {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-  if (!gym) throw new Error('GYM_NOT_FOUND');
+// Every new gym gets one trial on Professional, started at signup. It does not
+// approve the gym: Super Admin approval still gates the public directory.
+export const startAutomaticTrial = async (gymId: string): Promise<void> => {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { ownerId: true } });
+  if (!gym) return;
 
-  const plan = await prisma.saaSPlan.findUnique({ where: { id: planId } });
-  if (!plan) throw new Error('PLAN_NOT_FOUND');
+  const existing = await prisma.gymSubscription.count({ where: { gymId } });
+  if (existing > 0) return;
+
+  const plan = await prisma.saaSPlan.findFirst({
+    where: { OR: [{ code: TRIAL_PLAN_CODE }, { name: 'Professional' }] },
+  });
+  if (!plan) {
+    console.error(`[subscription] trial plan ${TRIAL_PLAN_CODE} not found, gym ${gymId} starts without a trial`);
+    return;
+  }
 
   const start = new Date();
-  const end = new Date(start.getTime() + trialDays * DAY_MS);
-  const trialEnds = new Date(end.getTime());
+  const end = new Date(start.getTime() + TRIAL_DAYS * DAY_MS);
 
   const subscription = await prisma.gymSubscription.create({
     data: {
       gymId,
-      planId,
+      planId: plan.id,
       status: 'TRIAL',
       startDate: start,
       endDate: end,
       amount: 0,
       billingCycle: 'MONTHLY',
-      trialEndsAt: trialEnds,
+      trialEndsAt: end,
     },
-    include: { plan: { select: { name: true } } },
   });
-
-  await prisma.gym.update({ where: { id: gymId }, data: { isApproved: true } });
-  await prisma.user.update({ where: { id: gym.ownerId }, data: { isActive: true } });
 
   await createNotification({
     userId: gym.ownerId,
     type: 'SUCCESS',
     title: 'Free trial started',
-    message: `Your ${trialDays}-day free trial of ${plan.name} has started. Explore all features before subscribing.`,
-    link: '/admin/gym',
+    message: `Your ${TRIAL_DAYS}-day free trial of ${plan.name} has started.`,
+    link: '/subscription',
   });
 
   await logAudit({
     action: 'SUBSCRIPTION_TRIAL_STARTED',
     entity: 'GymSubscription',
     entityId: subscription.id,
-    details: JSON.stringify({ gymId, planId, trialDays }),
+    details: JSON.stringify({ gymId, planId: plan.id, trialDays: TRIAL_DAYS }),
     userId: null,
   });
 
   clearSubscriptionCache(gymId);
-  return subscription;
 };
 
-// processExpiredSubscriptions — hourly scheduler job: expires overdue subscriptions, sets grace periods, sends notifications
+// Notifies a gym owner at most once a day per title, so hourly runs do not
+// repeat the same warning.
+const notifyOncePerDay = async (userId: string, title: string, message: string) => {
+  const recent = await prisma.notification.findFirst({
+    where: { userId, title, createdAt: { gte: new Date(Date.now() - DAY_MS) } },
+    select: { id: true },
+  });
+  if (recent) return false;
+  await createNotification({ userId, type: 'WARNING', title, message, link: '/subscription' });
+  return true;
+};
+
+// Scheduler job. Access is already decided live from the dates (see
+// getEffectiveStatus), so this only keeps stored statuses in step and sends
+// reminders. Grace is GRACE_PERIOD_DAYS after the end date unless set.
 export const processExpiredSubscriptions = async () => {
   const now = new Date();
+  const graceCutoff = new Date(now.getTime() - GRACE_PERIOD_DAYS * DAY_MS);
 
-  // 1. ACTIVE -> EXPIRED (end date passed)
-  const expired = await prisma.gymSubscription.updateMany({
-    where: { status: 'ACTIVE', endDate: { lt: now } },
-    data: { status: 'EXPIRED' },
-  });
+  const intoGrace = await prisma.$transaction([
+    prisma.gymSubscription.updateMany({
+      where: { status: 'ACTIVE', endDate: { lt: now, gte: graceCutoff } },
+      data: { status: 'GRACE_PERIOD' },
+    }),
+    prisma.gymSubscription.updateMany({
+      where: { status: 'TRIAL', trialEndsAt: { lt: now, gte: graceCutoff } },
+      data: { status: 'GRACE_PERIOD' },
+    }),
+  ]);
 
-  // 2. TRIAL -> EXPIRED (trial end date passed)
-  const expiredTrials = await prisma.gymSubscription.updateMany({
-    where: { status: 'TRIAL', trialEndsAt: { lt: now } },
-    data: { status: 'EXPIRED' },
-  });
-
-  // 3. EXPIRED -> GRACE_PERIOD (within grace period window)
-  const graceDeadline = new Date(now.getTime() + GRACE_PERIOD_DAYS * DAY_MS);
-  const gracePeriodSubs = await prisma.gymSubscription.updateMany({
-    where: {
-      status: 'EXPIRED',
-      gracePeriodEnd: null,
-      endDate: { gte: new Date(now.getTime() - GRACE_PERIOD_DAYS * DAY_MS) },
-    },
-    data: { gracePeriodEnd: graceDeadline, status: 'GRACE_PERIOD' },
-  });
-
-  // 4. Send notifications for expiring trials
-  const expiringTrials = await prisma.gymSubscription.findMany({
-    where: {
-      status: 'TRIAL',
-      trialEndsAt: {
-        gte: now,
-        lte: new Date(now.getTime() + 2 * DAY_MS),
+  const expired = await prisma.$transaction([
+    prisma.gymSubscription.updateMany({
+      where: { status: 'ACTIVE', endDate: { lt: graceCutoff } },
+      data: { status: 'EXPIRED' },
+    }),
+    prisma.gymSubscription.updateMany({
+      where: { status: 'TRIAL', trialEndsAt: { lt: graceCutoff } },
+      data: { status: 'EXPIRED' },
+    }),
+    prisma.gymSubscription.updateMany({
+      where: {
+        status: 'GRACE_PERIOD',
+        OR: [{ gracePeriodEnd: { lt: now } }, { gracePeriodEnd: null, endDate: { lt: graceCutoff } }],
       },
-    },
+      data: { status: 'EXPIRED' },
+    }),
+  ]);
+
+  const expiringTrials = await prisma.gymSubscription.findMany({
+    where: { status: 'TRIAL', trialEndsAt: { gte: now, lte: new Date(now.getTime() + 2 * DAY_MS) } },
     include: { plan: { select: { name: true } }, gym: { select: { ownerId: true } } },
   });
 
+  let trialExpiryNotifications = 0;
   for (const sub of expiringTrials) {
     const daysLeft = Math.max(1, Math.ceil((sub.trialEndsAt!.getTime() - now.getTime()) / DAY_MS));
-    await createNotification({
-      userId: sub.gym.ownerId,
-      type: 'WARNING',
-      title: 'Trial expiring soon',
-      message: `Your ${sub.plan.name} free trial expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Subscribe now to keep full access.`,
-      link: '/subscription',
-    });
+    const sent = await notifyOncePerDay(
+      sub.gym.ownerId,
+      'Trial expiring soon',
+      `Your ${sub.plan.name} free trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Choose a plan to keep full access.`,
+    );
+    if (sent) trialExpiryNotifications += 1;
   }
 
-  // 5. Send notifications for subscriptions entering grace period
-  const gracePeriodActive = await prisma.gymSubscription.findMany({
-    where: { status: 'GRACE_PERIOD', gracePeriodEnd: { gte: now } },
-    include: { plan: { select: { name: true } }, gym: { select: { ownerId: true } } },
+  const inGrace = await prisma.gymSubscription.findMany({
+    where: { status: 'GRACE_PERIOD' },
+    include: { gym: { select: { ownerId: true } } },
   });
 
-  for (const sub of gracePeriodActive) {
-    const daysLeft = Math.max(1, Math.ceil((sub.gracePeriodEnd!.getTime() - now.getTime()) / DAY_MS));
-    await createNotification({
-      userId: sub.gym.ownerId,
-      type: 'WARNING',
-      title: 'Grace period active',
-      message: `Your subscription is in grace period. Renew within ${daysLeft} day${daysLeft === 1 ? '' : 's'} to avoid restricted access.`,
-      link: '/subscription',
-    });
+  let gracePeriodNotifications = 0;
+  for (const sub of inGrace) {
+    const daysLeft = Math.max(1, Math.ceil((getGraceEnd(sub).getTime() - now.getTime()) / DAY_MS));
+    const sent = await notifyOncePerDay(
+      sub.gym.ownerId,
+      'Grace period active',
+      `Your plan has ended. Renew within ${daysLeft} day${daysLeft === 1 ? '' : 's'} or your gym becomes read-only.`,
+    );
+    if (sent) gracePeriodNotifications += 1;
   }
 
   return {
-    expired: expired.count + expiredTrials.count,
-    gracePeriod: gracePeriodSubs.count,
-    trialExpiryNotifications: expiringTrials.length,
-    gracePeriodNotifications: gracePeriodActive.length,
+    expired: expired.reduce((n, r) => n + r.count, 0),
+    gracePeriod: intoGrace.reduce((n, r) => n + r.count, 0),
+    trialExpiryNotifications,
+    gracePeriodNotifications,
   };
 };
 
@@ -240,7 +258,7 @@ export const cancelSubscription = async (subscriptionId: string, reason: string,
     userId: sub.gym.ownerId,
     type: 'WARNING',
     title: 'Subscription cancelled',
-    message: `Your ${sub.plan.name} subscription has been cancelled. Access will continue until ${sub.endDate.toLocaleDateString('en-IN')}.`,
+    message: `Your ${sub.plan.name} subscription has been cancelled. Choose a plan to keep full access to your gym.`,
     link: '/subscription',
   });
 
