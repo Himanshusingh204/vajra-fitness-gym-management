@@ -5,7 +5,8 @@ import { prisma } from '../utils/prisma';
 import { getOrSetJSON } from '../utils/cache';
 import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
 import { FRONTEND_URL } from '../utils/env';
-import { notifyGymOwner } from '../services/notification.service';
+import { createNotification, notifyGymOwner } from '../services/notification.service';
+import { logAudit } from '../utils/audit';
 import { sendActivationEmail } from '../utils/email';
 import { assertGymCapacity } from '../services/entitlements.service';
 import { logger } from '../utils/logger';
@@ -32,8 +33,9 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
     // Redis instead of the DB (same pattern as gym-stats).
     const result = await getOrSetJSON(`staff:${gymId}:${branchId ?? 'all'}`, 15, async () => {
       const [trainers, staff] = await Promise.all([
+        // Applications that are pending or rejected have their own endpoint.
         prisma.trainerDetails.findMany({
-          where,
+          where: { ...where, status: 'ACTIVE' },
           include: { user: { select: { id: true, username: true, email: true, phone: true } }, branch: { select: { id: true, name: true } } }
         }),
         prisma.staffDetails.findMany({
@@ -131,6 +133,131 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
     res.status(201).json({ ...safeUser, activationLink });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add staff' });
+  }
+};
+
+const applicationSelect = {
+  id: true,
+  status: true,
+  specialization: true,
+  experienceYears: true,
+  city: true,
+  bio: true,
+  joiningDate: true,
+  gymId: true,
+  user: { select: { id: true, username: true, email: true, phone: true, createdAt: true } },
+} as const;
+
+// Trainer self-signups waiting for (or turned down by) this gym.
+export const getTrainerApplications = async (req: AuthRequest, res: Response) => {
+  try {
+    const gymId = req.params.gymId as string;
+    const status = req.query.status === 'REJECTED' ? 'REJECTED' : 'PENDING';
+
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { ownerId: true } });
+    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const applications = await prisma.trainerDetails.findMany({
+      where: { gymId, status },
+      select: applicationSelect,
+      orderBy: { joiningDate: 'desc' },
+    });
+    res.json(applications);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch trainer applications' });
+  }
+};
+
+// Looks up a trainer application the caller is allowed to review. Another
+// gym's application reads as not found.
+const findApplication = (req: AuthRequest) =>
+  prisma.trainerDetails.findFirst({
+    where: {
+      id: req.params.id as string,
+      ...(req.user?.role === 'SUPER_ADMIN' ? {} : { gym: { ownerId: req.user?.userId ?? '' } }),
+    },
+    include: { gym: { select: { name: true } }, user: { select: { username: true } } },
+  });
+
+export const approveTrainerApplication = async (req: AuthRequest, res: Response) => {
+  try {
+    const application = await findApplication(req);
+    if (!application) return res.status(404).json({ error: 'Trainer application not found' });
+    if (application.status !== 'PENDING') return res.status(400).json({ error: 'This application has already been reviewed' });
+
+    // The pending trainer is already counted, so this only fails when the
+    // gym is over its trainer limit with them included.
+    try {
+      await assertGymCapacity(application.gymId);
+    } catch (err: any) {
+      if (err?.name === 'EntitlementError') return res.status(402).json({ error: err.message.split(':')[2] });
+      throw err;
+    }
+
+    const updated = await prisma.trainerDetails.update({
+      where: { id: application.id },
+      data: { status: 'ACTIVE', joiningDate: new Date() },
+      select: applicationSelect,
+    });
+
+    await createNotification({
+      userId: application.userId,
+      type: 'SUCCESS',
+      title: 'Application approved',
+      message: `${application.gym.name} approved your trainer application. Welcome to the team.`,
+      link: '/dashboard',
+    });
+
+    await logAudit({
+      action: 'TRAINER_APPROVED',
+      entity: 'TrainerDetails',
+      entityId: application.id,
+      details: JSON.stringify({ gymId: application.gymId, username: application.user.username }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve trainer' });
+  }
+};
+
+// Rejecting keeps the account (the trainer can still sign in and see the
+// outcome); it only blocks access to the gym.
+export const rejectTrainerApplication = async (req: AuthRequest, res: Response) => {
+  try {
+    const { reason } = req.body as { reason?: string | null };
+    const application = await findApplication(req);
+    if (!application) return res.status(404).json({ error: 'Trainer application not found' });
+    if (application.status !== 'PENDING') return res.status(400).json({ error: 'This application has already been reviewed' });
+
+    const updated = await prisma.trainerDetails.update({
+      where: { id: application.id },
+      data: { status: 'REJECTED' },
+      select: applicationSelect,
+    });
+
+    await createNotification({
+      userId: application.userId,
+      type: 'ERROR',
+      title: 'Application not approved',
+      message: `${application.gym.name} did not approve your trainer application.${reason ? ` Reason: ${reason}` : ''}`,
+      link: null,
+    });
+
+    await logAudit({
+      action: 'TRAINER_REJECTED',
+      entity: 'TrainerDetails',
+      entityId: application.id,
+      details: JSON.stringify({ gymId: application.gymId, username: application.user.username, reason: reason || null }),
+      userId: req.user?.userId ?? null,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject trainer' });
   }
 };
 

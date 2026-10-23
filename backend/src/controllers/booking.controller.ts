@@ -15,7 +15,7 @@ export const listTrainers = async (req: AuthRequest, res: Response) => {
     if (!gym || !gym.isApproved) return res.status(404).json({ error: 'Gym not found' });
 
     const trainers = await prisma.trainerDetails.findMany({
-      where: { gymId, gym: { isApproved: true } },
+      where: { gymId, status: 'ACTIVE', gym: { isApproved: true } },
       include: {
         user: { select: { id: true, username: true } },
         gym: { select: { id: true, name: true, city: true } },

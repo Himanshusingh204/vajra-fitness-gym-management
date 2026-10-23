@@ -97,7 +97,7 @@ export const createMembershipHandler = async (req: AuthRequest, res: Response) =
     if (message.includes('NOT_FOUND')) {
       return res.status(404).json({ error: message.replace('_NOT_FOUND', ' not found') });
     }
-    if (message.includes('INVALID')) {
+    if (message.includes('INVALID') || message.includes('MISMATCH')) {
       return res.status(400).json({ error: 'Invalid request data' });
     }
     res.status(500).json({ error: 'Failed to create membership' });

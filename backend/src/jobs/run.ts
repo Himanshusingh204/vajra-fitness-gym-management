@@ -1,9 +1,9 @@
 import { prisma } from '../utils/prisma';
-import { runAllJobs } from './scheduler';
+import { runScheduledJobs } from './scheduler';
 
 // Manual CLI entry: `npm run jobs` — runs every background job once and exits.
 // Useful for deployments on a timer or after a boot crash.
-runAllJobs()
+runScheduledJobs()
   .then((r) => {
     const line = [
       `expired memberships: ${r.expired}`,

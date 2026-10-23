@@ -1,5 +1,6 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { RedisRateLimitStore } from '../utils/redisRateLimitStore';
+import type { SubscriptionRequest } from './subscription.middleware';
 
 // Rate limiters are disabled in tests: supertest shares a single IP and the
 // per-email lockout is covered directly by auth tests.
@@ -58,4 +59,20 @@ export const logoutLimiter = isTest ? bypass : rateLimit({
   legacyHeaders: false,
   store: new RedisRateLimitStore('logout'),
   message: { error: 'Too many requests, please try again later.' },
+});
+
+// Mutations on tenant routes, keyed by the caller's user id (set by
+// requireValidSubscription) so one office IP shared by staff is not one bucket.
+export const tenantWriteLimiter = isTest ? bypass : rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisRateLimitStore('tenantWrite'),
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  keyGenerator: (req) => {
+    const callerId = (req as SubscriptionRequest).callerId;
+    return callerId ? `user:${callerId}` : `ip:${ipKeyGenerator(req.ip ?? '')}`;
+  },
+  message: { error: 'Too many requests, please slow down.' },
 });

@@ -68,7 +68,7 @@ export const createClass = async (req: AuthRequest, res: Response) => {
 
     // Validate trainer/branch belong to this gym (prevents cross-tenant references).
     if (trainerId) {
-      const trainer = await prisma.trainerDetails.findFirst({ where: { id: trainerId, gymId } });
+      const trainer = await prisma.trainerDetails.findFirst({ where: { id: trainerId, gymId, status: 'ACTIVE' } });
       if (!trainer) return res.status(400).json({ error: 'Trainer does not belong to this gym' });
     }
     if (branchId) {
@@ -235,7 +235,7 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
     const { name, description, capacity, duration, dayOfWeek, startTime, endTime, location, trainerId, branchId, isActive } = req.body;
 
     if (trainerId) {
-      const trainer = await prisma.trainerDetails.findFirst({ where: { id: trainerId, gymId: gymClass.gymId } });
+      const trainer = await prisma.trainerDetails.findFirst({ where: { id: trainerId, gymId: gymClass.gymId, status: 'ACTIVE' } });
       if (!trainer) return res.status(400).json({ error: 'Trainer does not belong to this gym' });
     }
     if (branchId) {

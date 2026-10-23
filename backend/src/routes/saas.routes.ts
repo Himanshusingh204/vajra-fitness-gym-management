@@ -11,7 +11,6 @@ import {
   purchaseSubscription,
   checkoutSubscription,
   verifySaaS,
-  startTrialHandler,
   extendSubscriptionHandler,
   cancelSubscriptionHandler,
   upgradeSubscriptionHandler,
@@ -21,7 +20,7 @@ import {
 } from '../controllers/saas.controller';
 import { authenticate, authorize, AuthRequest } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { saasPlanSchema, saasPlanUpdateSchema, subscriptionSchema, subscriptionStatusSchema, subscriptionPurchaseSchema, verifyPaymentSchema, idParams, startTrialSchema, extendSubscriptionSchema, cancelSubscriptionSchema, subscriptionChangePlanSchema, generateInvoiceSchema } from '../utils/validators';
+import { saasPlanSchema, saasPlanUpdateSchema, subscriptionSchema, subscriptionStatusSchema, subscriptionPurchaseSchema, verifyPaymentSchema, idParams, extendSubscriptionSchema, cancelSubscriptionSchema, subscriptionChangePlanSchema, generateInvoiceSchema } from '../utils/validators';
 
 const router = Router();
 
@@ -54,12 +53,10 @@ router.post('/checkout', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), 
 // Gym Admin: verify Razorpay payment
 router.post('/verify', authenticate, authorize(['GYM_ADMIN', 'SUPER_ADMIN']), validate(verifyPaymentSchema), asyncHandler(verifySaaS));
 
-// Gym Admin: start free trial
-router.post('/trial', authenticate, authorize(['GYM_ADMIN']), validate(startTrialSchema), asyncHandler(startTrialHandler));
-
-// Gym Admin: upgrade/downgrade plan
-router.post('/upgrade', authenticate, authorize(['GYM_ADMIN']), validate(subscriptionChangePlanSchema), asyncHandler(upgradeSubscriptionHandler));
-router.post('/downgrade', authenticate, authorize(['GYM_ADMIN']), validate(subscriptionChangePlanSchema), asyncHandler(downgradeSubscriptionHandler));
+// Super Admin: move a gym to another plan without payment. Gym admins change
+// plans through checkout so a new plan is only active once it is paid.
+router.post('/upgrade', authenticate, authorize(['SUPER_ADMIN']), validate(subscriptionChangePlanSchema), asyncHandler(upgradeSubscriptionHandler));
+router.post('/downgrade', authenticate, authorize(['SUPER_ADMIN']), validate(subscriptionChangePlanSchema), asyncHandler(downgradeSubscriptionHandler));
 
 // Gym Admin: view invoices
 router.get('/invoices', authenticate, authorize(['GYM_ADMIN']), asyncHandler(getInvoices));

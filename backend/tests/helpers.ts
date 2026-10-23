@@ -2,6 +2,7 @@ import request from 'supertest';
 import argon2 from 'argon2';
 import app from '../src/app';
 import { prisma } from '../src/utils/prisma';
+import { FEATURE_CODES } from '../src/services/entitlements.service';
 
 const agent = request(app);
 
@@ -62,7 +63,9 @@ export const seedSuperAdmin = async (email?: string) => {
   return user;
 };
 
-export const seedAdmin = async (opts: { approved?: boolean } = {}) => {
+// Every gym needs a plan to write. seedAdmin gives the gym an unlimited ACTIVE
+// plan unless `subscription: false`, so tests about other things keep working.
+export const seedAdmin = async (opts: { approved?: boolean; subscription?: boolean } = {}) => {
   const user = await prisma.user.create({
     data: {
       username: 'Gym Owner',
@@ -82,6 +85,7 @@ export const seedAdmin = async (opts: { approved?: boolean } = {}) => {
       isApproved: opts.approved ?? true,
     },
   });
+  if (opts.subscription !== false) await seedUnlimitedSubscription(gym.id);
   return { user, gym, password: PASSWORD };
 };
 
@@ -126,6 +130,33 @@ export const seedPlan = async (gymId: string, opts: { name?: string; price?: num
     },
   });
 
+const DAY = 24 * 60 * 60 * 1000;
+
+const seedUnlimitedSubscription = async (gymId: string) => {
+  const code = `u${Date.now().toString(36)}${(seq++).toString(36)}`;
+  const plan = await prisma.saaSPlan.create({
+    data: {
+      name: `Unlimited ${code}`,
+      code,
+      monthlyPrice: 0,
+      maxBranches: 50,
+      features: JSON.stringify(Object.values(FEATURE_CODES)),
+    },
+  });
+  // Dated in the past so a later seedSubscription row is always the newer one.
+  return prisma.gymSubscription.create({
+    data: {
+      gymId,
+      planId: plan.id,
+      status: 'ACTIVE',
+      amount: 0,
+      startDate: new Date(Date.now() - 30 * DAY),
+      endDate: new Date(Date.now() + 365 * DAY),
+      createdAt: new Date(Date.now() - 30 * DAY),
+    },
+  });
+};
+
 export const seedSubscription = async (gymId: string, maxMembers: number, maxTrainers: number, maxStaff: number) => {
   const code = `t${Date.now().toString(36)}${(seq++).toString(36)}`;
   const plan = await prisma.saaSPlan.create({
@@ -137,8 +168,8 @@ export const seedSubscription = async (gymId: string, maxMembers: number, maxTra
       planId: plan.id,
       status: 'ACTIVE',
       amount: 5000,
-      startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      startDate: new Date(Date.now() - 7 * DAY),
+      endDate: new Date(Date.now() + 30 * DAY),
     },
   });
 };
