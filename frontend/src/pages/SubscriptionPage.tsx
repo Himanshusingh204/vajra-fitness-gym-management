@@ -1,68 +1,58 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowRight, Check, CreditCard, Banknote, Smartphone, ShieldCheck, Sparkles, Loader2, Building2,
-} from 'lucide-react';
-import { Reveal } from '../components/Reveal';
-import { usePageMeta } from '../hooks/usePageMeta';
+import { Banknote, Check, CreditCard, ShieldCheck, Smartphone } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { getSaaSPlans, getMyGymSubscription, checkoutSubscription, verifySubscriptionPayment, getAllSubscriptions } from '../api/saas.api';
+import { getSaaSPlans, getMyGymSubscription, checkoutSubscription, verifySubscriptionPayment, getAllSubscriptions, type SaaSPlan } from '../api/saas.api';
 import { getPublicGyms } from '../api/gym.api';
 import { getPaymentConfig, loadRazorpayScript } from '../api/payment.api';
 import { formatPrice } from '../utils/format';
+import { Button, Card, EmptyState, Field, PageHeader, Select, Skeleton, cx } from '../components/ui';
+import { SITE_URL, pageSeo, useRouteMeta } from '../hooks/usePageMeta';
 
-const BILLING_CYCLES: { id: 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY'; label: string; priceKey: 'monthlyPrice' | 'quarterlyPrice' | 'halfYearlyPrice' | 'yearlyPrice'; months: number; savingsLabel?: string }[] = [
+type Cycle = 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
+
+const BILLING_CYCLES: { id: Cycle; label: string; priceKey: 'monthlyPrice' | 'quarterlyPrice' | 'halfYearlyPrice' | 'yearlyPrice'; months: number }[] = [
   { id: 'MONTHLY', label: 'Monthly', priceKey: 'monthlyPrice', months: 1 },
   { id: 'QUARTERLY', label: 'Quarterly', priceKey: 'quarterlyPrice', months: 3 },
-  { id: 'HALF_YEARLY', label: 'Half-Yearly', priceKey: 'halfYearlyPrice', months: 6 },
+  { id: 'HALF_YEARLY', label: 'Half-yearly', priceKey: 'halfYearlyPrice', months: 6 },
   { id: 'YEARLY', label: 'Yearly', priceKey: 'yearlyPrice', months: 12 },
 ];
 
 const PAYMENT_METHODS = [
-  {
-    id: 'CASH',
-    label: 'Cash / Bank (COD)',
-    desc: 'Pay at the gym or via bank transfer. Plan activates after payment is confirmed.',
-    icon: Banknote,
-  },
-  {
-    id: 'UPI',
-    label: 'UPI',
-    desc: 'Google Pay, PhonePe, Paytm and more.',
-    icon: Smartphone,
-  },
-  {
-    id: 'CARD',
-    label: 'Credit / Debit Card',
-    desc: 'Visa, Mastercard, RuPay and Amex.',
-    icon: CreditCard,
-  },
+  { id: 'CASH', label: 'Cash or bank transfer', desc: 'Pay the platform directly. The plan starts once payment is confirmed.', icon: Banknote },
+  { id: 'UPI', label: 'UPI', desc: 'Google Pay, PhonePe, Paytm and others.', icon: Smartphone },
+  { id: 'CARD', label: 'Credit or debit card', desc: 'Visa, Mastercard, RuPay and Amex.', icon: CreditCard },
 ];
 
-const SubscriptionPage = () => {
-  usePageMeta(
-    'Subscription Plans',
-    'Choose a Vajra Fitness platform plan for your gym — Starter, Professional or Enterprise. Pay by cash, UPI or card.',
-    '/subscription',
-  );
+const requestError = (err: unknown, fallback: string) =>
+  (err as { response?: { data?: { error?: string } } }).response?.data?.error || fallback;
+
+const planOffers = (plans: SaaSPlan[]) =>
+  plans.map((p) => ({
+    '@type': 'Offer',
+    name: p.name,
+    price: p.monthlyPrice,
+    priceCurrency: p.currency || 'INR',
+    url: `${SITE_URL}/subscription`,
+  }));
+
+export default function SubscriptionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
   const [selectedPlanId, setSelectedPlanId] = useState('');
-  const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY'>('MONTHLY');
+  const [billingCycle, setBillingCycle] = useState<Cycle>('MONTHLY');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [gymId, setGymId] = useState('');
   const [success, setSuccess] = useState('');
   const [inlineError, setInlineError] = useState('');
   const [paying, setPaying] = useState(false);
 
-  const { data: plans = [], isLoading } = useQuery({
-    queryKey: ['saas-plans'],
-    queryFn: getSaaSPlans,
-    staleTime: 60_000,
-  });
+  const { data: plans = [], isLoading } = useQuery({ queryKey: ['saas-plans'], queryFn: getSaaSPlans, staleTime: 60_000 });
+
+  useRouteMeta('/subscription', plans.length ? [{ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Vajra Fitness', applicationCategory: 'BusinessApplication', operatingSystem: 'Web', offers: planOffers(plans) }] : undefined);
 
   const { data: mySub, isLoading: subLoading } = useQuery({
     queryKey: ['my-gym-subscription'],
@@ -70,57 +60,36 @@ const SubscriptionPage = () => {
     enabled: user?.role === 'GYM_ADMIN',
   });
 
-  // Super Admins subscribe on behalf of a specific gym, so they pick one here.
+  // Super admins buy on behalf of a gym, so they pick one here.
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const { data: gyms = [], isLoading: gymsLoading } = useQuery({
-    queryKey: ['public-gyms'],
-    queryFn: getPublicGyms,
-    enabled: isSuperAdmin,
-  });
+  const { data: gyms = [], isLoading: gymsLoading } = useQuery({ queryKey: ['public-gyms'], queryFn: getPublicGyms, enabled: isSuperAdmin });
+  const { data: subscriptions = [] } = useQuery({ queryKey: ['saas-subscriptions'], queryFn: getAllSubscriptions, enabled: isSuperAdmin });
+  const busyGymIds = new Set(subscriptions.filter((s) => s.status === 'ACTIVE' || s.status === 'PENDING').map((s) => s.gymId));
 
-  // Super Admin sees which gyms already hold an active/pending subscription
-  // so they don't pick one that can't accept another.
-  const { data: subscriptions = [] } = useQuery({
-    queryKey: ['saas-subscriptions'],
-    queryFn: getAllSubscriptions,
-    enabled: isSuperAdmin,
-  });
-  const busyGymIds = new Set(
-    subscriptions
-      .filter((s) => s.status === 'ACTIVE' || s.status === 'PENDING')
-      .map((s) => s.gymId),
-  );
-
-  const { data: payConfig } = useQuery({
-    queryKey: ['paymentConfig'],
-    queryFn: getPaymentConfig,
-  });
+  const { data: payConfig } = useQuery({ queryKey: ['paymentConfig'], queryFn: getPaymentConfig });
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
   const alreadySubscribed = !!mySub?.hasSubscription;
   const activeCycle = BILLING_CYCLES.find((c) => c.id === billingCycle)!;
-  const cyclePrice = (plan: (typeof plans)[number]) => plan[activeCycle.priceKey];
+  const cyclePrice = (plan: SaaSPlan) => plan[activeCycle.priceKey];
+
+  const choosePlan = (id: string) => {
+    setSelectedPlanId(id);
+    setInlineError('');
+    setSuccess('');
+  };
 
   const handleCheckout = async () => {
     setInlineError('');
     setSuccess('');
-    if (!selectedPlanId) {
-      setInlineError('Please choose a plan first.');
-      return;
-    }
-    if (!user) {
-      navigate(`/login?redirect=/subscription`);
-      return;
-    }
+    if (!selectedPlanId) return setInlineError('Choose a plan first.');
+    if (!user) return navigate('/login?redirect=/subscription');
     if (user.role !== 'GYM_ADMIN' && user.role !== 'SUPER_ADMIN') {
-      setInlineError('Only gym owners can purchase a platform subscription. Log in with your gym owner account.');
-      return;
+      return setInlineError('Only gym owners can buy a platform plan. Log in with your gym owner account.');
     }
-    if (isSuperAdmin && !gymId) {
-      setInlineError('Please select the gym you are purchasing the plan for.');
-      return;
-    }
+    if (isSuperAdmin && !gymId) return setInlineError('Select the gym you are buying the plan for.');
     if (paying) return;
+
     setPaying(true);
     try {
       const checkout = await checkoutSubscription({
@@ -132,14 +101,13 @@ const SubscriptionPage = () => {
 
       if (checkout.mode === 'manual') {
         const sub = checkout.subscription;
-        const howToPay = paymentMethod === 'CASH'
-          ? 'cash / bank transfer at the gym'
-          : !payConfig?.enabled
-            ? 'cash / bank transfer at the gym (online payments are currently unavailable)'
-            : paymentMethod;
-        setSuccess(
-          `Your ${sub.plan?.name ?? 'subscription'} request is in. Pay ${formatPrice(sub.amount)} via ${howToPay} and the platform will activate your plan shortly.`,
-        );
+        const howToPay =
+          paymentMethod === 'CASH'
+            ? 'cash or bank transfer'
+            : !payConfig?.enabled
+              ? 'cash or bank transfer (online payments are off right now)'
+              : paymentMethod;
+        setSuccess(`Your ${sub.plan?.name ?? 'plan'} request is in. Pay ${formatPrice(sub.amount)} by ${howToPay} and the platform will activate it.`);
         queryClient.invalidateQueries({ queryKey: ['my-gym-subscription'] });
         queryClient.invalidateQueries({ queryKey: ['myNotifications'] });
         return;
@@ -152,9 +120,9 @@ const SubscriptionPage = () => {
         amount: checkout.amount,
         currency: checkout.currency,
         name: 'Vajra Fitness',
-        description: `SaaS subscription · ${formatPrice(checkout.subscription.amount)}`,
+        description: `Platform plan, ${formatPrice(checkout.subscription.amount)}`,
         order_id: checkout.orderId,
-        handler: async (response: any) => {
+        handler: async (response) => {
           try {
             await verifySubscriptionPayment({
               orderId: response.razorpay_order_id,
@@ -163,216 +131,174 @@ const SubscriptionPage = () => {
             });
             queryClient.invalidateQueries({ queryKey: ['my-gym-subscription'] });
             queryClient.invalidateQueries({ queryKey: ['myNotifications'] });
-            setSuccess(
-              `Payment received! Your ${checkout.subscription.plan?.name ?? 'subscription'} is now active.`,
-            );
+            setSuccess(`Payment received. Your ${checkout.subscription.plan?.name ?? 'plan'} is now active.`);
           } catch {
-            setInlineError('Payment was not confirmed. Your request stays pending — retry or pay at the gym.');
+            setInlineError('The payment was not confirmed. Your request stays pending, so you can retry or pay another way.');
           }
         },
       });
       rzp.open();
-    } catch (err: any) {
-      setInlineError(err.response?.data?.error || 'Failed to start checkout. Please try again.');
+    } catch (err) {
+      setInlineError(requestError(err, 'Could not start checkout. Please try again.'));
     } finally {
       setPaying(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
-      {/* HERO */}
-      <section className="relative pt-32 pb-16 md:pt-40 md:pb-20 overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <div className="absolute -top-32 -right-32 w-[34rem] h-[34rem] bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
-          <div className="absolute top-1/2 -left-40 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
-        </div>
-        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <Reveal>
-            <span className="eyebrow bg-[var(--color-primary)]/10! text-[var(--color-primary)]! border-[var(--color-primary)]/20!">
-              <Sparkles className="w-4 h-4" /> Platform Subscription
-            </span>
-          </Reveal>
-          <Reveal delay={100}>
-            <h1 className="display mt-8 text-5xl sm:text-6xl md:text-7xl leading-[0.95]">
-              Choose your <span className="text-gradient animate-gradient-x">Plan</span>
-            </h1>
-          </Reveal>
-          <Reveal delay={220}>
-            <p className="mt-6 text-lg text-[var(--color-muted)] max-w-2xl mx-auto">
-              Pick a plan for your gym, choose how you'd like to pay, and go live once payment is confirmed.
-            </p>
-          </Reveal>
-        </div>
-      </section>
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+      <PageHeader
+        title={pageSeo['/subscription'].h1}
+        description="Plans are billed to the gym, not to its members. Choose a plan, pick how to pay and it starts once payment is confirmed."
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+      <div className="mt-8">
         {subLoading && user?.role === 'GYM_ADMIN' ? (
-          <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" /></div>
+          <Skeleton className="h-48" />
         ) : alreadySubscribed ? (
-          <div className="max-w-3xl mx-auto text-center card p-10">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-green-500/10 text-green-500 flex items-center justify-center mb-5">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-extrabold dark:text-white mb-2">You already have an active subscription</h2>
-            <p className="text-[var(--color-muted)] mb-6">
-              {mySub?.plan?.name} · {mySub?.status} · valid till {mySub?.endDate ? new Date(mySub.endDate).toLocaleDateString('en-IN') : '—'}
+          <Card className="mx-auto max-w-2xl text-center">
+            <ShieldCheck className="mx-auto size-8 text-success-ink" aria-hidden="true" />
+            <h2 className="mt-3 text-xl font-bold text-ink">You already have a plan</h2>
+            <p className="mt-1 text-ink-muted">
+              {mySub?.plan?.name}, {mySub?.status}, valid till {mySub?.endDate ? new Date(mySub.endDate).toLocaleDateString('en-IN') : 'not set'}
             </p>
-            <Link to="/admin/gym" className="btn-primary justify-center">Go to your Dashboard</Link>
-          </div>
+            <Button to="/admin/gym" className="mt-5">Go to your dashboard</Button>
+          </Card>
         ) : (
-          <div className="grid lg:grid-cols-5 gap-10 items-start">
-            {/* Plan cards */}
-            <div className="lg:col-span-3">
-              <div className="inline-flex flex-wrap gap-1 p-1 rounded-xl bg-[var(--color-base-dark)]/60 dark:bg-white/[0.04] mb-6">
+          <div className="grid items-start gap-8 lg:grid-cols-5">
+            <section className="lg:col-span-3" aria-labelledby="plans-heading">
+              <h2 id="plans-heading" className="sr-only">Plans</h2>
+              <div role="group" aria-label="Billing period" className="inline-flex flex-wrap gap-1 rounded-control bg-surface-sunken p-1">
                 {BILLING_CYCLES.map((c) => (
                   <button
                     key={c.id}
+                    type="button"
+                    aria-pressed={billingCycle === c.id}
                     onClick={() => setBillingCycle(c.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${billingCycle === c.id ? 'bg-[var(--color-primary)] text-white shadow' : 'text-[var(--color-muted)] hover:text-[var(--color-charcoal)] dark:hover:text-white'}`}
+                    className={cx(
+                      'min-h-11 cursor-pointer rounded-lg px-4 text-sm font-semibold sm:min-h-9',
+                      billingCycle === c.id ? 'bg-accent text-on-accent' : 'text-ink-muted hover:text-ink',
+                    )}
                   >
                     {c.label}
                   </button>
                 ))}
               </div>
-              <div className="grid md:grid-cols-3 gap-6 stagger">
+
               {isLoading ? (
-                <div className="col-span-3 flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" /></div>
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  {[0, 1, 2].map((i) => <Skeleton key={i} className="h-72" />)}
+                </div>
               ) : plans.length === 0 ? (
-                <div className="col-span-3 card p-12 text-center text-[var(--color-muted)]">No plans published yet.</div>
+                <EmptyState className="mt-6" title="No plans are published yet" description="Check back soon, or contact us and we will help you get started." action={<Button to="/contact">Contact us</Button>} />
               ) : (
-                plans.map((plan, i) => {
-                  const features = plan.features ?? [];
-                  const highlight = plan.code === 'PROFESSIONAL';
-                  return (
-                    <Reveal key={plan.id} delay={i * 100} className="h-full">
-                      <button
-                        onClick={() => { setSelectedPlanId(plan.id); setInlineError(''); setSuccess(''); }}
-                        className={`w-full h-full text-left rounded-2xl p-6 transition-all duration-300 ${selectedPlanId === plan.id ? 'ring-2 ring-[var(--color-primary)] shadow-xl scale-[1.02]' : 'card-hover'} ${highlight ? 'bg-gradient-to-b from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white' : 'bg-[var(--color-surface)] border border-[var(--color-border)]'}`}
-                      >
-                        {highlight && (
-                          <span className="inline-flex items-center gap-1 chip bg-white text-[var(--color-primary)] mb-3"><Sparkles className="w-3.5 h-3.5" /> Most Popular</span>
-                        )}
-                        <h3 className={`text-xl font-extrabold ${highlight ? 'text-white' : 'dark:text-white'}`}>{plan.name}</h3>
-                        <p className={`text-sm mt-1 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>{plan.description}</p>
-                        <div className="flex items-end gap-1 mt-5 mb-1">
-                          <span className={`text-sm font-semibold mb-1.5 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>₹</span>
-                          <span className="text-4xl font-extrabold tracking-tight">{cyclePrice(plan).toLocaleString('en-IN')}</span>
-                          <span className={`text-sm font-semibold mb-1.5 ${highlight ? 'text-white/70' : 'text-[var(--color-muted)]'}`}>/{activeCycle.label.toLowerCase()}</span>
-                        </div>
-                        {activeCycle.months > 1 && (
-                          <p className={`text-xs mb-6 ${highlight ? 'text-white/60' : 'text-[var(--color-muted)]'}`}>
-                            ≈ ₹{Math.round(cyclePrice(plan) / activeCycle.months).toLocaleString('en-IN')}/month billed {activeCycle.label.toLowerCase()}
-                          </p>
-                        )}
-                        {activeCycle.months === 1 && <div className="mb-6" />}
-                        <ul className="space-y-2.5">
-                          {features.map((f) => (
-                            <li key={f} className={`flex items-start gap-2.5 text-sm ${highlight ? 'text-white/85' : 'text-[var(--color-charcoal)] dark:text-gray-300'}`}>
-                              <Check className="w-4 h-4 mt-0.5 shrink-0" /> {f}
-                            </li>
-                          ))}
-                          {plan.maxMembers && (
-                            <li className={`flex items-start gap-2.5 text-sm ${highlight ? 'text-white/85' : 'text-[var(--color-charcoal)] dark:text-gray-300'}`}>
-                              <Check className="w-4 h-4 mt-0.5 shrink-0" /> Up to {plan.maxMembers} members
-                            </li>
+                <ul className="mt-6 grid gap-4 md:grid-cols-3">
+                  {plans.map((plan) => {
+                    const selected = selectedPlanId === plan.id;
+                    return (
+                      <li key={plan.id}>
+                        <button
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => choosePlan(plan.id)}
+                          className={cx(
+                            'h-full w-full cursor-pointer rounded-card border bg-surface p-5 text-left transition-colors',
+                            selected ? 'border-accent-ink ring-2 ring-accent-ink' : 'border-line hover:border-line-strong',
                           )}
-                        </ul>
-                      </button>
-                    </Reveal>
-                  );
-                })
+                        >
+                          <h3 className="text-lg font-bold text-ink">{plan.name}</h3>
+                          {plan.description && <p className="mt-1 text-sm text-ink-muted">{plan.description}</p>}
+                          <p className="mt-4 text-3xl font-extrabold tracking-tight text-ink tabular-nums">
+                            {formatPrice(cyclePrice(plan))}
+                            <span className="text-sm font-medium text-ink-muted"> / {activeCycle.label.toLowerCase()}</span>
+                          </p>
+                          <p className="mt-1 min-h-5 text-xs text-ink-muted">
+                            {activeCycle.months > 1 && `About ${formatPrice(Math.round(cyclePrice(plan) / activeCycle.months))} a month`}
+                          </p>
+                          <ul className="mt-4 space-y-2 text-sm text-ink">
+                            {(plan.features ?? []).map((f) => (
+                              <li key={f} className="flex items-start gap-2">
+                                <Check className="mt-0.5 size-4 shrink-0 text-success-ink" aria-hidden="true" /> {f}
+                              </li>
+                            ))}
+                            {plan.maxMembers && (
+                              <li className="flex items-start gap-2">
+                                <Check className="mt-0.5 size-4 shrink-0 text-success-ink" aria-hidden="true" /> Up to {plan.maxMembers} members
+                              </li>
+                            )}
+                          </ul>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
-              </div>
-            </div>
+            </section>
 
-            {/* Checkout summary */}
-            <div className="lg:col-span-2 lg:sticky lg:top-24">
-              <div className="card p-6 space-y-6">
-                <h2 className="text-xl font-extrabold dark:text-white">Checkout</h2>
+            <Card className="space-y-6 lg:sticky lg:top-24 lg:col-span-2">
+              <h2 className="text-xl font-bold text-ink">Checkout</h2>
 
-                <div className="p-4 rounded-2xl bg-[var(--color-base-dark)]/60 dark:bg-white/[0.04] text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-[var(--color-muted)]">Plan</span>
-                    <span className="font-bold dark:text-white">{selectedPlan?.name ?? '—'}</span>
-                  </div>
-                  <div className="flex justify-between mt-2">
-                    <span className="text-[var(--color-muted)]">Billing</span>
-                    <span className="font-bold dark:text-white">{activeCycle.label}</span>
-                  </div>
-                  <div className="flex justify-between mt-2 pt-3 border-t border-[var(--color-border)]">
-                    <span className="font-semibold text-[var(--color-muted)]">Total</span>
-                    <span className="font-extrabold text-[var(--color-primary)] text-xl">{selectedPlan ? formatPrice(cyclePrice(selectedPlan)) : '—'}</span>
-                  </div>
-                </div>
+              <dl className="space-y-2 rounded-control bg-surface-sunken p-4 text-sm">
+                <div className="flex justify-between"><dt className="text-ink-muted">Plan</dt><dd className="font-semibold text-ink">{selectedPlan?.name ?? 'None chosen'}</dd></div>
+                <div className="flex justify-between"><dt className="text-ink-muted">Billing</dt><dd className="font-semibold text-ink">{activeCycle.label}</dd></div>
+                <div className="flex justify-between border-t border-line pt-2"><dt className="font-semibold text-ink-muted">Total</dt><dd className="text-xl font-extrabold text-ink">{selectedPlan ? formatPrice(cyclePrice(selectedPlan)) : '-'}</dd></div>
+              </dl>
 
-                {isSuperAdmin && (
-                  <div>
-                    <p className="text-sm font-bold text-[var(--color-charcoal)] dark:text-white mb-3">Gym to subscribe</p>
-                    <div className="relative">
-                      <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[var(--color-muted)] pointer-events-none" />
-                      <select
-                        value={gymId}
-                        onChange={(e) => { setGymId(e.target.value); setInlineError(''); }}
-                        disabled={gymsLoading}
-                        className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-base-dark)]/60 dark:bg-white/[0.04] py-3 pl-10 pr-3 text-sm dark:text-white outline-none focus:ring-2 focus:ring-[var(--color-primary)]/40 disabled:opacity-50 appearance-none"
-                      >
-                        <option value="">{gymsLoading ? 'Loading gyms…' : 'Select a gym…'}</option>
-                        {gyms.map((g) => {
-                          const busy = busyGymIds.has(g.id);
-                          return (
-                            <option key={g.id} value={g.id} disabled={busy}>
-                              {g.name} · {g.city}{busy ? ' · already subscribed' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-sm font-bold text-[var(--color-charcoal)] dark:text-white mb-3">Payment Method</p>
-                  <div className="space-y-2.5">
-                    {PAYMENT_METHODS.map((m) => (
-                      <label key={m.id} className={`block cursor-pointer rounded-xl border p-3.5 transition-all ${paymentMethod === m.id ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 ring-1 ring-[var(--color-primary)]/20' : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/40'}`}>
-                        <input type="radio" name="paymentMethod" value={m.id} checked={paymentMethod === m.id} onChange={() => setPaymentMethod(m.id)} className="sr-only" />
-                        <span className="flex items-center gap-3">
-                          <m.icon className="w-5 h-5 text-[var(--color-primary)] shrink-0" />
-                          <span>
-                            <span className="block font-bold text-sm dark:text-white">{m.label}</span>
-                            <span className="block text-xs text-[var(--color-muted)]">{m.desc}</span>
-                          </span>
-                        </span>
-                      </label>
+              {isSuperAdmin && (
+                <Field label="Gym to subscribe">
+                  <Select value={gymId} onChange={(e) => { setGymId(e.target.value); setInlineError(''); }} disabled={gymsLoading}>
+                    <option value="">{gymsLoading ? 'Loading gyms' : 'Select a gym'}</option>
+                    {gyms.map((g) => (
+                      <option key={g.id} value={g.id} disabled={busyGymIds.has(g.id)}>
+                        {g.name}, {g.city}{busyGymIds.has(g.id) ? ' (already subscribed)' : ''}
+                      </option>
                     ))}
-                  </div>
+                  </Select>
+                </Field>
+              )}
+
+              <fieldset>
+                <legend className="mb-2 text-sm font-medium text-ink">Payment method</legend>
+                <div className="space-y-2">
+                  {PAYMENT_METHODS.map((m) => (
+                    <label
+                      key={m.id}
+                      className={cx(
+                        'flex min-h-11 cursor-pointer items-start gap-3 rounded-control border p-3 has-focus-visible:outline-2 has-focus-visible:outline-offset-2',
+                        paymentMethod === m.id ? 'border-accent-ink bg-accent-soft' : 'border-line hover:border-line-strong',
+                      )}
+                    >
+                      <input type="radio" name="paymentMethod" value={m.id} checked={paymentMethod === m.id} onChange={() => setPaymentMethod(m.id)} className="sr-only" />
+                      <m.icon className="mt-0.5 size-5 shrink-0 text-accent-ink" aria-hidden="true" />
+                      <span>
+                        <span className="block text-sm font-semibold text-ink">{m.label}</span>
+                        <span className="block text-sm text-ink-muted">{m.desc}</span>
+                      </span>
+                    </label>
+                  ))}
                 </div>
+              </fieldset>
 
-                {inlineError && <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">{inlineError}</div>}
-                {success && <div className="text-green-600 dark:text-green-400 text-sm bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">{success}</div>}
+              {inlineError && <p role="alert" className="rounded-control bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink">{inlineError}</p>}
+              {success && <p role="status" className="rounded-control bg-success-soft px-3 py-2 text-sm font-medium text-success-ink">{success}</p>}
 
-                <button onClick={handleCheckout} disabled={paying || !selectedPlanId} className="btn-primary w-full justify-center">
-                  {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {user ? 'Proceed to Payment' : 'Log in to Subscribe'} <ArrowRight className="w-4 h-4" />
-                </button>
+              <Button onClick={handleCheckout} loading={paying} disabled={!selectedPlanId} className="w-full">
+                {user ? 'Continue to payment' : 'Log in to subscribe'}
+              </Button>
 
-                <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-                  {!user ? (
-                    <>You'll need a gym owner account to subscribe. <Link to="/register" className="text-[var(--color-primary)] font-semibold">Register your gym</Link> or <Link to="/login" className="text-[var(--color-primary)] font-semibold">log in</Link>.</>
-                  ) : payConfig?.enabled ? (
-                    <>UPI and Card payments are secured by Razorpay. For Cash/Bank, the platform activates your plan once payment is confirmed. <ShieldCheck className="inline w-3.5 h-3.5 text-green-500" /> 100% secure.</>
-                  ) : (
-                    <>Online payments are temporarily unavailable — choose Cash / Bank and pay at the gym, or pay via UPI/Card once online payments are enabled. <ShieldCheck className="inline w-3.5 h-3.5 text-green-500" /></>
-                  )}
-                </p>
-              </div>
-            </div>
+              <p className="text-sm text-ink-muted">
+                {!user ? (
+                  <>You need a gym owner account. <Link to="/register/partner" className="font-semibold text-accent-ink underline underline-offset-2">Register your gym</Link> or <Link to="/login?redirect=/subscription" className="font-semibold text-accent-ink underline underline-offset-2">log in</Link>.</>
+                ) : payConfig?.enabled ? (
+                  'UPI and card payments are processed by Razorpay. For cash or bank transfer, the platform activates your plan once it confirms the payment.'
+                ) : (
+                  'Online payments are off right now. Choose cash or bank transfer and the platform will activate your plan once payment is confirmed.'
+                )}
+              </p>
+            </Card>
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default SubscriptionPage;
+}

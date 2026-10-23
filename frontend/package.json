@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node -e \"require('fs').copyFileSync('dist/index.html', 'dist/404.html')\"",
+    "build": "tsc -b && vite build && node scripts/prerender.mjs",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test --grep-invert @a11y",
+    "audit:seo": "node scripts/audit-seo.mjs",
+    "audit:a11y": "playwright test --grep @a11y",
+    "lighthouse": "node scripts/lighthouse.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
@@ -24,12 +28,15 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "autoprefixer": "^10.5.4",
+    "lighthouse": "^13.5.0",
     "oxlint": "^1.75.0",
     "playwright": "^1.62.1",
     "postcss": "^8.5.25",
