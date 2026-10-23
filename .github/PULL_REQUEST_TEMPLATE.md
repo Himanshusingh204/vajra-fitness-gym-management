@@ -11,10 +11,10 @@ Please delete options that are not relevant.
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] This change requires a documentation update
 
-## Checklist:
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
+## Checklist
+- [ ] Typecheck passes (`cd backend && npx tsc --noEmit`, `cd frontend && npx tsc -b`)
+- [ ] Lint passes (`cd frontend && npm run lint`)
+- [ ] Tests pass and new behaviour has a test (`cd backend && npm test`)
+- [ ] Screenshots attached for any UI change (light and dark, mobile width)
+- [ ] Database changes ship as a Prisma migration, and the migration is mentioned in this description
+- [ ] No secrets, tokens, `.env` files or real personal data in the diff

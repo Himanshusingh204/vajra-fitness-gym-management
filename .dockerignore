@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+**/*.tsbuildinfo
+.git
+.github
+.claude
+.env*
+!.env.example
+mobile
+docs
+backend/backups
