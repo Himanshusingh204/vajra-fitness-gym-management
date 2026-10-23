@@ -44,17 +44,29 @@ export const getPublicSiteContent = async (_req: Request, res: Response) => {
 // Only safe aggregate counts are returned — no PII, no per-gym or per-user data.
 export const getPublicStats = async (_req: Request, res: Response) => {
   try {
-    const [gyms, members, trainers, cityGroups] = await Promise.all([
-      prisma.gym.count({ where: { isApproved: true } }),
-      prisma.memberDetails.count({ where: { status: 'ACTIVE', gym: { isApproved: true } } }),
+    const [gyms, members, trainers, allGymCities] = await Promise.all([
+      prisma.gym.count({ where: { isApproved: true } }).catch(() => 0),
+      prisma.memberDetails.count({ where: { status: 'ACTIVE', gym: { isApproved: true } } }).catch(() => 0),
       prisma.user.count({
         where: { role: 'TRAINER', isActive: true, trainerDetails: { status: 'ACTIVE', gym: { isApproved: true } } },
-      }),
-      prisma.gym.groupBy({ by: ['city'], where: { isApproved: true, city: { not: '' } } }),
+      }).catch(() => 0),
+      prisma.gym.findMany({
+        where: { isApproved: true },
+        select: { city: true },
+      }).catch(() => []),
     ]);
-    res.json({ gyms, members, trainers, cities: cityGroups.length });
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch stats' });
+
+    const uniqueCities = new Set(allGymCities.map((g) => g.city?.trim()).filter(Boolean));
+
+    res.json({
+      gyms: gyms || 0,
+      members: members || 0,
+      trainers: trainers || 0,
+      cities: uniqueCities.size || 0,
+    });
+  } catch (err) {
+    console.error('Failed to fetch public stats:', err);
+    res.json({ gyms: 0, members: 0, trainers: 0, cities: 0 });
   }
 };
 
