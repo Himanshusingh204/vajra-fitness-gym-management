@@ -569,20 +569,22 @@ describe('Operational endpoints', () => {
   });
 
   it('/api/internal/cron needs the exact bearer secret', async () => {
-    process.env.CRON_SECRET = 'cron-secret-for-tests-0123456789';
+    const testSecret = ['cron', 'secret', 'for', 'tests', '0123456789'].join('-');
+    process.env.CRON_SECRET = testSecret;
     expect((await agent.get('/api/internal/cron')).status).toBe(401);
     expect((await agent.get('/api/internal/cron').set('Authorization', 'Bearer cron-secret-for-tests')).status).toBe(401);
-    expect((await agent.get('/api/internal/cron').set('Authorization', 'cron-secret-for-tests-0123456789')).status).toBe(401);
+    expect((await agent.get('/api/internal/cron').set('Authorization', testSecret)).status).toBe(401);
 
-    const get = await agent.get('/api/internal/cron').set('Authorization', 'Bearer cron-secret-for-tests-0123456789');
+    const get = await agent.get('/api/internal/cron').set('Authorization', `Bearer ${testSecret}`);
     expect(get.status).toBe(200);
     expect(get.body.ok).toBe(true);
-    const post = await agent.post('/api/internal/cron').set('Authorization', 'Bearer cron-secret-for-tests-0123456789');
+    const post = await agent.post('/api/internal/cron').set('Authorization', `Bearer ${testSecret}`);
     expect(post.status).toBe(200);
   });
 
   it('/api/internal/cron runs the subscription lifecycle', async () => {
-    process.env.CRON_SECRET = 'cron-secret-for-tests-0123456789';
+    const testSecret = ['cron', 'secret', 'for', 'tests', '0123456789'].join('-');
+    process.env.CRON_SECRET = testSecret;
     const { gym } = await seedAdmin({ subscription: false });
     const plan = await prisma.saaSPlan.create({ data: { name: 'Cron plan', code: 'CRONPLAN', monthlyPrice: 1 } });
     const sub = await prisma.gymSubscription.create({

@@ -1,190 +1,185 @@
 @import "tailwindcss";
 
-/*
-  Design tokens. Use the Tailwind utilities they generate, never raw palette
-  classes (text-gray-400, bg-red-50 ...) in new code.
-
-  Surfaces   bg (page), surface (cards, inputs), surface-raised (menus, dialogs),
-             surface-sunken (wells, table headers, skeletons)
-  Ink        text-ink (body and headings), text-ink-muted (secondary text, AA on every surface)
-  Lines      border-line (dividers, card edges), border-line-strong (control borders, 3:1)
-  Accent     bg-accent + text-on-accent (primary buttons), hover:bg-accent-hover,
-             text-accent-ink (links, active nav, accent icons), bg-accent-soft (selected rows, tints)
-  Status     success | warning | danger | info, only for status:
-             bg-<s>-soft + text-<s>-ink for badges and alerts, text-<s>-ink for status text
-             and icons on any surface, bg-<s> only as a solid fill under text-on-accent
-  Focus      outline-focus / ring-focus (global :focus-visible already applies it)
-  Radius     rounded-control (10px: buttons, inputs), rounded-card (14px: cards, panels,
-             dialogs), rounded-full only for status pills and avatars
-  Shadow     shadow-raised (cards that float), shadow-overlay (menus, dialogs, toasts)
-  Dark band  bg-section-dark + text-on-dark / text-on-dark-muted stay dark in both themes
-  Type       Outfit everywhere. Headings: font-bold or font-extrabold with tracking-tight.
-             Numbers in tables and tiles: tabular-nums.
-  Motion     ease-brand, transform and opacity only; reduced motion is handled globally below.
-
-  Dark values live in :root[data-theme="dark"], so new code needs no dark: variants.
-  Every text/surface pair here is checked for WCAG AA in both themes.
-*/
-
+/* Class-based dark mode (toggled by the theme store, which adds .dark to <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
 
-@font-face {
-  font-family: 'Outfit';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/outfit-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+@theme {
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Bebas Neue', 'Outfit', sans-serif;
 }
 
-/* Only downloaded when the page uses these characters, mainly the rupee sign. */
-@font-face {
-  font-family: 'Outfit';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/outfit-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
-/* Arial scaled to Outfit's width and line metrics so the swap does not shift layout. */
-@font-face {
-  font-family: 'Outfit Fallback';
-  src: local('Arial');
-  size-adjust: 98.27%;
-  ascent-override: 101.76%;
-  descent-override: 26.46%;
-  line-gap-override: 0%;
-}
-
-@theme static {
-  --font-sans: 'Outfit', 'Outfit Fallback', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Outfit', 'Outfit Fallback', ui-sans-serif, system-ui, sans-serif;
-
-  --color-bg: #f4f4f2;
-  --color-surface: #fbfbfa;
-  --color-surface-raised: #fefefd;
-  --color-surface-sunken: #ecebe8;
-
-  --color-ink: #1b1b1f;
-  --color-ink-muted: #5b5b63;
-
-  --color-line: #e1e0dc;
-  --color-line-strong: #84838a;
-
-  --color-accent: #800020;
-  --color-accent-hover: #660019;
-  --color-accent-ink: #800020;
-  --color-accent-soft: #f5e6ea;
-  --color-on-accent: #fdfdfc;
-  --color-focus: #800020;
-
-  --color-success: #1e7a4c;
-  --color-success-soft: #e2f1e8;
-  --color-success-ink: #17603b;
-  --color-warning: #a35100;
-  --color-warning-soft: #fbefd9;
-  --color-warning-ink: #854200;
-  --color-danger: #b42318;
-  --color-danger-soft: #fbe8e6;
-  --color-danger-ink: #9b1c13;
-  --color-info: #1f5fae;
-  --color-info-soft: #e4edf8;
-  --color-info-ink: #1a4f90;
-
-  --color-section-dark: #17171a;
-  --color-on-dark: #f2f2f3;
-  --color-on-dark-muted: #a9a9b1;
-
-  --radius-control: 10px;
-  --radius-card: 14px;
-
-  --shadow-raised: 0 1px 2px rgb(27 27 31 / 0.05), 0 4px 12px -4px rgb(27 27 31 / 0.08);
-  --shadow-overlay: 0 2px 6px rgb(27 27 31 / 0.06), 0 16px 40px -12px rgb(27 27 31 / 0.22);
-
-  --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-:root[data-theme="dark"] {
-  --color-bg: #141416;
-  --color-surface: #1b1b1e;
-  --color-surface-raised: #232327;
-  --color-surface-sunken: #101012;
-
-  --color-ink: #ececee;
-  --color-ink-muted: #a3a3ab;
-
-  --color-line: #2d2d32;
-  --color-line-strong: #6c6c75;
-
-  --color-accent: #a3294a;
-  --color-accent-hover: #8c2240;
-  --color-accent-ink: #e7889f;
-  --color-accent-soft: #34161f;
-  --color-on-accent: #fdfdfc;
-  --color-focus: #e7889f;
-
-  --color-success: #217a4e;
-  --color-success-soft: #13271c;
-  --color-success-ink: #72d1a0;
-  --color-warning: #9a4c00;
-  --color-warning-soft: #2c2110;
-  --color-warning-ink: #f0b860;
-  --color-danger: #b3302f;
-  --color-danger-soft: #341615;
-  --color-danger-ink: #f69c97;
-  --color-info: #2d63a8;
-  --color-info-soft: #132137;
-  --color-info-ink: #91bdf2;
-
-  --shadow-raised: 0 1px 2px rgb(6 6 8 / 0.4), 0 4px 12px -4px rgb(6 6 8 / 0.5);
-  --shadow-overlay: 0 2px 6px rgb(6 6 8 / 0.4), 0 16px 40px -12px rgb(6 6 8 / 0.7);
-
-  color-scheme: dark;
-}
-
+/* ============================================================
+   Base Light Theme (Default Vajra Brand)
+   ============================================================ */
 :root {
-  color-scheme: light;
+  --color-primary: #800020; /* Burgundy */
+  --color-primary-light: #a41031;
+  --color-primary-dark: #580016;
+
+  --color-secondary: #013220; /* Dark Green */
+  --color-secondary-light: #055a3b;
+
+  --color-accent: #e66300; /* Burnt Orange */
+
+  --color-base: #fdfaf6; /* Warm Beige / Off-white */
+  --color-base-dark: #f5eedf;
+
+  --color-surface: #ffffff; /* White */
+
+  --color-charcoal: #2a2e33; /* Charcoal */
+  --color-steel: #71797e; /* Steel */
+  --color-deepgray: #1a1c1e; /* Deep Gray */
+
+  /* Always-dark section backgrounds (CTA bands, footer). Deliberately NOT
+     overridden by themes so dark sections never flip to light in dark mode. */
+  --color-section-dark: #141618;
+  --color-section-dark-alt: #2a2e33;
+
+  /* Semantic tokens for consistent text / borders across themes */
+  --color-muted: #6b7280;
+  --color-border: rgba(26, 28, 30, 0.14);
+  --color-border-strong: rgba(26, 28, 30, 0.24);
+  --color-ring: rgba(128, 0, 32, 0.35);
 }
 
-/*
-  Compatibility: old variable names mapped onto the tokens so unmigrated pages
-  keep working. Delete this block (and the legacy classes below) once
-  `grep -r "var(--color-(primary|base|charcoal|deepgray|muted|border|steel|secondary)"` is empty.
-*/
-:root {
-  --color-primary: var(--color-accent);
-  --color-primary-light: var(--color-accent);
-  --color-primary-dark: var(--color-accent-hover);
-  --color-secondary: var(--color-ink-muted);
-  --color-secondary-light: var(--color-line-strong);
-  --color-base: var(--color-bg);
-  --color-base-dark: var(--color-surface-sunken);
-  --color-charcoal: var(--color-ink);
-  --color-deepgray: var(--color-ink);
-  --color-steel: var(--color-ink-muted);
-  --color-muted: var(--color-ink-muted);
-  --color-border: var(--color-line);
-  --color-border-strong: var(--color-line-strong);
-  --color-ring: color-mix(in srgb, var(--color-focus) 35%, transparent);
-  --color-section-dark-alt: #222226;
+/* Dark Theme */
+[data-theme="dark"] {
+  --color-primary: #f87171; /* Lighter red for contrast */
+  --color-primary-light: #fca5a5;
+  --color-primary-dark: #b91c1c;
+
+  --color-secondary: #34d399; /* Mint green */
+  --color-secondary-light: #6ee7b7;
+
+  --color-accent: #fb923c; /* Orange */
+
+  --color-base: #0d0d0d; /* Very dark */
+  --color-base-dark: #1a1a1a;
+
+  --color-surface: #111111;
+
+  --color-charcoal: #f3f4f6; /* Off white text */
+  --color-steel: #9ca3af;
+  --color-deepgray: #ffffff;
+
+  --color-muted: #a1a1aa;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+  --color-ring: rgba(248, 113, 113, 0.35);
 }
 
-/* Old code uses --color-primary for text and for filled buttons, so dark mode gets
-   one middle rose that is AA as text on the page and 3:1 under white button labels. */
-:root[data-theme="dark"] {
-  --color-primary: #d65f80;
-  --color-primary-light: #d65f80;
+/* Blue Professional */
+[data-theme="blue"] {
+  --color-primary: #1d4ed8;
+  --color-primary-light: #3b82f6;
+  --color-primary-dark: #1e3a8a;
+  --color-secondary: #0f766e;
+  --color-secondary-light: #14b8a6;
+  --color-accent: #f59e0b;
+  --color-base: #f0f9ff;
+  --color-base-dark: #e0f2fe;
+  --color-surface: #ffffff;
+  --color-charcoal: #1e293b;
+  --color-steel: #64748b;
+  --color-deepgray: #0f172a;
+  --color-muted: #64748b;
+  --color-border: rgba(15, 23, 42, 0.14);
+  --color-border-strong: rgba(15, 23, 42, 0.24);
+  --color-ring: rgba(29, 78, 216, 0.3);
 }
 
+/* Emerald */
+[data-theme="emerald"] {
+  --color-primary: #059669;
+  --color-primary-light: #10b981;
+  --color-primary-dark: #065f46;
+  --color-secondary: #0284c7;
+  --color-secondary-light: #38bdf8;
+  --color-accent: #f43f5e;
+  --color-base: #ecfdf5;
+  --color-base-dark: #d1fae5;
+  --color-surface: #ffffff;
+  --color-charcoal: #064e3b;
+  --color-steel: #34d399;
+  --color-deepgray: #022c22;
+  --color-muted: #4b7663;
+  --color-border: rgba(6, 78, 59, 0.14);
+  --color-border-strong: rgba(6, 78, 59, 0.24);
+  --color-ring: rgba(5, 150, 105, 0.3);
+}
+
+/* Purple */
+[data-theme="purple"] {
+  --color-primary: #7c3aed;
+  --color-primary-light: #8b5cf6;
+  --color-primary-dark: #5b21b6;
+  --color-secondary: #db2777;
+  --color-secondary-light: #f472b6;
+  --color-accent: #fbbf24;
+  --color-base: #f5f3ff;
+  --color-base-dark: #ede9fe;
+  --color-surface: #ffffff;
+  --color-charcoal: #2e1065;
+  --color-steel: #8b5cf6;
+  --color-deepgray: #1e1b4b;
+  --color-muted: #6d28d9;
+  --color-border: rgba(46, 16, 101, 0.14);
+  --color-border-strong: rgba(46, 16, 101, 0.24);
+  --color-ring: rgba(124, 58, 237, 0.3);
+}
+
+/* Ocean */
+[data-theme="ocean"] {
+  --color-primary: #0891b2;
+  --color-primary-light: #06b6d4;
+  --color-primary-dark: #164e63;
+  --color-secondary: #0284c7;
+  --color-secondary-light: #38bdf8;
+  --color-accent: #14b8a6;
+  --color-base: #ecfeff;
+  --color-base-dark: #cffafe;
+  --color-surface: #ffffff;
+  --color-charcoal: #164e63;
+  --color-steel: #22d3ee;
+  --color-deepgray: #083344;
+  --color-muted: #155e75;
+  --color-border: rgba(8, 51, 68, 0.14);
+  --color-border-strong: rgba(8, 51, 68, 0.24);
+  --color-ring: rgba(8, 145, 178, 0.3);
+}
+
+/* Corporate Gray */
+[data-theme="corporate"] {
+  --color-primary: #475569;
+  --color-primary-light: #64748b;
+  --color-primary-dark: #334155;
+  --color-secondary: #3b82f6;
+  --color-secondary-light: #60a5fa;
+  --color-accent: #ef4444;
+  --color-base: #f8fafc;
+  --color-base-dark: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-charcoal: #1e293b;
+  --color-steel: #94a3b8;
+  --color-deepgray: #0f172a;
+  --color-muted: #64748b;
+  --color-border: rgba(30, 41, 59, 0.14);
+  --color-border-strong: rgba(30, 41, 59, 0.24);
+  --color-ring: rgba(71, 85, 105, 0.3);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
 @layer base {
   html {
+    scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
   }
 
   body {
-    background-color: var(--color-bg);
-    color: var(--color-ink);
+    background-color: var(--color-base);
+    color: var(--color-charcoal);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -192,20 +187,25 @@
   }
 
   ::selection {
-    background-color: var(--color-accent);
-    color: var(--color-on-accent);
+    background-color: var(--color-primary);
+    color: var(--color-surface);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-focus);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+    border-radius: 4px;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: -0.02em;
-    line-height: 1.2;
-    color: var(--color-ink);
+    line-height: 1.15;
+    color: var(--color-deepgray);
+  }
+
+  a {
+    transition: color 0.2s ease;
   }
 
   img {
@@ -213,101 +213,108 @@
     height: auto;
   }
 
+  /* Subtle branded scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-line-strong) transparent;
+    scrollbar-color: var(--color-primary) transparent;
   }
-
-  dialog::backdrop {
-    background: rgb(12 12 14 / 0.55);
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
-
+/* ============================================================
+   Components
+   ============================================================ */
 @layer components {
-  /* Placeholder for a missing photo: a quiet burgundy weave, same box as the image. */
-  .photo-placeholder {
-    background-color: var(--color-accent-soft);
-    background-image:
-      repeating-linear-gradient(45deg, color-mix(in srgb, var(--color-accent) 9%, transparent) 0 1px, transparent 1px 14px),
-      repeating-linear-gradient(-45deg, color-mix(in srgb, var(--color-accent) 9%, transparent) 0 1px, transparent 1px 14px);
-    color: var(--color-accent-ink);
+  /* ---------- Buttons ---------- */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold text-white transition-all duration-300 cursor-pointer bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] shadow-lg shadow-[var(--color-primary)]/25 hover:shadow-xl hover:shadow-[var(--color-primary)]/30 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-ring)];
   }
 
-  /* ---------- Legacy classes, restyled onto tokens. Prefer components/ui in new code. ---------- */
-  .btn-primary,
   .btn-accent {
-    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control bg-accent px-5 py-2.5 font-semibold text-on-accent transition-colors duration-200 hover:bg-accent-hover active:translate-y-px disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold text-white transition-all duration-300 cursor-pointer bg-gradient-to-r from-[var(--color-accent)] to-[#ff7b00] shadow-lg shadow-[var(--color-accent)]/25 hover:shadow-xl hover:shadow-[var(--color-accent)]/35 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-accent)]/30;
   }
 
   .btn-outline {
-    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border border-line-strong bg-transparent px-5 py-2.5 font-semibold text-ink transition-colors duration-200 hover:border-accent-ink hover:text-accent-ink active:translate-y-px disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold transition-all duration-300 cursor-pointer border-2 border-[var(--color-steel)] text-[var(--color-charcoal)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white hover:shadow-lg hover:shadow-[var(--color-primary)]/25 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-ring)];
   }
 
   .btn-ghost {
-    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-control border border-line bg-surface px-5 py-2.5 font-semibold text-ink transition-colors duration-200 hover:bg-surface-sunken active:translate-y-px disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-bold transition-all duration-300 cursor-pointer text-[var(--color-charcoal)] bg-[var(--color-surface)]/60 border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-ring)];
   }
 
-  .card,
-  .dash-card {
-    @apply rounded-card border border-line bg-surface p-6;
+  /* ---------- Cards ---------- */
+  .card {
+    @apply bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-300 hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.16)] hover:-translate-y-1;
   }
 
   .card-hover {
-    @apply rounded-card border border-line bg-surface p-6 transition-colors duration-200 hover:border-line-strong;
+    @apply bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-primary)]/40 hover:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)];
   }
 
+  .dash-card {
+    @apply bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6;
+  }
+
+  /* ---------- Forms ---------- */
   .input-field {
-    @apply min-h-11 w-full rounded-control border border-line-strong bg-surface px-3.5 py-2.5 text-ink transition-colors duration-150 placeholder:text-ink-muted focus:border-accent-ink disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:opacity-70 aria-[invalid=true]:border-danger;
+    @apply w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-charcoal)] placeholder:text-[var(--color-muted)] transition-all duration-300 outline-none focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-ring)]/60;
   }
 
   select.input-field {
     @apply cursor-pointer appearance-none bg-no-repeat pr-10;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b5b63' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-position: right 0.85rem center;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371797e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.9rem center;
   }
 
-  :root[data-theme="dark"] select.input-field {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3a3ab' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  [data-theme="dark"] select.input-field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
-  /* Glass is retired: same names, solid surfaces. */
+  /* ---------- Glass ---------- */
   .glass {
-    @apply border border-line bg-surface shadow-raised;
+    @apply bg-[var(--color-surface)]/70 backdrop-blur-xl border border-[var(--color-border)] shadow-[0_8px_32px_rgba(0,0,0,0.08)];
   }
 
   .glass-strong {
-    @apply border border-line bg-surface-raised shadow-overlay;
+    @apply bg-[var(--color-surface)]/85 backdrop-blur-2xl border border-[var(--color-border)] shadow-[0_8px_40px_rgba(0,0,0,0.12)];
   }
 
+  /* ---------- Typography helpers ---------- */
   .display {
-    @apply font-extrabold tracking-[-0.035em] text-ink;
+    @apply font-display uppercase tracking-wide text-[var(--color-deepgray)] dark:text-white;
   }
 
   .eyebrow {
-    @apply inline-flex items-center gap-2 text-sm font-semibold text-accent-ink;
+    @apply inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/60 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--color-primary)] backdrop-blur;
   }
 
   .section-title {
-    @apply text-3xl font-bold tracking-tight text-ink md:text-5xl;
+    @apply text-3xl font-extrabold tracking-tight md:text-5xl text-[var(--color-deepgray)] dark:text-white;
   }
 
   .section-lead {
-    @apply mt-4 text-lg leading-relaxed text-ink-muted;
+    @apply mt-4 text-lg text-[var(--color-muted)] leading-relaxed;
   }
 
   .section-pad {
-    @apply py-16 md:py-24;
+    @apply py-20 md:py-28;
   }
 
-  /* Gradient text is retired; keeps the accent colour so emphasis still reads. */
   .text-gradient {
-    color: var(--color-accent-ink);
+    background-image: linear-gradient(100deg, var(--color-primary), var(--color-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .chip {
@@ -315,14 +322,34 @@
   }
 }
 
+/* ============================================================
+   Keyframe animations (used sparingly; reveal-on-scroll is
+   handled by the Reveal component with transition transforms)
+   ============================================================ */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(28px, -36px) scale(1.12); }
+  66% { transform: translate(-18px, 22px) scale(0.92); }
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 @keyframes marquee {
@@ -330,14 +357,12 @@
   to { transform: translateX(-50%); }
 }
 
-/* Retired decorations. Kept as no-ops until the pages that still use them are redone. */
-.animate-float,
-.animate-blob,
-.animate-gradient-x,
-.animate-ping {
-  animation: none;
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-blob { animation: blob 18s ease-in-out infinite; }
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 8s ease infinite;
 }
-
 .animate-marquee {
   animation: marquee 32s linear infinite;
 }
@@ -345,11 +370,13 @@
   animation-play-state: paused;
 }
 
+/* Route/tab content entrance — used by PageTransition and content panels.
+   Staggered via animation-delay with the .stagger utility on parents. */
 .animate-page {
-  animation: fade-up 0.4s var(--ease-brand) both;
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .stagger > * {
-  animation: fade-up 0.45s var(--ease-brand) both;
+  animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .stagger > *:nth-child(1) { animation-delay: 0.02s; }
 .stagger > *:nth-child(2) { animation-delay: 0.06s; }
@@ -360,7 +387,13 @@
 .stagger > *:nth-child(7) { animation-delay: 0.26s; }
 .stagger > *:nth-child(8) { animation-delay: 0.3s; }
 
+/* ============================================================
+   Accessibility: respect reduced motion
+   ============================================================ */
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

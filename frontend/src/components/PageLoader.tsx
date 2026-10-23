@@ -1,8 +1,8 @@
 export function PageLoader() {
   return (
-    <div role="status" className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-      <div className="size-8 animate-spin rounded-full border-[3px] border-line border-t-accent-ink" aria-hidden="true" />
-      <span className="text-sm font-medium text-ink-muted">Loading</span>
+    <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 bg-[var(--color-base)] dark:bg-[var(--color-base)]">
+      <div className="w-10 h-10 rounded-full border-4 border-[var(--color-primary)]/20 border-t-[var(--color-primary)] animate-spin" role="status" aria-label="Loading" />
+      <span className="text-sm font-semibold text-[var(--color-muted)]">Loading…</span>
     </div>
   );
 }

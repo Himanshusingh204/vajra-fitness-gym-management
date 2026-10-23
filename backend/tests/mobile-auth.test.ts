@@ -38,23 +38,26 @@ describe('Mobile token flow', () => {
 
   it('does the same for member, trainer and vendor signup', async () => {
     const { gym } = await seedAdmin();
-    const signups = [
-      agent.post('/api/auth/register/member').set('X-Client', 'mobile').send({
-        username: 'Mobile Member', email: uniq('member'), password: PASSWORD, gymId: gym.id,
-      }),
-      agent.post('/api/auth/register/trainer').set('X-Client', 'mobile').send({
-        username: 'Mobile Coach', email: uniq('trainer'), password: PASSWORD, phone: '9876512345', gymId: gym.id,
-      }),
-      agent.post('/api/auth/register/vendor').set('X-Client', 'mobile').send({
-        username: 'Mobile Owner', email: uniq('vendor'), password: PASSWORD, gymName: 'Pocket Gym', address: '3 Lane', city: 'Pune', state: 'MH',
-      }),
-    ];
-    for (const pending of signups) {
-      const res = await pending;
-      expect(res.status).toBe(201);
-      expect(res.body.refreshToken).toBeTruthy();
-      expect(hasRefreshCookie(res)).toBe(false);
-    }
+    const memberRes = await agent.post('/api/auth/register/member').set('X-Client', 'mobile').send({
+      username: 'Mobile Member', email: uniq('member'), password: PASSWORD, gymId: gym.id,
+    });
+    expect(memberRes.status).toBe(201);
+    expect(memberRes.body.refreshToken).toBeTruthy();
+    expect(hasRefreshCookie(memberRes)).toBe(false);
+
+    const trainerRes = await agent.post('/api/auth/register/trainer').set('X-Client', 'mobile').send({
+      username: 'Mobile Coach', email: uniq('trainer'), password: PASSWORD, phone: '9876512345', gymId: gym.id,
+    });
+    expect(trainerRes.status).toBe(201);
+    expect(trainerRes.body.refreshToken).toBeTruthy();
+    expect(hasRefreshCookie(trainerRes)).toBe(false);
+
+    const vendorRes = await agent.post('/api/auth/register/vendor').set('X-Client', 'mobile').send({
+      username: 'Mobile Owner', email: uniq('vendor'), password: PASSWORD, gymName: 'Pocket Gym', address: '3 Lane', city: 'Pune', state: 'MH',
+    });
+    expect(vendorRes.status).toBe(201);
+    expect(vendorRes.body.refreshToken).toBeTruthy();
+    expect(hasRefreshCookie(vendorRes)).toBe(false);
   });
 
   it('rotates the token sent in the body', async () => {
