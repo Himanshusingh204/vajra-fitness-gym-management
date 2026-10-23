@@ -1,22 +1,67 @@
-import { LegalPage, LegalSection } from '../components/LegalPage';
+import React from 'react';
+import { Reveal } from '../components/Reveal';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const SECTIONS = [
-  ['1. Membership rules', "By joining a gym through Vajra Fitness you agree to follow that gym's rules, respect staff and other members and use equipment with care. Memberships cannot be transferred to another person."],
-  ['2. Payments and fees', "Membership fees are set by your gym and are paid in advance. Overdue fees can lead to a temporary suspension of your membership. Platform plan prices can change with 30 days' written notice to the gym owner."],
-  ['3. Cancellation', 'You can cancel at any time by contacting your gym. Partial months and unused time are not refunded. The refund and cancellation policy has the details.'],
-  ['4. Health and liability', 'Exercise carries risk. Vajra Fitness is not liable for injury, loss or damage to belongings at a gym. Speak to a doctor before starting a new training programme. The calculators on this site give estimates and are not medical advice.'],
-  ['5. Gym owners and the platform', 'Gym owners agree to keep member records accurate, to follow applicable data protection law including the Digital Personal Data Protection Act, 2023, and not to use the platform to harm members or third parties.'],
-  ['6. Intellectual property', 'The software, design and content of Vajra Fitness belong to Vajra Fitness and may not be copied, resold or redistributed without written permission.'],
+  {
+    title: '1. Membership Rules',
+    body: 'By signing up for a Vajra Fitness membership, you agree to abide by all gym rules, respect staff and fellow members, and use equipment responsibly. Memberships are non-transferable.',
+  },
+  {
+    title: '2. Payment & Fees',
+    body: 'All fees must be paid in advance. Overdue fees may result in temporary suspension of your membership. We reserve the right to change pricing tiers with 30 days written notice.',
+  },
+  {
+    title: '3. Cancellation Policy',
+    body: 'Members can cancel their subscription at any time. However, there are no refunds for partial months or unused time. To cancel, please contact your local branch administrator.',
+  },
+  {
+    title: '4. Liability Waiver',
+    body: 'Exercise carries inherent risks. Vajra Fitness is not liable for any personal injuries, loss, or damage to personal property while on the premises. Members are advised to consult a physician before beginning any new exercise program.',
+  },
+  {
+    title: '5. Platform Usage',
+    body: 'Gym owners using the Vajra Fitness SaaS platform agree to maintain accurate member records, comply with applicable data protection laws (including the DPDP Act, 2023), and not misuse the platform to harm members or third parties.',
+  },
+  {
+    title: '6. Intellectual Property',
+    body: 'All software, design, and content on the Vajra Fitness platform are the intellectual property of Vajra Fitness and may not be copied, resold, or redistributed without prior written consent.',
+  },
 ];
 
-export default function TermsPage() {
-  return (
-    <LegalPage path="/terms" updated="23 October 2026">
-      {SECTIONS.map(([title, body]) => (
-        <LegalSection key={title} title={title}>
-          <p>{body}</p>
-        </LegalSection>
-      ))}
-    </LegalPage>
+const TermsPage = () => {
+  usePageMeta(
+    'Terms & Conditions',
+    'The terms and conditions governing your use of the Vajra Fitness platform, accounts, and services.',
+    '/terms',
   );
-}
+  return (
+    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
+      <div className="relative pt-32 pb-20 overflow-hidden">
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-[var(--color-primary)]/10 rounded-full blur-3xl animate-blob" />
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6">
+          <Reveal className="text-center mb-14">
+            <span className="eyebrow">Legal</span>
+            <h1 className="display mt-5 text-5xl md:text-6xl leading-[0.95]">
+              Terms & <span className="text-gradient">Conditions</span>
+            </h1>
+            <p className="section-lead">Last updated: 1 August 2026 · Applies to all Vajra Fitness members and platform users</p>
+          </Reveal>
+
+          <div className="space-y-6">
+            {SECTIONS.map((section, i) => (
+              <Reveal key={section.title} delay={i * 60}>
+                <div className="card-hover">
+                  <h2 className="text-xl font-extrabold text-[var(--color-primary)] mb-3">{section.title}</h2>
+                  <p className="text-[var(--color-charcoal)] leading-relaxed">{section.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TermsPage;

@@ -1,0 +1,15 @@
+[extend]
+# Use default gitleaks config and extend with custom allowlists
+
+[allowlist]
+description = "Exempt test files and CI mock configurations from secret scanning"
+paths = [
+  '''backend/tests/.*''',
+  '''\.gitleaksignore''',
+]
+regexes = [
+  '''cron-secret-for-tests.*''',
+  '''test-secret-that-is-at-least-32-characters-long.*''',
+  '''test_jwt_secret_for_ci_pipeline.*''',
+  '''e2e_jwt_secret_for_ci_pipeline.*''',
+]

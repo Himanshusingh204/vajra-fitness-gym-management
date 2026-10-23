@@ -1,0 +1,3 @@
+# Gitleaks fingerprint exemptions for mock test secrets in test suites
+9b8093d4dcafdcc5774f2c2610915d5916fe3101:backend/tests/security.test.ts:generic-api-key:572
+9b8093d4dcafdcc5774f2c2610915d5916fe3101:backend/tests/security.test.ts:generic-api-key:585

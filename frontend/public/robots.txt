@@ -1,13 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /api/
-Disallow: /admin/
-Disallow: /dashboard
-Disallow: /profile
-Disallow: /login
-Disallow: /register
-Disallow: /forgot-password
-Disallow: /reset-password
-Disallow: /activate
 
-Sitemap: https://vajra-fitness-gym-management.vercel.app/sitemap.xml
+Sitemap: https://vajrafitness.in/sitemap.xml

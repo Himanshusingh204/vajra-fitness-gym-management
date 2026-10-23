@@ -49,12 +49,12 @@ const emptyForm: ClassFormState = {
 
 const bookingStatusBadge = (status: string) => {
   const map: Record<string, string> = {
-    BOOKED: 'bg-success-soft text-success-ink',
-    WAITLISTED: 'bg-warning-soft text-warning-ink',
-    CANCELLED: 'bg-surface-sunken text-ink-muted',
+    BOOKED: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+    WAITLISTED: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    CANCELLED: 'bg-[var(--color-border)] text-[var(--color-muted)]',
   };
   return (
-    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${map[status] || 'bg-surface-sunken text-ink-muted'}`}>
+    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${map[status] || 'bg-[var(--color-border)] text-[var(--color-muted)]'}`}>
       {status.charAt(0) + status.slice(1).toLowerCase()}
     </span>
   );
@@ -182,44 +182,44 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
     <div className="space-y-6">
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-surface rounded-card p-5 border border-line">
-          <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1">Active classes</p>
-          <p className="text-2xl font-extrabold tabular-nums text-ink">{totalClasses}</p>
+        <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Active Classes</p>
+          <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{totalClasses}</p>
         </div>
-        <div className="bg-surface rounded-card p-5 border border-line">
-          <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1">Total capacity</p>
-          <p className="text-2xl font-extrabold tabular-nums text-ink">{totalCapacity}</p>
+        <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Capacity</p>
+          <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{totalCapacity}</p>
         </div>
-        <div className="bg-surface rounded-card p-5 border border-line">
-          <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1">Total bookings</p>
-          <p className="text-2xl font-extrabold tabular-nums text-accent-ink">{totalBookings}</p>
+        <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Bookings</p>
+          <p className="text-2xl font-extrabold tabular-nums text-[var(--color-primary)]">{totalBookings}</p>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Create / Edit form */}
-        <div className="bg-surface rounded-card border border-line p-6">
-          <h3 className="font-bold text-lg mb-4">{editingClass ? 'Edit Class' : 'Create Class'}</h3>
+        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+          <h3 className="font-bold text-lg dark:text-white mb-4">{editingClass ? 'Edit Class' : 'Create Class'}</h3>
           <form className="grid sm:grid-cols-2 gap-4" onSubmit={handleSubmit}>
             <div className="sm:col-span-2">
-              <label htmlFor="classestab-f1" className="block text-sm font-semibold text-ink mb-1.5">Name</label>
-              <input id="classestab-f1" className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Morning Yoga" required maxLength={100} />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Name</label>
+              <input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Morning Yoga" required maxLength={100} />
             </div>
             <div className="sm:col-span-2">
-              <label htmlFor="classestab-f2" className="block text-sm font-semibold text-ink mb-1.5">Description</label>
-              <input id="classestab-f2" className="input-field" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" maxLength={500} />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Description</label>
+              <input className="input-field" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description" maxLength={500} />
             </div>
             <div>
-              <label htmlFor="classestab-f3" className="block text-sm font-semibold text-ink mb-1.5">Capacity</label>
-              <input id="classestab-f3" className="input-field" type="number" min={1} max={500} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} required />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Capacity</label>
+              <input className="input-field" type="number" min={1} max={500} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} required />
             </div>
             <div>
-              <label htmlFor="classestab-f4" className="block text-sm font-semibold text-ink mb-1.5">Duration (min)</label>
-              <input id="classestab-f4" className="input-field" type="number" min={1} max={480} value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} required />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Duration (min)</label>
+              <input className="input-field" type="number" min={1} max={480} value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} required />
             </div>
             <div>
-              <label htmlFor="classestab-f5" className="block text-sm font-semibold text-ink mb-1.5">Day of week</label>
-              <select id="classestab-f5" className="input-field" value={form.dayOfWeek} onChange={(e) => setForm({ ...form, dayOfWeek: e.target.value })}>
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Day of Week</label>
+              <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={form.dayOfWeek} onChange={(e) => setForm({ ...form, dayOfWeek: e.target.value })}>
                 <option value="">Not scheduled</option>
                 {DAYS.map((d) => (
                   <option key={d} value={d}>{DAY_LABELS_FULL[d]}</option>
@@ -227,21 +227,21 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
               </select>
             </div>
             <div>
-              <label htmlFor="classestab-f6" className="block text-sm font-semibold text-ink mb-1.5">Location</label>
-              <input id="classestab-f6" className="input-field" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Studio 2" maxLength={200} />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Location</label>
+              <input className="input-field" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Studio 2" maxLength={200} />
             </div>
             <div>
-              <label htmlFor="classestab-f7" className="block text-sm font-semibold text-ink mb-1.5">Start time</label>
-              <input id="classestab-f7" className="input-field" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} placeholder="HH:MM" pattern="\d{2}:\d{2}" />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Start Time</label>
+              <input className="input-field" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} placeholder="HH:MM" pattern="\d{2}:\d{2}" />
             </div>
             <div>
-              <label htmlFor="classestab-f8" className="block text-sm font-semibold text-ink mb-1.5">End time</label>
-              <input id="classestab-f8" className="input-field" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} placeholder="HH:MM" pattern="\d{2}:\d{2}" />
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">End Time</label>
+              <input className="input-field" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} placeholder="HH:MM" pattern="\d{2}:\d{2}" />
             </div>
             <div className="sm:col-span-2">
-              <label htmlFor="classes-trainer" className="block text-sm font-semibold text-ink mb-1.5">Trainer</label>
+              <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Trainer</label>
               {trainers.length > 0 ? (
-                <select id="classes-trainer" className="input-field" value={form.trainerId} onChange={(e) => setForm({ ...form, trainerId: e.target.value })}>
+                <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={form.trainerId} onChange={(e) => setForm({ ...form, trainerId: e.target.value })}>
                   <option value="">Unassigned</option>
                   {trainers.map((t) => (
                     <option key={t.id} value={t.id}>{t.user.username}</option>
@@ -253,12 +253,12 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
             </div>
 
             {formError && (
-              <div className="sm:col-span-2 bg-danger-soft text-danger-ink p-3 rounded-control text-sm border border-danger">
+              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
                 {formError}
               </div>
             )}
             {(createMut.isError || updateMut.isError) && (
-              <div className="sm:col-span-2 bg-danger-soft text-danger-ink p-3 rounded-control text-sm border border-danger">
+              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
                 {(createMut.error as any)?.response?.data?.error || (updateMut.error as any)?.response?.data?.error || 'Failed to save class'}
               </div>
             )}
@@ -285,18 +285,18 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
         </div>
 
         {/* Classes list */}
-        <div className="bg-surface rounded-card border border-line overflow-hidden">
-          <div className="px-6 py-4 border-b border-line flex flex-wrap justify-between items-center gap-3">
-            <h2 className="font-bold text-lg">Classes ({totalClasses})</h2>
-            <div className="flex rounded-control border border-line overflow-hidden flex-wrap">
+        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
+            <h2 className="font-bold text-lg dark:text-white">Classes ({totalClasses})</h2>
+            <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden flex-wrap">
               {['ALL', ...DAYS].map((d) => (
                 <button
                   key={d}
                   onClick={() => setDayFilter(d)}
                   className={`px-3 py-1.5 text-xs font-bold transition-colors ${
                     dayFilter === d
-                      ? 'bg-accent text-on-accent'
-                      : 'text-ink-muted hover:bg-surface-sunken'
+                      ? 'bg-[var(--color-primary)] text-white'
+                      : 'text-[var(--color-muted)] hover:bg-gray-50 dark:hover:bg-white/5'
                   }`}
                 >
                   {d === 'ALL' ? 'All' : DAY_LABELS[d]}
@@ -308,33 +308,33 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
           {classesLoading ? (
             <div className="p-6 space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-surface-sunken rounded-control animate-pulse" />
+                <div key={i} className="h-16 bg-[var(--color-muted)]/10 rounded-xl animate-pulse" />
               ))}
             </div>
           ) : classes.length === 0 ? (
-            <div className="p-8 text-center text-ink-muted">
+            <div className="p-8 text-center text-[var(--color-muted)]">
               {dayFilter === 'ALL' ? 'No classes yet. Create one to get started.' : 'No classes scheduled for this day.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-surface-sunken">
+                <thead className="bg-gray-50 dark:bg-white/5">
                   <tr>
                     {['Class', 'Schedule', 'Capacity', 'Location', 'Trainer', 'Actions'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-bold text-ink-muted uppercase tracking-wider">{h}</th>
+                      <th key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                   {classes.map((cls) => {
                     const booked = cls._count?.bookings ?? 0;
                     const isFull = booked >= cls.capacity;
                     const isExpanded = expandedId === cls.id;
                     return (
                       <Fragment key={cls.id}>
-                        <tr className="hover:bg-surface-sunken">
-                          <td className="px-6 py-4 font-semibold">{cls.name}</td>
-                          <td className="px-6 py-4 text-ink-muted">
+                        <tr className="hover:bg-gray-50 dark:hover:bg-white/5">
+                          <td className="px-6 py-4 font-semibold dark:text-white">{cls.name}</td>
+                          <td className="px-6 py-4 text-[var(--color-muted)]">
                             {cls.dayOfWeek || cls.startTime ? (
                               <div className="flex flex-col gap-0.5">
                                 {cls.dayOfWeek && (
@@ -344,28 +344,28 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                                 )}
                                 {(cls.startTime || cls.endTime) && (
                                   <span className="inline-flex items-center gap-1.5">
-                                    <Clock className="w-3.5 h-3.5" /> {cls.startTime || '-'}{cls.endTime ? ` to ${cls.endTime}` : ''}
+                                    <Clock className="w-3.5 h-3.5" /> {cls.startTime || '—'}{cls.endTime ? ` – ${cls.endTime}` : ''}
                                   </span>
                                 )}
                               </div>
-                            ) : '-'}
+                            ) : '—'}
                           </td>
-                          <td className={`px-6 py-4 font-semibold ${isFull ? 'text-danger-ink' : 'text-ink'}`}>
+                          <td className={`px-6 py-4 font-semibold ${isFull ? 'text-red-500' : 'text-[var(--color-deepgray)] dark:text-white'}`}>
                             {booked} / {cls.capacity}
                           </td>
-                          <td className="px-6 py-4 text-ink-muted">
+                          <td className="px-6 py-4 text-[var(--color-muted)]">
                             {cls.location ? (
                               <span className="inline-flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {cls.location}</span>
-                            ) : '-'}
+                            ) : '—'}
                           </td>
-                          <td className="px-6 py-4 text-ink-muted">{cls.trainer?.user.username || '-'}</td>
+                          <td className="px-6 py-4 text-[var(--color-muted)]">{cls.trainer?.user.username || '—'}</td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <button
                                 onClick={() => setExpandedId(isExpanded ? null : cls.id)}
                                 aria-label={`${isExpanded ? 'Hide' : 'View'} bookings for ${cls.name}`}
                                 title="View bookings"
-                                className="inline-flex items-center gap-1 text-accent-ink hover:opacity-80"
+                                className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:opacity-80"
                               >
                                 <Users className="w-4 h-4" />
                                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -374,7 +374,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                                 onClick={() => startEdit(cls)}
                                 aria-label={`Edit ${cls.name}`}
                                 title="Edit class"
-                                className="text-ink-muted hover:text-accent-ink"
+                                className="text-[var(--color-muted)] hover:text-[var(--color-primary)]"
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
@@ -382,7 +382,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                                 onClick={() => setDeleteTarget(cls)}
                                 aria-label={`Delete ${cls.name}`}
                                 title="Delete class"
-                                className="text-ink-muted hover:text-danger-ink"
+                                className="text-[var(--color-muted)] hover:text-red-600"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -390,37 +390,37 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                           </td>
                         </tr>
                         {isExpanded && (
-                          <tr className="bg-surface-sunken">
+                          <tr className="bg-gray-50 dark:bg-white/5">
                             <td colSpan={6} className="px-6 py-4">
                               <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-ink-muted">Bookings for {cls.name}</h4>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">Bookings for {cls.name}</h4>
                                 <button
                                   onClick={() => setExpandedId(null)}
                                   aria-label="Close bookings"
-                                  className="text-ink-muted hover:text-ink"
+                                  className="text-[var(--color-muted)] hover:text-[var(--color-deepgray)] dark:hover:text-white"
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
                               </div>
                               {bookingsLoading ? (
-                                <div className="text-sm text-ink-muted">Loading…</div>
+                                <div className="text-sm text-[var(--color-muted)]">Loading…</div>
                               ) : bookings.length === 0 ? (
-                                <div className="text-sm text-ink-muted">No bookings yet.</div>
+                                <div className="text-sm text-[var(--color-muted)]">No bookings yet.</div>
                               ) : (
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-sm">
                                     <thead>
                                       <tr>
                                         {['Member', 'Email', 'Status'].map((h) => (
-                                          <th key={h} className="text-left px-3 py-2 text-xs font-bold text-ink-muted uppercase tracking-wider">{h}</th>
+                                          <th key={h} className="text-left px-3 py-2 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                                         ))}
                                       </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-line">
+                                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                                       {bookings.map((b) => (
                                         <tr key={b.id}>
-                                          <td className="px-3 py-2 font-semibold">{b.member.user.username}</td>
-                                          <td className="px-3 py-2 text-ink-muted">{b.member.user.email}</td>
+                                          <td className="px-3 py-2 font-semibold dark:text-white">{b.member.user.username}</td>
+                                          <td className="px-3 py-2 text-[var(--color-muted)]">{b.member.user.email}</td>
                                           <td className="px-3 py-2">{bookingStatusBadge(b.status)}</td>
                                         </tr>
                                       ))}

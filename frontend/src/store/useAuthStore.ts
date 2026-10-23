@@ -5,10 +5,7 @@ export interface User {
   username: string;
   email: string;
   role: 'SUPER_ADMIN' | 'GYM_ADMIN' | 'MEMBER' | 'TRAINER' | 'STAFF';
-  trainerStatus?: 'ACTIVE' | 'PENDING' | 'REJECTED';
 }
-
-export type Role = User['role'];
 
 interface AuthState {
   user: User | null;

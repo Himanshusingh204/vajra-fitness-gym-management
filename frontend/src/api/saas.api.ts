@@ -125,6 +125,11 @@ export const verifySubscriptionPayment = async (params: { orderId: string; payme
   return response.data;
 };
 
+export const startTrial = async (data: { planId: string; trialDays?: number }) => {
+  const response = await api.post<GymSubscription>('/saas/trial', data);
+  return response.data;
+};
+
 export const upgradePlan = async (data: { planId: string }) => {
   const response = await api.post<GymSubscription>('/saas/upgrade', data);
   return response.data;
