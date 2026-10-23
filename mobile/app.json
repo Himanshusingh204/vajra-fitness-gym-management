@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Vajra Fitness",
+    "slug": "vajra-fitness",
+    "scheme": "vajrafitness",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#f7f6f3",
+    "ios": {
+      "bundleIdentifier": "in.vajrafitness.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "in.vajrafitness.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#17181a",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#f7f6f3",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#17181a"
+          }
+        }
+      ]
+    ]
+  }
+}
