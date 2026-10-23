@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+coverage
+.git
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+playwright-report
+test-results
+lighthouse-reports
+Dockerfile
+.dockerignore

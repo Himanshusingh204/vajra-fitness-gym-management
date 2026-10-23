@@ -2,14 +2,22 @@ name: Vajra Fitness CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, staging, develop]
   pull_request:
-    branches: [main]
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   quality:
     name: Type Check, Lint, Build & Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       # Backend tests run against a dedicated test database. Credentials match
@@ -65,6 +73,10 @@ jobs:
         working-directory: backend
         run: npx tsc --noEmit
 
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
       - name: Run backend tests
         working-directory: backend
         run: npm test
@@ -78,6 +90,6 @@ jobs:
         run: npm run build
 
 # Deployment itself is handled by Vercel's native GitHub integration (see
-# vercel.json + DEPLOYMENT.md) — it deploys automatically on every push to
-# main once the repo is imported on vercel.com. This workflow is just the
-# quality gate (types, lint, tests, build) that must pass first.
+# vercel.json + DEPLOYMENT.md). Vercel deploys main to production and builds a
+# preview for every other branch, including staging. This workflow is just the
+# quality gate (types, lint, tests, build).
