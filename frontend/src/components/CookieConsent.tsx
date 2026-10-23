@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Cookie } from 'lucide-react';
+import { Button } from './ui/Button';
 
 const CONSENT_KEY = 'vf-cookie-consent';
 
@@ -30,36 +30,23 @@ const CookieConsent = () => {
   };
 
   return (
-    <div
-      role="dialog"
-      aria-live="polite"
+    <section
       aria-label="Cookie notice"
-      className="fixed bottom-4 inset-x-4 sm:left-auto sm:right-4 sm:max-w-md z-[100] glass-strong rounded-2xl p-5 shadow-2xl"
+      className="fixed inset-x-4 bottom-4 z-50 rounded-card border border-line bg-surface-raised p-5 shadow-overlay sm:left-auto sm:max-w-md"
     >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center shrink-0">
-          <Cookie className="w-5 h-5" />
-        </div>
-        <div className="text-sm">
-          <p className="font-bold text-[var(--color-deepgray)] dark:text-white mb-1">Cookies on Vajra Fitness</p>
-          <p className="text-[var(--color-muted)] leading-relaxed mb-3">
-            We use essential cookies to keep you signed in and remember your preferences.
-            We do not set advertising or tracking cookies. See our{' '}
-            <Link to="/cookies" className="text-[var(--color-primary)] font-semibold hover:underline">
-              Cookie Policy
-            </Link>
-            .
-          </p>
-          <button
-            type="button"
-            onClick={accept}
-            className="btn-primary text-sm px-4 py-2 rounded-xl"
-          >
-            Got it
-          </button>
-        </div>
-      </div>
-    </div>
+      <p className="mb-1 text-sm font-semibold text-ink">Cookies on Vajra Fitness</p>
+      <p className="mb-3 text-sm leading-relaxed text-ink-muted">
+        We use essential cookies to keep you signed in and remember your preferences. We do not set advertising or
+        tracking cookies. See our{' '}
+        <Link to="/cookies" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+          cookie policy
+        </Link>
+        .
+      </p>
+      <Button size="sm" onClick={accept}>
+        Got it
+      </Button>
+    </section>
   );
 };
 

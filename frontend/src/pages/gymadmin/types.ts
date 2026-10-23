@@ -1,0 +1,6 @@
+export type Plan = { id: string; name: string; description: string | null; duration: number; price: number; isActive: boolean };
+export type Member = { id: string; status: string; joiningDate: string; user: { id: string; username: string; email: string; phone: string | null }; membershipPlan: Plan | null; branch?: { id: string; name: string } | null };
+export type WorkoutSlip = { id: string; title: string | null; exercises: string; assignedDate: string; validUntil: string | null; member: { id: string; user: { username: string; email: string } }; trainer: { id: string; user: { username: string } } | null };
+export type StaffEntry = { id: string; role: string; specialization: string | null; joiningDate: string; user: { id: string; username: string; email: string; phone: string | null }; branch?: { id: string; name: string } | null };
+export type AttendanceRecord = { id: string; checkIn: string; status: string; member: { user: { username: string } } | null; staff: { user: { username: string } } | null };
+export type GymStats = { totalMembers: number; activeMembers: number; pendingMembers: number; trainers: number; staff: number; totalRevenue: number; revenueThisMonth: number; pendingFees: number; attendanceToday: number; plans: number; notices: number };

@@ -1,0 +1,121 @@
+{
+  "/": {
+    "name": "Home",
+    "title": "Gym management software for Indian gyms",
+    "description": "Vajra Fitness helps gym owners run memberships, fee collection, attendance, trainers and workout plans from one place, and helps members find a gym to join.",
+    "h1": "Run your gym without the paperwork",
+    "summary": "Memberships, fees, attendance, trainers and workout plans for Indian gyms, with a public directory members can browse."
+  },
+  "/about": {
+    "name": "About",
+    "title": "About Vajra Fitness",
+    "description": "Vajra Fitness is gym management software built for Indian fitness businesses. Learn what the platform does, who it is for and how it handles your data.",
+    "h1": "About Vajra Fitness",
+    "summary": "Vajra Fitness is software for gyms. Owners run daily operations on it and members use it to find a gym, track their plan and book sessions."
+  },
+  "/gyms": {
+    "name": "Gyms",
+    "title": "Find a gym",
+    "description": "Browse gyms listed on Vajra Fitness. Compare cities, facilities and membership plans, then register with the one that suits you.",
+    "h1": "Find a gym",
+    "summary": "Search approved gyms by city or facility and compare their membership plans."
+  },
+  "/membership": {
+    "name": "Membership",
+    "title": "How gym membership works",
+    "description": "Pick a gym, choose a plan, send your request and start training once the gym approves it. This is how membership works on Vajra Fitness.",
+    "h1": "How membership works",
+    "summary": "Browse gyms, choose a plan and register. The gym approves your request and you start training."
+  },
+  "/subscription": {
+    "name": "Pricing",
+    "title": "Pricing for gym owners",
+    "description": "Platform plans for gym owners, billed monthly, quarterly, half-yearly or yearly. Pay by cash, UPI or card.",
+    "h1": "Pricing for gym owners",
+    "summary": "Plans are billed to the gym, not to its members. Compare limits and features, then pay by cash, UPI or card."
+  },
+  "/tools": {
+    "name": "Tools",
+    "title": "Free fitness calculators",
+    "description": "Free BMI, daily calorie, one-rep max and protein calculators. No sign-up needed and nothing is stored.",
+    "h1": "Free fitness calculators",
+    "summary": "BMI, calorie, one-rep max and protein calculators that run in your browser."
+  },
+  "/tools/bmi-calculator": {
+    "name": "BMI calculator",
+    "title": "BMI calculator",
+    "description": "Work out your body mass index from height and weight in metric or imperial units, with the WHO category and the Asian cut-offs.",
+    "h1": "BMI calculator",
+    "summary": "Enter height and weight to get your body mass index and category."
+  },
+  "/tools/calorie-calculator": {
+    "name": "Calorie calculator",
+    "title": "Daily calorie calculator",
+    "description": "Estimate how many calories you burn each day and how many to eat to lose, hold or gain weight, using the Mifflin-St Jeor equation.",
+    "h1": "Daily calorie calculator",
+    "summary": "Estimate maintenance calories and a daily target for your goal."
+  },
+  "/tools/one-rep-max-calculator": {
+    "name": "One-rep max calculator",
+    "title": "One-rep max calculator",
+    "description": "Estimate your one-rep max from the weight and reps of a lighter set, with a table of working weights by percentage.",
+    "h1": "One-rep max calculator",
+    "summary": "Estimate your one-rep max from a lighter set and see working weights by percentage."
+  },
+  "/tools/protein-calculator": {
+    "name": "Protein calculator",
+    "title": "Daily protein calculator",
+    "description": "Find a daily protein range in grams based on your body weight, activity level and goal.",
+    "h1": "Daily protein calculator",
+    "summary": "A daily protein range in grams from your weight, activity and goal."
+  },
+  "/contact": {
+    "name": "Contact",
+    "title": "Contact Vajra Fitness",
+    "description": "Send the Vajra Fitness team a message about your gym, a partnership or a problem with your account. We reply by email.",
+    "h1": "Contact us",
+    "summary": "Use the form to reach the team about a gym listing, a partnership or an account problem."
+  },
+  "/help": {
+    "name": "Help",
+    "title": "Help centre",
+    "description": "Answers to common questions about memberships, payments, bookings and accounts on Vajra Fitness, and how to reach us when you need more.",
+    "h1": "Help centre",
+    "summary": "Common answers about memberships, payments and accounts, with a link to contact the team."
+  },
+  "/faq": {
+    "name": "FAQ",
+    "title": "Frequently asked questions",
+    "description": "Short answers about what Vajra Fitness is, who it is for, what it costs and how your data is handled.",
+    "h1": "Frequently asked questions",
+    "summary": "Short answers about the platform, pricing, accounts and data."
+  },
+  "/terms": {
+    "name": "Terms",
+    "title": "Terms and conditions",
+    "description": "The terms that apply to members, trainers and gym owners using Vajra Fitness.",
+    "h1": "Terms and conditions",
+    "summary": "The terms that apply when you use Vajra Fitness as a member, trainer or gym owner."
+  },
+  "/privacy": {
+    "name": "Privacy",
+    "title": "Privacy policy",
+    "description": "What personal data Vajra Fitness collects, why it is collected, how long it is kept and how to ask for it to be removed.",
+    "h1": "Privacy policy",
+    "summary": "What we collect, why, how long we keep it and how to ask for deletion."
+  },
+  "/refund": {
+    "name": "Refunds",
+    "title": "Refund and cancellation policy",
+    "description": "How refunds and cancellations work for platform subscriptions and gym memberships on Vajra Fitness.",
+    "h1": "Refund and cancellation policy",
+    "summary": "How refunds and cancellations work for platform subscriptions and for gym memberships."
+  },
+  "/cookies": {
+    "name": "Cookies",
+    "title": "Cookie policy",
+    "description": "Which cookies and browser storage Vajra Fitness uses, and why. We do not use advertising or cross-site tracking cookies.",
+    "h1": "Cookie policy",
+    "summary": "Which cookies and browser storage we use. None are for advertising."
+  }
+}

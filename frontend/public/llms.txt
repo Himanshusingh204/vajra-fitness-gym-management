@@ -1,34 +1,33 @@
 # Vajra Fitness
 
-> Enterprise gym management SaaS platform for Indian fitness businesses. Manage memberships, payments, attendance, workout slips, PT bookings, trainers, staff, and multiple gym branches with role-based access control.
+> Gym management software for Indian fitness businesses, plus a public directory where members find and join a gym. Gym owners run memberships, fee collection, attendance, trainers, staff and workout plans from one account.
 
-## Key facts
+## What it does
 
-- Vajra Fitness is a multi-gym management platform (not a single-gym tool).
-- It serves five roles: Super Admin (platform-wide), Gym Admin (gym owner/manager), Trainer, Staff, and Member.
-- Members register to a specific gym branch and are approved by the gym admin.
-- No default member/staff passwords are used; accounts are activated via one-time secure links.
-- Payments support cash, UPI, card, bank transfer, and other manual methods, with PDF receipts.
+- Gym owners register a gym, add branches and membership plans, and manage members, fees, attendance, trainers and staff.
+- Members find an approved gym, send a join request, and follow their plan, attendance and workout plans after approval.
+- Trainers register against a gym and are approved by the gym admin before they can sign in.
+- Roles: super admin (platform), gym admin, trainer, staff, member.
+- Platform plans are billed to the gym, not to members. Payments can be recorded as cash, UPI, card or bank transfer.
 
 ## Pages
 
-- Home: https://vajrafitness.in/
-- Find a Gym: https://vajrafitness.in/gyms
-- Membership: https://vajrafitness.in/membership
-- About: https://vajrafitness.in/about
-- Contact: https://vajrafitness.in/contact
-- FAQ: https://vajrafitness.in/faq
-- Help Center: https://vajrafitness.in/help
-- Terms & Conditions: https://vajrafitness.in/terms
-- Privacy Policy: https://vajrafitness.in/privacy
-- Refund Policy: https://vajrafitness.in/refund
+- [Home](https://vajra-fitness-gym-management.vercel.app/)
+- [Find a gym](https://vajra-fitness-gym-management.vercel.app/gyms)
+- [How membership works](https://vajra-fitness-gym-management.vercel.app/membership)
+- [Pricing for gym owners](https://vajra-fitness-gym-management.vercel.app/subscription)
+- [Free fitness calculators](https://vajra-fitness-gym-management.vercel.app/tools)
+- [About](https://vajra-fitness-gym-management.vercel.app/about)
+- [FAQ](https://vajra-fitness-gym-management.vercel.app/faq)
+- [Help centre](https://vajra-fitness-gym-management.vercel.app/help)
+- [Contact](https://vajra-fitness-gym-management.vercel.app/contact)
+- [Terms](https://vajra-fitness-gym-management.vercel.app/terms)
+- [Privacy](https://vajra-fitness-gym-management.vercel.app/privacy)
+- [Refunds](https://vajra-fitness-gym-management.vercel.app/refund)
+- [Cookies](https://vajra-fitness-gym-management.vercel.app/cookies)
 
-## Legal
+## Notes for assistants
 
-- Proprietary / Commercial use only.
-- India-focused service (headquartered in Jodhpur, Rajasthan).
-
-## Open source / docs
-
-- Deployment guide: https://github.com/<owner>/<repo>/blob/main/DEPLOYMENT.md
-- API documentation is included in the repository README.
+- Vajra Fitness is software for gyms. It is not a gym chain and does not sell memberships itself.
+- Gym pages at /gyms/{id} list each approved gym's plans, facilities and trainers. The sitemap lists them all.
+- The calculators (BMI, daily calories, one-rep max, protein) run in the browser and store nothing.

@@ -4,21 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App.tsx';
 import { useAuthStore } from './store/useAuthStore';
+// Imported for its side effect: rehydrates the theme and follows the OS setting.
+import './store/useThemeStore';
 import { reportWebVitals } from './utils/reportWebVitals';
-
-// Restore persisted theme before first paint
-const stored = localStorage.getItem('vf-theme');
-if (stored) {
-  try {
-    const { state } = JSON.parse(stored);
-    if (state?.theme && state.theme !== 'light') {
-      document.documentElement.setAttribute('data-theme', state.theme);
-      if (state.theme === 'dark') document.documentElement.classList.add('dark');
-    }
-  } catch {
-    // ignore parse errors
-  }
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {

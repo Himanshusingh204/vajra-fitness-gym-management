@@ -11,16 +11,16 @@ const CATEGORIES = [
 ] as const;
 
 const CATEGORY_STYLES: Record<string, string> = {
-  RENT: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-  ELECTRICITY: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-  INTERNET: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400',
-  SALARIES: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400',
-  MAINTENANCE: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
-  EQUIPMENT: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
-  MARKETING: 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400',
-  CLEANING: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400',
-  SOFTWARE: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400',
-  MISC: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400',
+  RENT: 'bg-info-soft text-info-ink',
+  ELECTRICITY: 'bg-warning-soft text-warning-ink',
+  INTERNET: 'bg-info-soft text-info-ink',
+  SALARIES: 'bg-surface-sunken text-ink',
+  MAINTENANCE: 'bg-warning-soft text-warning-ink',
+  EQUIPMENT: 'bg-info-soft text-info-ink',
+  MARKETING: 'bg-surface-sunken text-ink',
+  CLEANING: 'bg-success-soft text-success-ink',
+  SOFTWARE: 'bg-surface-sunken text-ink-muted',
+  MISC: 'bg-surface-sunken text-ink-muted',
 };
 
 const categoryLabel = (category: string) => category.charAt(0) + category.slice(1).toLowerCase();
@@ -128,52 +128,52 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
       {summaryLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 bg-[var(--color-border)]/30 rounded-2xl animate-pulse" />
+            <div key={i} className="h-24 bg-surface-sunken rounded-card animate-pulse" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1 flex items-center gap-1.5">
+          <div className="bg-surface rounded-card p-5 border border-line">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
               <Wallet className="w-3.5 h-3.5" /> This Month
             </p>
-            <p className="text-2xl font-extrabold tabular-nums text-red-500">
+            <p className="text-2xl font-extrabold tabular-nums text-danger-ink">
               ₹{(summary?.monthTotal ?? 0).toLocaleString('en-IN')}
             </p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1 flex items-center gap-1.5">
+          <div className="bg-surface rounded-card p-5 border border-line">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
               <Receipt className="w-3.5 h-3.5" /> All-Time Total
             </p>
-            <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">
+            <p className="text-2xl font-extrabold tabular-nums text-ink">
               ₹{(summary?.allTimeTotal ?? 0).toLocaleString('en-IN')}
             </p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1 flex items-center gap-1.5">
+          <div className="bg-surface rounded-card p-5 border border-line">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1 flex items-center gap-1.5">
               <TrendingDown className="w-3.5 h-3.5" /> Top Category (Month)
             </p>
             {topCategory ? (
               <>
-                <p className="text-lg font-extrabold text-[var(--color-deepgray)] dark:text-white">{categoryLabel(topCategory.category)}</p>
-                <p className="text-xs text-[var(--color-muted)] mt-0.5 tabular-nums">₹{(topCategory._sum.amount ?? 0).toLocaleString('en-IN')}</p>
+                <p className="text-lg font-extrabold text-ink">{categoryLabel(topCategory.category)}</p>
+                <p className="text-xs text-ink-muted mt-0.5 tabular-nums">₹{(topCategory._sum.amount ?? 0).toLocaleString('en-IN')}</p>
               </>
             ) : (
-              <p className="text-lg font-extrabold text-[var(--color-muted)]">—</p>
+              <p className="text-lg font-extrabold text-ink-muted">-</p>
             )}
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Categories (Month)</p>
-            <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{summary?.byCategory?.length ?? 0}</p>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">of {CATEGORIES.length} tracked</p>
+          <div className="bg-surface rounded-card p-5 border border-line">
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-muted mb-1">Categories (Month)</p>
+            <p className="text-2xl font-extrabold tabular-nums text-ink">{summary?.byCategory?.length ?? 0}</p>
+            <p className="text-xs text-ink-muted mt-0.5">of {CATEGORIES.length} tracked</p>
           </div>
         </div>
       )}
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Add expense form */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
-          <h3 className="font-bold text-lg dark:text-white mb-4">Record an Expense</h3>
+        <div className="bg-surface rounded-card border border-line p-6">
+          <h3 className="font-bold text-lg mb-4">Record an Expense</h3>
           <form
             className="grid sm:grid-cols-2 gap-4"
             onSubmit={(e) => {
@@ -182,7 +182,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
             }}
           >
             <select
-              className="input-field bg-white! dark:bg-[#1a1a1a]!"
+              className="input-field"
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
               required
@@ -192,8 +192,8 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               ))}
             </select>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Amount (₹)</label>
-              <input
+              <label htmlFor="expensestab-f1" className="block text-sm font-semibold text-ink mb-1.5">Amount (₹)</label>
+              <input id="expensestab-f1"
                 className="input-field"
                 type="number"
                 min={0}
@@ -204,8 +204,8 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
-              <input
+              <label htmlFor="expensestab-f2" className="block text-sm font-semibold text-ink mb-1.5">Description</label>
+              <input id="expensestab-f2"
                 className="input-field"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -215,8 +215,8 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Date</label>
-              <input
+              <label htmlFor="expensestab-f3" className="block text-sm font-semibold text-ink mb-1.5">Date</label>
+              <input id="expensestab-f3"
                 className="input-field"
                 type="date"
                 value={form.date}
@@ -224,20 +224,20 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               />
             </div>
             <div className="flex items-end pb-3">
-              <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+              <label className="inline-flex items-center gap-2 text-sm font-semibold text-ink cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.isRecurring}
                   onChange={(e) => setForm({ ...form, isRecurring: e.target.checked })}
-                  className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                  className="w-4 h-4 rounded border-line accent-accent"
                 />
                 Recurring expense
-                <RotateCcw className="w-3.5 h-3.5 text-[var(--color-muted)]" aria-hidden="true" />
+                <RotateCcw className="w-3.5 h-3.5 text-ink-muted" aria-hidden="true" />
               </label>
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Receipt URL (optional)</label>
-              <input
+              <label htmlFor="expensestab-f4" className="block text-sm font-semibold text-ink mb-1.5">Receipt URL (optional)</label>
+              <input id="expensestab-f4"
                 className="input-field"
                 value={form.receiptUrl}
                 onChange={(e) => setForm({ ...form, receiptUrl: e.target.value })}
@@ -246,8 +246,8 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Notes</label>
-              <input
+              <label htmlFor="expensestab-f5" className="block text-sm font-semibold text-ink mb-1.5">Notes</label>
+              <input id="expensestab-f5"
                 className="input-field"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -256,7 +256,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               />
             </div>
             {recordMut.isError && (
-              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+              <div className="sm:col-span-2 bg-danger-soft text-danger-ink p-3 rounded-control text-sm border border-danger">
                 {(recordMut.error as any)?.response?.data?.error || 'Failed to record expense'}
               </div>
             )}
@@ -267,22 +267,22 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
         </div>
 
         {/* Expenses table */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
-          <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
-            <h2 className="font-bold text-lg dark:text-white">Expenses ({expenses.length})</h2>
+        <div className="bg-surface rounded-card border border-line overflow-hidden">
+          <div className="px-6 py-4 border-b border-line flex flex-wrap justify-between items-center gap-3">
+            <h2 className="font-bold text-lg">Expenses ({expenses.length})</h2>
             <button onClick={exportCsv} className="btn-outline text-sm px-3 py-1.5" disabled={expenses.length === 0}>
               <Download className="w-3.5 h-3.5" /> CSV
             </button>
           </div>
 
           <div className="px-6 pt-4 flex flex-wrap gap-2">
-            <div className="flex flex-wrap rounded-lg border border-[var(--color-border)] overflow-hidden">
+            <div className="flex flex-wrap rounded-control border border-line overflow-hidden">
               <button
                 onClick={() => setCategoryFilter('ALL')}
                 className={`px-3 py-1.5 text-xs font-bold transition-colors ${
                   categoryFilter === 'ALL'
-                    ? 'bg-[var(--color-primary)] text-white'
-                    : 'text-[var(--color-muted)] hover:bg-gray-50 dark:hover:bg-white/5'
+                    ? 'bg-accent text-on-accent'
+                    : 'text-ink-muted hover:bg-surface-sunken'
                 }`}
               >
                 All
@@ -293,8 +293,8 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
                   onClick={() => setCategoryFilter(c)}
                   className={`px-3 py-1.5 text-xs font-bold transition-colors ${
                     categoryFilter === c
-                      ? 'bg-[var(--color-primary)] text-white'
-                      : 'text-[var(--color-muted)] hover:bg-gray-50 dark:hover:bg-white/5'
+                      ? 'bg-accent text-on-accent'
+                      : 'text-ink-muted hover:bg-surface-sunken'
                   }`}
                 >
                   {categoryLabel(c)}
@@ -306,49 +306,49 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
           {expensesLoading ? (
             <div className="p-6 space-y-3">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-10 bg-[var(--color-border)]/30 rounded-xl animate-pulse" />
+                <div key={i} className="h-10 bg-surface-sunken rounded-control animate-pulse" />
               ))}
             </div>
           ) : expenses.length === 0 ? (
-            <div className="p-8 text-center text-[var(--color-muted)]">
+            <div className="p-8 text-center text-ink-muted">
               {categoryFilter === 'ALL' ? 'No expenses recorded yet.' : 'No expenses match this filter.'}
             </div>
           ) : (
             <div className="overflow-x-auto mt-4">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-white/5">
+                <thead className="bg-surface-sunken">
                   <tr>
                     {['Date', 'Category', 'Description', 'Amount', 'Recurring', 'Notes', 'Actions'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                      <th key={h} className="text-left px-6 py-3 text-xs font-bold text-ink-muted uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                <tbody className="divide-y divide-line">
                   {expenses.map((exp) => (
-                    <tr key={exp.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
-                      <td className="px-6 py-4 text-[var(--color-muted)] whitespace-nowrap">{new Date(exp.date).toLocaleDateString('en-IN')}</td>
+                    <tr key={exp.id} className="hover:bg-surface-sunken">
+                      <td className="px-6 py-4 text-ink-muted whitespace-nowrap">{new Date(exp.date).toLocaleDateString('en-IN')}</td>
                       <td className="px-6 py-4">
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${CATEGORY_STYLES[exp.category] || CATEGORY_STYLES.MISC}`}>
                           {categoryLabel(exp.category)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-semibold dark:text-white max-w-[220px] truncate" title={exp.description}>{exp.description}</td>
-                      <td className="px-6 py-4 font-semibold text-[var(--color-primary)] tabular-nums whitespace-nowrap">₹{exp.amount.toLocaleString('en-IN')}</td>
+                      <td className="px-6 py-4 font-semibold max-w-[220px] truncate" title={exp.description}>{exp.description}</td>
+                      <td className="px-6 py-4 font-semibold text-accent-ink tabular-nums whitespace-nowrap">₹{exp.amount.toLocaleString('en-IN')}</td>
                       <td className="px-6 py-4">
                         {exp.isRecurring ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)]">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-accent-ink">
                             <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" /> Recurring
                           </span>
                         ) : (
-                          <span className="text-xs text-[var(--color-muted)]">—</span>
+                          <span className="text-xs text-ink-muted">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-[var(--color-muted)] max-w-[200px] truncate" title={exp.notes || ''}>{exp.notes || '—'}</td>
+                      <td className="px-6 py-4 text-ink-muted max-w-[200px] truncate" title={exp.notes || ''}>{exp.notes || '-'}</td>
                       <td className="px-6 py-4">
                         <button
                           onClick={() => setDeleteTarget(exp)}
                           aria-label={`Delete expense: ${exp.description}`}
-                          className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline"
+                          className="inline-flex items-center gap-1 text-danger-ink hover:text-danger-ink font-semibold text-xs hover:underline"
                         >
                           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> Delete
                         </button>
