@@ -95,7 +95,7 @@ Payments: orders are created server-side with the amount taken from the fee reco
 | Secrets in the repo | `.env*` ignored except `.env.example`, gitleaks in CI |
 | Dependencies | Dependabot, dependency review, `npm audit` and CodeQL in CI |
 
-The CSP above comes from the API process. The static frontend is served by Vercel without a CSP header, and `frontend/nginx.conf` (local Docker stack only) also sets none. Reporting a vulnerability: see [../SECURITY.md](../SECURITY.md).
+The CSP above comes from the API process. The static frontend gets nosniff, frame, referrer, permissions and HSTS headers from `vercel.json` but no CSP yet, and `frontend/nginx.conf` (local Docker stack only) also sets none. Reporting a vulnerability: see [../SECURITY.md](../SECURITY.md).
 
 ## Scaling notes
 
@@ -125,5 +125,5 @@ docs/                Documentation
 
 ## Clients
 
-- **Web:** route-level code splitting, light, dark and system themes, per-page meta tags through `usePageMeta`, a web app manifest (`frontend/public/manifest.webmanifest`), `sitemap.xml`, `robots.txt` and `llms.txt` in `frontend/public`. The API also serves a generated sitemap at `/api/public/sitemap.xml`.
+- **Web:** route-level code splitting, light, dark and system themes, per-page meta tags through `usePageMeta`, a web app manifest (`frontend/public/manifest.webmanifest`), `robots.txt` and `llms.txt` in `frontend/public`. The API serves the sitemap at `/api/public/sitemap.xml`, and `vercel.json` rewrites `/sitemap.xml` to it. Public pages are prerendered after the Vite build (`frontend/scripts/prerender.mjs`, fail-soft).
 - **Mobile:** Expo Router, same REST API, role-based tab sets. See [mobile.md](mobile.md).
