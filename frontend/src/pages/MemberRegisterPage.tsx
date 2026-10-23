@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router';
-import { MapPin, Dumbbell, ShieldCheck, UserPlus, LogOut, Banknote, Smartphone, CreditCard } from 'lucide-react';
+import { MapPin, ShieldCheck, UserPlus, LogOut, Banknote, Smartphone, CreditCard, AlertCircle, CheckCircle2, User, Mail, Phone, Lock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { getPublicGyms, enrollMember } from '../api/gym.api';
 import { formatDuration, formatPrice } from '../utils/format';
+import AuthSplitLayout from '../components/AuthSplitLayout';
 
 const MemberRegisterPage = () => {
   const navigate = useNavigate();
@@ -53,7 +54,6 @@ const MemberRegisterPage = () => {
     setSuccess('');
 
     if (isLoggedInMember && decideLater) {
-      // "Join a new gym" for an existing member only makes sense with a gym picked.
       setError('Please select a gym, or come back to this page later.');
       return;
     }
@@ -99,130 +99,143 @@ const MemberRegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen pt-28 pb-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="max-w-2xl mb-10">
-          <span className="eyebrow bg-[var(--color-primary)]/10! text-[var(--color-primary)]! border-[var(--color-primary)]/20!">
-            <Dumbbell className="w-4 h-4" />
-            Membership Registration
-          </span>
-          <h1 className="display mt-4 text-4xl sm:text-5xl leading-[1.02]">
-            {isLoggedInMember ? 'Join a New Gym' : 'Create your member account'}
-          </h1>
-          <p className="mt-4 text-[var(--color-muted)]">
-            {isLoggedInMember
-              ? 'Pick your gym and plan below — your membership request will be sent instantly.'
-              : 'Pick a gym and plan, then set up your account. You\'ll log in once the gym approves your request.'}
+    <AuthSplitLayout
+      badge="Member Sign Up"
+      title={isLoggedInMember ? 'Join a New Gym' : 'Create Member Account'}
+      subtitle={
+        isLoggedInMember
+          ? 'Pick your target gym and membership plan below — request is processed instantly.'
+          : 'Select your preferred gym and plan, or sign up now and choose a fitness center later.'
+      }
+      imageSrc="/images/auth-login.jpg"
+      imageAlt="Vajra Fitness Gym Training"
+      quote="The real workout starts when you want to stop. Unleash your full potential."
+      quoteAuthor="Vajra Athlete Community"
+      features={[
+        { title: 'Touchless Entry', description: 'Personal QR pass' },
+        { title: 'Goal Tracking', description: 'Weight & attendance logs' },
+        { title: 'Certified Coaches', description: 'Custom nutrition & guidance' },
+      ]}
+      maxWidth="max-w-2xl"
+    >
+      {user && !isLoggedInMember && (
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-4 text-xs">
+          <p className="font-semibold text-amber-800 dark:text-amber-300">
+            You are logged in as {user.role.replace('_', ' ')} ({user.email}).
           </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="btn-outline px-3 py-1.5 text-xs shrink-0 self-start sm:self-auto cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" /> Logout
+          </button>
         </div>
+      )}
 
-        {user && !isLoggedInMember && (
-          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl p-5">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              You're logged in as {user.role.replace('_', ' ')} ({user.email}). Member registration creates a separate member account.
-            </p>
-            <button onClick={handleLogout} className="btn-outline px-5! py-2! text-sm shrink-0">
-              <LogOut className="w-4 h-4" /> Logout
-            </button>
-          </div>
-        )}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
 
-        {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="mb-6 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 p-4 rounded-xl text-sm border border-green-200 dark:border-green-500/20">
-            {success}
-          </div>
-        )}
+      {success && (
+        <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm font-medium flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+          <span>{success}</span>
+        </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="grid lg:grid-cols-2 gap-8 items-start">
-          {/* STEP 1: Gym */}
-          <div className="card p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="w-8 h-8 rounded-full bg-[var(--color-primary)] text-white text-sm font-extrabold flex items-center justify-center shrink-0">1</span>
-              <h2 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white">Choose your gym</h2>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* STEP 1: Gym Selection */}
+        <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-[var(--color-base)]/50 dark:bg-white/5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              1
+            </span>
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-[var(--color-charcoal)] dark:text-white">
+              Choose Your Gym & Plan
+            </h2>
+          </div>
+
+          {gymsLoading ? (
+            <div className="space-y-3">
+              <div className="h-10 bg-black/5 dark:bg-white/5 animate-pulse rounded-xl" />
+              <div className="h-24 bg-black/5 dark:bg-white/5 animate-pulse rounded-xl" />
             </div>
+          ) : (
+            <>
+              <label htmlFor="member-gym-select" className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
+                {gyms.length === 0 ? 'No partner gyms found' : 'Select Gym Partner'}
+              </label>
+              <select
+                id="member-gym-select"
+                value={gymId}
+                onChange={(e) => handleGymChange(e.target.value)}
+                disabled={decideLater}
+                className="input-field bg-white! dark:bg-[#1a1a1a]! disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                required={!decideLater}
+              >
+                <option value="">Choose a gym…</option>
+                {gyms.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} — {g.city}
+                  </option>
+                ))}
+              </select>
 
-            {gymsLoading ? (
-              <div className="space-y-3">
-                <div className="h-12 bg-[var(--color-base-dark)] dark:bg-white/5 animate-pulse rounded-xl" />
-                <div className="h-48 bg-[var(--color-base-dark)] dark:bg-white/5 animate-pulse rounded-xl" />
-              </div>
-            ) : (
-              <>
-                <label htmlFor="register-gym" className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">
-                  {gyms.length === 0 ? 'No gyms available yet' : 'Select Gym'}
+              {!isLoggedInMember && (
+                <label className="mt-3 flex items-start gap-2.5 rounded-xl border border-[var(--color-border)] p-3 cursor-pointer hover:border-[var(--color-primary)]/40 transition-colors bg-[var(--color-surface)]">
+                  <input
+                    type="checkbox"
+                    checked={decideLater}
+                    onChange={(e) => handleDecideLaterToggle(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-[var(--color-primary)] cursor-pointer"
+                  />
+                  <span className="text-xs">
+                    <span className="block font-bold text-[var(--color-charcoal)] dark:text-white">I'll pick a gym later</span>
+                    <span className="block text-[var(--color-muted)] mt-0.5">Create your member profile now and explore gyms anytime.</span>
+                  </span>
                 </label>
-                <select
-                  id="register-gym"
-                  value={gymId}
-                  onChange={(e) => handleGymChange(e.target.value)}
-                  disabled={decideLater}
-                  className="input-field bg-white! dark:bg-[#1a1a1a]! disabled:opacity-50 disabled:cursor-not-allowed"
-                  required={!decideLater}
-                >
-                  <option value="">Select a gym…</option>
-                  {gyms.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name} — {g.city}
-                    </option>
-                  ))}
-                </select>
+              )}
+            </>
+          )}
 
-                {!isLoggedInMember && (
-                  <label className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--color-border)] p-3.5 cursor-pointer hover:border-[var(--color-primary)]/40 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={decideLater}
-                      onChange={(e) => handleDecideLaterToggle(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]"
-                    />
-                    <span className="text-sm">
-                      <span className="block font-semibold text-[var(--color-charcoal)] dark:text-white">I'll pick a gym later</span>
-                      <span className="block text-[var(--color-muted)] mt-0.5">Create your account now and browse gyms whenever you're ready — no gym required to sign up.</span>
-                    </span>
-                  </label>
-                )}
-              </>
-            )}
-
-            {gym && !decideLater && (
-              <div className="mt-5">
-                <div className="rounded-2xl overflow-hidden border border-[var(--color-border)]">
-                  <div className="relative h-36">
-                    <img
-                      src={gym.imageUrl || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80'}
-                      alt={gym.name}
-                      loading="lazy"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <h3 className="font-extrabold text-white">{gym.name}</h3>
-                      <p className="flex items-center gap-1.5 text-sm text-white/80 mt-0.5">
-                        <MapPin className="w-4 h-4" /> {gym.location || `${gym.city}, ${gym.state}`}
-                      </p>
-                    </div>
-                  </div>
+          {gym && !decideLater && (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-xl overflow-hidden border border-[var(--color-border)] relative h-28">
+                <img
+                  src={gym.imageUrl || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80'}
+                  alt={gym.name}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-3">
+                  <h3 className="font-extrabold text-sm text-white">{gym.name}</h3>
+                  <p className="flex items-center gap-1 text-xs text-white/80 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-[var(--color-primary-light)]" />
+                    <span>{gym.location || `${gym.city}, ${gym.state}`}</span>
+                  </p>
                 </div>
+              </div>
 
-                <label className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5 mt-6">
-                  Select Membership Plan
+              <div>
+                <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-2">
+                  Select Membership Plan *
                 </label>
                 {gym.membershipPlans.length === 0 ? (
-                  <p className="text-sm text-[var(--color-muted)]">This gym hasn't published any plans yet.</p>
+                  <p className="text-xs text-[var(--color-muted)]">No published plans for this gym yet.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {gym.membershipPlans.map((plan) => (
                       <label
                         key={plan.id}
-                        className={`block cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
+                        className={`block cursor-pointer rounded-xl border p-3 transition-all ${
                           planId === plan.id
-                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 ring-2 ring-[var(--color-primary)]/25'
-                            : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/40'
+                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 ring-2 ring-[var(--color-primary)]/30'
+                            : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40'
                         }`}
                       >
                         <input
@@ -233,150 +246,214 @@ const MemberRegisterPage = () => {
                           onChange={() => setPlanId(plan.id)}
                           className="sr-only"
                         />
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-bold text-[var(--color-charcoal)] dark:text-white">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs text-[var(--color-charcoal)] dark:text-white">
                             {plan.name}
                           </span>
-                          <span className="font-extrabold text-[var(--color-primary)]">
+                          <span className="font-extrabold text-xs text-[var(--color-primary)]">
                             {formatPrice(plan.price)}
                           </span>
                         </div>
-                        <p className="text-sm text-[var(--color-muted)] mt-1.5">
-                          {plan.description || `Full access for ${formatDuration(plan.duration)}`} · {formatDuration(plan.duration)}
+                        <p className="text-[11px] text-[var(--color-muted)] mt-1 line-clamp-1">
+                          {plan.description || `${formatDuration(plan.duration)} access`}
                         </p>
                       </label>
                     ))}
                   </div>
                 )}
               </div>
-            )}
+            </div>
+          )}
+        </div>
+
+        {/* STEP 2: Profile Details */}
+        <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-[var(--color-base)]/50 dark:bg-white/5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-xs font-bold flex items-center justify-center shrink-0">
+              2
+            </span>
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-[var(--color-charcoal)] dark:text-white">
+              {isLoggedInMember ? 'Verify Account' : 'Personal Details'}
+            </h2>
           </div>
 
-          {/* STEP 2: Account */}
-          <div className="card p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="w-8 h-8 rounded-full bg-[var(--color-primary)] text-white text-sm font-extrabold flex items-center justify-center shrink-0">2</span>
-              <h2 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white">
-                {isLoggedInMember ? 'Confirm your membership' : 'Your details'}
-              </h2>
+          {isLoggedInMember ? (
+            <div className="p-3.5 rounded-xl bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 text-xs">
+              <p className="flex items-center gap-2 font-bold text-[var(--color-primary)]">
+                <ShieldCheck className="w-4 h-4" /> Signed in as {user.username}
+              </p>
+              <p className="text-[var(--color-muted)] mt-1">{user.email}</p>
             </div>
-
-            {isLoggedInMember ? (
-              <div className="space-y-5">
-                <div className="rounded-2xl bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/15 p-5">
-                  <p className="flex items-center gap-2.5 text-sm font-semibold text-[var(--color-primary)]">
-                    <ShieldCheck className="w-5 h-5" /> Logged in as {user.username}
-                  </p>
-                  <p className="text-sm text-[var(--color-muted)] mt-1">{user.email}</p>
-                </div>
-                <p className="text-sm text-[var(--color-muted)] leading-relaxed">
-                  Submitting this request will link your account to <span className="font-bold text-[var(--color-charcoal)] dark:text-white">{gym?.name}</span> and the selected plan. The gym admin will approve it from their dashboard.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">Full Name</label>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1">
+                  Full Name *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--color-muted)]">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
                   <input
-                    className="input-field"
+                    className="input-field pl-9 text-sm"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    placeholder="Your name"
+                    placeholder="Your Name"
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">Email</label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1">
+                  Email Address *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--color-muted)]">
+                    <Mail className="w-3.5 h-3.5" />
+                  </div>
                   <input
                     type="email"
-                    className="input-field"
+                    className="input-field pl-9 text-sm"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="you@example.com"
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">Phone Number</label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1">
+                  Phone Number *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--color-muted)]">
+                    <Phone className="w-3.5 h-3.5" />
+                  </div>
                   <input
                     type="tel"
-                    className="input-field"
+                    className="input-field pl-9 text-sm"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="+91"
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-[var(--color-charcoal)] dark:text-gray-300 mb-1.5">Password</label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1">
+                  Create Password *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--color-muted)]">
+                    <Lock className="w-3.5 h-3.5" />
+                  </div>
                   <input
                     type="password"
-                    className="input-field"
+                    className="input-field pl-9 text-sm"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Create a password"
+                    placeholder="Min 6 characters"
                     minLength={6}
                     required
                   />
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Step 3: Payment method */}
-            {!decideLater && (
-            <div className="mt-6">
-              <p className="text-sm font-bold text-[var(--color-charcoal)] dark:text-white mb-3">How would you like to pay?</p>
-              <div className="space-y-2.5">
+          {/* Payment Method Selector */}
+          {!decideLater && (
+            <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-2">
+                Preferred Payment Option
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {[
-                  { id: 'CASH', label: 'Pay at Gym (COD)', desc: 'Pay cash at the front desk after approval.', icon: Banknote },
-                  { id: 'UPI', label: 'UPI', desc: 'Google Pay, PhonePe, Paytm — pay online securely.', icon: Smartphone },
-                  { id: 'CARD', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay — pay online securely.', icon: CreditCard },
+                  { id: 'UPI', label: 'UPI / QR', icon: Smartphone },
+                  { id: 'CARD', label: 'Credit/Debit Card', icon: CreditCard },
+                  { id: 'CASH', label: 'Pay at Desk', icon: Banknote },
                 ].map((m) => (
-                  <label key={m.id} className={`block cursor-pointer rounded-xl border p-3.5 transition-all ${preferredPaymentMethod === m.id ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/5 ring-1 ring-[var(--color-primary)]/20' : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/40'}`}>
-                    <input type="radio" name="paymentMethod" value={m.id} checked={preferredPaymentMethod === m.id} onChange={() => setPreferredPaymentMethod(m.id)} className="sr-only" />
-                    <span className="flex items-center gap-3">
-                      <m.icon className="w-5 h-5 text-[var(--color-primary)] shrink-0" />
-                      <span>
-                        <span className="block font-bold text-sm dark:text-white">{m.label}</span>
-                        <span className="block text-xs text-[var(--color-muted)]">{m.desc}</span>
-                      </span>
+                  <label
+                    key={m.id}
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                      preferredPaymentMethod === m.id
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 ring-1 ring-[var(--color-primary)]/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)]/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value={m.id}
+                      checked={preferredPaymentMethod === m.id}
+                      onChange={() => setPreferredPaymentMethod(m.id)}
+                      className="sr-only"
+                    />
+                    <m.icon className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                    <span className="text-xs font-bold text-[var(--color-charcoal)] dark:text-white truncate">
+                      {m.label}
                     </span>
                   </label>
                 ))}
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Submit Button */}
+        <div>
+          <button
+            type="submit"
+            disabled={isSubmitting || gymsLoading}
+            className="w-full btn-primary py-3.5 text-base shadow-lg cursor-pointer"
+          >
+            {isSubmitting ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Processing request...
+              </span>
+            ) : (
+              <>
+                <UserPlus className="w-4 h-4" />
+                <span>
+                  {decideLater
+                    ? 'Create Member Account'
+                    : isLoggedInMember
+                      ? 'Confirm Gym Request'
+                      : 'Join & Request Membership'}
+                </span>
+              </>
             )}
+          </button>
+        </div>
+      </form>
 
+      {/* Switcher back to login */}
+      <div className="mt-6 pt-6 border-t border-[var(--color-border)] text-center text-sm text-[var(--color-muted)]">
+        {isLoggedInMember ? (
+          <>
+            Wrong user?{' '}
             <button
-              type="submit"
-              disabled={isSubmitting || gymsLoading}
-              className="btn-primary w-full mt-8 py-4! text-lg justify-center"
+              type="button"
+              onClick={handleLogout}
+              className="text-[var(--color-primary)] font-bold hover:underline cursor-pointer"
             >
-              <UserPlus className="w-5 h-5" />
-              {isSubmitting
-                ? 'Submitting…'
-                : decideLater
-                  ? 'Create Account'
-                  : isLoggedInMember
-                    ? 'Confirm Membership Request'
-                    : 'Create Account & Request Membership'}
+              Switch Account
             </button>
-
-            <div className="mt-5 text-center text-sm text-[var(--color-muted)]">
-              {isLoggedInMember ? (
-                <>
-                  Wrong account? <button type="button" onClick={handleLogout} className="text-[var(--color-primary)] font-semibold hover:underline">Switch account</button>
-                </>
-              ) : (
-                <>
-                  Already a member? <Link to="/login" className="text-[var(--color-primary)] font-semibold hover:underline">Login Here</Link>
-                </>
-              )}
-            </div>
-          </div>
-        </form>
+          </>
+        ) : (
+          <>
+            Already a registered member?{' '}
+            <Link to="/login" className="text-[var(--color-primary)] font-bold hover:underline">
+              Sign In Here
+            </Link>
+          </>
+        )}
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 };
 

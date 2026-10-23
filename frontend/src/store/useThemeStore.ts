@@ -26,6 +26,10 @@ export const useThemeStore = create<ThemeStore>()(
         return { theme };
       }),
     }),
-    { name: 'vf-theme' }
+    {
+      name: 'vf-theme',
+      version: 1,
+      migrate: (persistedState: unknown) => persistedState as ThemeStore,
+    }
   )
 );

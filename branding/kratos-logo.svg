@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" fill="none">
+  <defs>
+    <linearGradient id="kratosGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF5400" />
+      <stop offset="100%" stop-color="#FF0054" />
+    </linearGradient>
+  </defs>
+
+  <!-- Icon Mark: Hexagonal Tech Monogram -->
+  <g transform="translate(15, 10)">
+    <!-- Hexagonal Outer Ring -->
+    <polygon points="40,5 75,25 75,65 40,85 5,65 5,25" 
+             fill="#0B090A" stroke="#161A1D" stroke-width="4" stroke-linejoin="round" />
+    <!-- Dynamic K Slash Structure -->
+    <path d="M 28 24 L 28 66 M 28 45 L 54 24 M 36 42 L 56 66" 
+          stroke="url(#kratosGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Typography -->
+  <text x="110" y="58" font-family="'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+        font-weight="900" font-size="38" letter-spacing="1" fill="#0B090A">
+    KRATOS
+  </text>
+  <text x="282" y="58" font-family="'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+        font-weight="900" font-size="38" letter-spacing="1" fill="url(#kratosGrad)">
+    OS
+  </text>
+  <text x="112" y="78" font-family="'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+        font-weight="700" font-size="11" letter-spacing="4" fill="#6B7280">
+    PERFORMANCE GYM INFRASTRUCTURE
+  </text>
+</svg>
