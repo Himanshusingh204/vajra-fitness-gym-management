@@ -35,7 +35,7 @@ Live site: <https://vajra-fitness-gym-management.vercel.app>
 - Revenue, churn, retention and trainer performance reports, with CSV export for revenue.
 - Public pages: gym directory and gym detail pages, pricing, FAQ, legal pages, and calculators (BMI, calorie, one rep max, protein).
 - Light, dark and system themes.
-- An Expo mobile app for members, trainers, gym owners and staff (see [docs/mobile.md](docs/mobile.md)).
+- An Expo mobile app for members, trainers, gym owners and staff (see [docs/DOCUMENTATION.md#5-mobile-application-mobile](docs/DOCUMENTATION.md#5-mobile-application-mobile)).
 
 ## Tech stack
 
@@ -175,21 +175,25 @@ The workflow serves the site at `http://localhost:4173` and the API at `http://l
 - `staging` is the integration branch. Branch feature work off `staging` and open pull requests into it. Vercel builds a preview for every non-production branch.
 - CI (`deploy.yml`, job `quality`) runs on pushes to `main`, `staging` and `develop` and on pull requests to `main` and `staging`: `prisma validate`, `prisma generate`, `tsc --noEmit`, backend build, backend tests against a Postgres 16 service, frontend lint and frontend build.
 - `security.yml` runs CodeQL, dependency review (pull requests), `npm audit` (report only) and a gitleaks secret scan. CodeQL also runs weekly.
-- `backup.yml` takes a daily database dump when backups are enabled (see [DEPLOYMENT.md](DEPLOYMENT.md)).
-- Schema changes must be applied to the production database with `prisma migrate deploy` before the change is merged to `main`. See [DEPLOYMENT.md](DEPLOYMENT.md).
+- `backup.yml` takes a daily database dump when backups are enabled (see [docs/DOCUMENTATION.md#automated-backups--disaster-recovery](docs/DOCUMENTATION.md#automated-backups--disaster-recovery)).
+- Schema changes must be applied to the production database with `prisma migrate deploy` before the change is merged to `main`. See [docs/DOCUMENTATION.md#database-migrations-workflow](docs/DOCUMENTATION.md#database-migrations-workflow).
 
-Full deployment steps for Vercel and Neon are in [DEPLOYMENT.md](DEPLOYMENT.md).
+Full deployment steps for Vercel and Neon are in [docs/DOCUMENTATION.md#7-deployment-infrastructure--devops](docs/DOCUMENTATION.md#7-deployment-infrastructure--devops).
 
 ## Documentation
 
-- [DEPLOYMENT.md](DEPLOYMENT.md): Vercel and Neon setup, migrations, backups, troubleshooting.
-- [CONTRIBUTING.md](CONTRIBUTING.md): workflow and checks before a pull request.
-- [SECURITY.md](SECURITY.md): how to report a vulnerability.
-- [docs/architecture.md](docs/architecture.md): request path, auth, data and scaling notes.
-- [docs/detailed_overview.md](docs/detailed_overview.md): features, endpoints and background jobs.
-- [docs/api.md](docs/api.md): endpoints added or changed for trainer signup, profiles, the mobile app and public gym pages.
-- [docs/mobile.md](docs/mobile.md) and [mobile/README.md](mobile/README.md): mobile app.
-- [BRANDING.md](BRANDING.md): brand guide.
+All project documentation is consolidated in the master reference guide:
+
+- **[Master Technical Documentation](docs/DOCUMENTATION.md)**:
+  - [System Architecture & Core Patterns](docs/DOCUMENTATION.md#2-system-architecture--core-patterns)
+  - [Domain Models & Database Architecture](docs/DOCUMENTATION.md#3-domain-models--database-architecture)
+  - [API Specification & Contracts](docs/DOCUMENTATION.md#4-api-specification--service-contracts)
+  - [Mobile Application Guide](docs/DOCUMENTATION.md#5-mobile-application-mobile) (also see [mobile/README.md](mobile/README.md))
+  - [Security Policy & Threat Mitigation](docs/DOCUMENTATION.md#6-security-policy--threat-mitigation)
+  - [Deployment, Infrastructure & DevOps](docs/DOCUMENTATION.md#7-deployment-infrastructure--devops)
+  - [Brand Identity & Design System](docs/DOCUMENTATION.md#8-brand-identity--design-system)
+  - [Contributor Guide & Engineering Standards](docs/DOCUMENTATION.md#9-contributor-guide--engineering-standards)
+- *Historical plans and audit roadmaps are preserved in [docs/archive/](docs/archive/).*
 
 ## License
 
