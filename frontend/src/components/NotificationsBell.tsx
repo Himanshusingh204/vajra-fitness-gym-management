@@ -33,12 +33,11 @@ const NotificationsBell = () => {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const load = async () => {
-    setLoading(true);
     try {
       const res = await getMyNotifications({ limit: 15 });
       setItems(res.notifications);
@@ -51,9 +50,12 @@ const NotificationsBell = () => {
   };
 
   useEffect(() => {
-    load();
+    const first = setTimeout(load, 0);
     const interval = setInterval(load, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -118,7 +120,7 @@ const NotificationsBell = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-3 w-80 sm:w-96 glass-strong rounded-2xl border border-[var(--color-border)] shadow-2xl overflow-hidden z-50">
+        <div className="absolute right-0 top-full mt-3 w-80 max-sm:fixed max-sm:inset-x-4 max-sm:top-20 max-sm:mt-0 max-sm:w-auto sm:w-96 glass-strong rounded-2xl border border-[var(--color-border)] shadow-2xl overflow-hidden z-50">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
             <h3 className="text-sm font-bold text-[var(--color-deepgray)] dark:text-white">Notifications</h3>
             {unread > 0 && (

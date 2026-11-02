@@ -3,6 +3,7 @@ import Razorpay from 'razorpay';
 import { prisma } from '../utils/prisma';
 import { logAudit } from '../utils/audit';
 import { createNotification, notifyGymOwner } from './notification.service';
+import { settleMarketplaceOrder, markOrderFailed } from './order.service';
 
 // Razorpay credentials. Online payments are fully disabled (UI + API) until a
 // key pair is configured — this keeps the app functional without an API key.
@@ -174,18 +175,45 @@ export const verifyPayment = async (input: {
   return { fee, orderId: order.orderId };
 };
 
+type WebhookEvent = {
+  event?: string;
+  payload?: { payment?: { entity?: { id?: string; order_id?: string; amount?: number } } };
+};
+
 // Validates + processes Razorpay webhook events. Returns a plain object so the
 // route can respond 200 quickly and let Razorpay stop retrying.
-export const handleWebhook = async (rawBody: string, signature: string) => {
+export const handleWebhook = async (rawBody: string, signature: string, eventId?: string) => {
   if (!webhookSecret()) throw new Error('WEBHOOK_SECRET_MISSING');
   if (!Razorpay.validateWebhookSignature(rawBody, signature, webhookSecret())) {
     throw new Error('INVALID_WEBHOOK_SIGNATURE');
   }
 
-  const event = JSON.parse(rawBody) as {
-    event?: string;
-    payload?: { payment?: { entity?: { id?: string; order_id?: string; amount?: number } } };
-  };
+  const event = JSON.parse(rawBody) as WebhookEvent;
+
+  // Razorpay redelivers until it gets a 2xx; the unique event id makes a repeat a no-op.
+  const providerEventId = eventId || crypto.createHash('sha256').update(rawBody).digest('hex');
+  try {
+    await prisma.paymentEvent.create({ data: { providerEventId, type: event.event ?? 'unknown', payload: event as object } });
+  } catch (err: any) {
+    if (err?.code === 'P2002') return { received: true, duplicate: true };
+    throw err;
+  }
+
+  try {
+    await processWebhookEvent(event);
+  } catch (err) {
+    // Let Razorpay's retry process it again.
+    await prisma.paymentEvent.delete({ where: { providerEventId } });
+    throw err;
+  }
+  await prisma.paymentEvent.update({ where: { providerEventId }, data: { processedAt: new Date() } });
+  return { received: true };
+};
+
+const processWebhookEvent = async (event: WebhookEvent) => {
+  if (event.event === 'payment.failed' && event.payload?.payment?.entity?.order_id) {
+    await markOrderFailed(event.payload.payment.entity.order_id);
+  }
 
   if (event.event === 'payment.captured') {
     const entity = event.payload?.payment?.entity;
@@ -210,14 +238,14 @@ export const handleWebhook = async (rawBody: string, signature: string) => {
             });
           }
         }
-      } else {
-        // No matching fee order — it may be an online SaaS subscription payment.
-        await settleSaaSOrderByRazorpayOrder(orderId, paymentId);
+      } else if (!order) {
+        // Not a fee: a marketplace plan order, or an online SaaS subscription payment.
+        const marketplaceOrder = await prisma.order.findUnique({ where: { razorpayOrderId: orderId } });
+        if (marketplaceOrder) await settleMarketplaceOrder(marketplaceOrder, paymentId, entity?.amount);
+        else await settleSaaSOrderByRazorpayOrder(orderId, paymentId);
       }
     }
   }
-
-  return { received: true };
 };
 
 // ---- SaaS subscription payments ----

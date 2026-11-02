@@ -15,6 +15,7 @@ const verifyUser = (opts: { allowUnapprovedTrainer: boolean }) =>
 
     try {
       const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string; role: string; tokenVersion: number };
+      if (typeof decoded.userId !== 'string') return res.status(401).json({ error: 'Unauthorized: Invalid token' });
 
       // Validate against the database on every request so suspensions, role changes,
       // and password resets take effect immediately — never trust a stale token alone.
@@ -54,6 +55,8 @@ const verifyUser = (opts: { allowUnapprovedTrainer: boolean }) =>
       }
       next();
     } catch (error) {
+      // A database outage must not look like a bad token, or clients log the user out.
+      if (!(error instanceof jwt.JsonWebTokenError)) return next(error);
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
   };

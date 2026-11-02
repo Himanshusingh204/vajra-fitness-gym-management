@@ -67,11 +67,6 @@ export const getCategories = async (gymId: string) => {
   return response.data;
 };
 
-export const createCategory = async (gymId: string, name: string) => {
-  const response = await api.post<ProductCategory>(`/inventory/gym/${gymId}/categories`, { name });
-  return response.data;
-};
-
 export const getSales = async (gymId: string) => {
   const response = await api.get<Sale[]>(`/inventory/gym/${gymId}/sales`);
   return response.data;

@@ -1,6 +1,9 @@
+import crypto from 'crypto';
 import { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym, findMemberProfile, requestedGymId } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
 
 // =====================================================================
@@ -11,23 +14,51 @@ import { logAudit } from '../utils/audit';
 // Admin of) the gym before touching any referral data.
 // =====================================================================
 
-// Helper: verify the requesting user owns the gym (or is SUPER_ADMIN).
-const assertGymOwner = async (gymId: string, userId: string | undefined, role: string | undefined) => {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, ownerId: true } });
-  if (!gym) return false;
-  if (role === 'SUPER_ADMIN') return true;
-  return gym.ownerId === userId;
-};
-
 // Helper: resolve a referral's gym and verify ownership by referral id.
-const assertReferralGymAccess = async (referralId: string, userId: string | undefined, role: string | undefined) => {
+const assertReferralGymAccess = async (referralId: string, user: AuthRequest['user']) => {
   const referral = await prisma.referral.findUnique({
     where: { id: referralId },
     select: { id: true, gymId: true },
   });
   if (!referral) return { ok: false as const, referral: null };
-  const ok = await assertGymOwner(referral.gymId, userId, role);
+  const ok = await canAccessGym(user, referral.gymId);
   return { ok, referral };
+};
+
+// GET /api/referrals/me — a member's own share code (created on first use) and their referrals.
+export const getMyReferrals = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const member = await findMemberProfile(userId, requestedGymId(req));
+    if (!member) return res.status(404).json({ error: 'Member profile not found' });
+
+    let code = member.referralCode;
+    for (let attempt = 0; !code && attempt < 5; attempt++) {
+      try {
+        // referralCode IS NULL guards against two first visits racing to set different codes.
+        await prisma.memberDetails.updateMany({
+          where: { id: member.id, referralCode: null },
+          data: { referralCode: `VF${crypto.randomBytes(4).toString('hex').toUpperCase()}` },
+        });
+        code = (await prisma.memberDetails.findUnique({ where: { id: member.id }, select: { referralCode: true } }))?.referralCode ?? null;
+      } catch (err) {
+        // Unique clash with another member's code: roll a new one.
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
+      }
+    }
+    if (!code) throw new Error('Could not generate a unique referral code');
+
+    const rows = await prisma.referral.findMany({
+      where: { referrerUserId: userId, gymId: member.gymId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, rewardType: true, rewardValue: true, createdAt: true },
+    });
+    const referrals = rows.map((r) => ({ ...r, rewardValue: r.rewardValue ? r.rewardValue.toNumber() : null }));
+    res.json({ code, referrals });
+  } catch (error) {
+    console.error('Get my referrals error:', error);
+    res.status(500).json({ error: 'Failed to fetch referrals' });
+  }
 };
 
 // GET /api/referrals/gym/:gymId — list referrals for a gym (owner / super admin).
@@ -36,7 +67,7 @@ export const getReferrals = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
 
     // Tenant isolation: verify the caller owns this gym.
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -67,7 +98,7 @@ export const createReferral = async (req: AuthRequest, res: Response) => {
     }
 
     // Tenant isolation: verify the caller owns this gym.
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -91,7 +122,7 @@ export const createReferral = async (req: AuthRequest, res: Response) => {
         gymId,
         referrerUserId: userId,
         referredUserId,
-        referralCode: `REF-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+        referralCode: `REF-${crypto.randomBytes(6).toString('hex').toUpperCase()}`,
         rewardType,
         rewardValue: parsedRewardValue,
       },
@@ -123,7 +154,7 @@ export const updateReferralStatus = async (req: AuthRequest, res: Response) => {
     }
 
     // Tenant isolation: verify the caller owns the referral's gym.
-    const access = await assertReferralGymAccess(id, req.user?.userId, req.user?.role);
+    const access = await assertReferralGymAccess(id, req.user);
     if (!access.ok) return res.status(403).json({ error: 'Unauthorized' });
 
     const referral = await prisma.referral.update({
@@ -152,7 +183,7 @@ export const getReferralStats = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
 
     // Tenant isolation: verify the caller owns this gym.
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

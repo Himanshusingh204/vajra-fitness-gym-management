@@ -1,11 +1,10 @@
-import React from 'react';
 import { Reveal } from '../components/Reveal';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 const SECTIONS = [
   {
     title: '1. Membership Rules',
-    body: 'By signing up for a Vajra Fitness membership, you agree to abide by all gym rules, respect staff and fellow members, and use equipment responsibly. Memberships are non-transferable.',
+    body: 'By signing up for a Kavach Fitness membership, you agree to abide by all gym rules, respect staff and fellow members, and use equipment responsibly. Memberships are non-transferable.',
   },
   {
     title: '2. Payment & Fees',
@@ -17,22 +16,22 @@ const SECTIONS = [
   },
   {
     title: '4. Liability Waiver',
-    body: 'Exercise carries inherent risks. Vajra Fitness is not liable for any personal injuries, loss, or damage to personal property while on the premises. Members are advised to consult a physician before beginning any new exercise program.',
+    body: 'Exercise carries inherent risks. Kavach Fitness is not liable for any personal injuries, loss, or damage to personal property while on the premises. Members are advised to consult a physician before beginning any new exercise program.',
   },
   {
     title: '5. Platform Usage',
-    body: 'Gym owners using the Vajra Fitness SaaS platform agree to maintain accurate member records, comply with applicable data protection laws (including the DPDP Act, 2023), and not misuse the platform to harm members or third parties.',
+    body: 'Gym owners using the Kavach Fitness SaaS platform agree to maintain accurate member records, comply with applicable data protection laws (including the DPDP Act, 2023), and not misuse the platform to harm members or third parties.',
   },
   {
     title: '6. Intellectual Property',
-    body: 'All software, design, and content on the Vajra Fitness platform are the intellectual property of Vajra Fitness and may not be copied, resold, or redistributed without prior written consent.',
+    body: 'All software, design, and content on the Kavach Fitness platform are the intellectual property of Kavach Fitness and may not be copied, resold, or redistributed without prior written consent.',
   },
 ];
 
 const TermsPage = () => {
   usePageMeta(
     'Terms & Conditions',
-    'The terms and conditions governing your use of the Vajra Fitness platform, accounts, and services.',
+    'The terms and conditions governing your use of the Kavach Fitness platform, accounts, and services.',
     '/terms',
   );
   return (
@@ -45,7 +44,7 @@ const TermsPage = () => {
             <h1 className="display mt-5 text-5xl md:text-6xl leading-[0.95]">
               Terms & <span className="text-gradient">Conditions</span>
             </h1>
-            <p className="section-lead">Last updated: 1 August 2026 · Applies to all Vajra Fitness members and platform users</p>
+            <p className="section-lead">Last updated: 1 August 2026 · Applies to all Kavach Fitness members and platform users</p>
           </Reveal>
 
           <div className="space-y-6">

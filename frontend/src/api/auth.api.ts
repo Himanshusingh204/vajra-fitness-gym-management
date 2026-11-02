@@ -24,3 +24,8 @@ export const changePassword = async (currentPassword: string, newPassword: strin
   const response = await api.put('/auth/password', { currentPassword, newPassword });
   return response.data;
 };
+
+export const acceptTrainerInvite = async (token: string, name: string, password: string) => {
+  const response = await api.post('/auth/accept-invite', { token, name, password });
+  return response.data;
+};

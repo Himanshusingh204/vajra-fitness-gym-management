@@ -36,6 +36,10 @@ describe('friendlyMessage', () => {
     expect(friendlyMessage(new ApiError(403, 'x', 'SUBSCRIPTION_READONLY'))).toMatch(/changes are paused/);
   });
 
+  it('explains a database outage', () => {
+    expect(friendlyMessage(errorFromResponse(503, { error: 'Database unreachable', code: 'DB_UNREACHABLE' }))).toMatch(/database/);
+  });
+
   it('hides server internals on 5xx', () => {
     expect(friendlyMessage(new ApiError(500, 'Internal server error'))).toMatch(/on our side/);
   });

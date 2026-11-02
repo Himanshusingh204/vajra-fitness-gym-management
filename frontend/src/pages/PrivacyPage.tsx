@@ -12,7 +12,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 const PrivacyPage = () => {
   usePageMeta(
     'Privacy Policy',
-    'How Vajra Fitness collects, uses, and protects your personal data. Read our privacy policy to understand your rights.',
+    'How Kavach Fitness collects, uses, and protects your personal data. Read our privacy policy to understand your rights.',
     '/privacy',
   );
   return (
@@ -20,11 +20,11 @@ const PrivacyPage = () => {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20">
       <h1 className="text-4xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-3">Privacy Policy</h1>
       <p className="text-gray-500 dark:text-gray-400 mb-12 text-sm">
-        Last updated: 1 August 2026 · Effective for all Vajra Fitness platform users
+        Last updated: 1 August 2026 · Effective for all Kavach Fitness platform users
       </p>
 
       <Section title="1. Information We Collect">
-        <p>When you register or use the Vajra Fitness platform, we collect your name, email address, mobile number, and gym affiliation. Payment transactions are processed via Razorpay and we do not store card or bank details on our servers.</p>
+        <p>When you register or use the Kavach Fitness platform, we collect your name, email address, mobile number, and gym affiliation. Payment transactions are processed via Razorpay and we do not store card or bank details on our servers.</p>
       </Section>
 
       <Section title="2. How We Use Your Information">
@@ -36,7 +36,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="4. Data Retention">
-        <p>Member records are retained for a minimum of 3 years in accordance with Indian GST regulations. You may request deletion of your account by contacting <a href="mailto:support@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">support@vajrafitness.in</a>. Financial transaction records will be retained as legally required.</p>
+        <p>Member records are retained for a minimum of 3 years in accordance with Indian GST regulations. You may request deletion of your account by contacting <a href="mailto:support@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">support@kavachfitness.in</a>. Financial transaction records will be retained as legally required.</p>
       </Section>
 
       <Section title="5. Cookies">
@@ -48,7 +48,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="7. Contact">
-        <p>For any privacy-related queries, write to us at <a href="mailto:privacy@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">privacy@vajrafitness.in</a> or visit our <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact page</Link>.</p>
+        <p>For any privacy-related queries, write to us at <a href="mailto:privacy@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">privacy@kavachfitness.in</a> or visit our <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact page</Link>.</p>
       </Section>
     </div>
   </div>

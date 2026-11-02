@@ -128,12 +128,12 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
       {summaryLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 bg-[var(--color-border)]/30 rounded-2xl animate-pulse" />
+            <div key={i} className="h-24 bg-[var(--color-border)]/30 rounded-lg animate-pulse" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1 flex items-center gap-1.5">
               <Wallet className="w-3.5 h-3.5" /> This Month
             </p>
@@ -141,7 +141,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               ₹{(summary?.monthTotal ?? 0).toLocaleString('en-IN')}
             </p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1 flex items-center gap-1.5">
               <Receipt className="w-3.5 h-3.5" /> All-Time Total
             </p>
@@ -149,7 +149,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               ₹{(summary?.allTimeTotal ?? 0).toLocaleString('en-IN')}
             </p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1 flex items-center gap-1.5">
               <TrendingDown className="w-3.5 h-3.5" /> Top Category (Month)
             </p>
@@ -162,7 +162,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               <p className="text-lg font-extrabold text-[var(--color-muted)]">—</p>
             )}
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Categories (Month)</p>
             <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{summary?.byCategory?.length ?? 0}</p>
             <p className="text-xs text-[var(--color-muted)] mt-0.5">of {CATEGORIES.length} tracked</p>
@@ -172,7 +172,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Add expense form */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+        <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
           <h3 className="font-bold text-lg dark:text-white mb-4">Record an Expense</h3>
           <form
             className="grid sm:grid-cols-2 gap-4"
@@ -256,7 +256,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
               />
             </div>
             {recordMut.isError && (
-              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
                 {(recordMut.error as any)?.response?.data?.error || 'Failed to record expense'}
               </div>
             )}
@@ -267,7 +267,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
         </div>
 
         {/* Expenses table */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+        <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
             <h2 className="font-bold text-lg dark:text-white">Expenses ({expenses.length})</h2>
             <button onClick={exportCsv} className="btn-outline text-sm px-3 py-1.5" disabled={expenses.length === 0}>
@@ -306,7 +306,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
           {expensesLoading ? (
             <div className="p-6 space-y-3">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-10 bg-[var(--color-border)]/30 rounded-xl animate-pulse" />
+                <div key={i} className="h-10 bg-[var(--color-border)]/30 rounded-lg animate-pulse" />
               ))}
             </div>
           ) : expenses.length === 0 ? (
@@ -319,7 +319,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
                 <thead className="bg-gray-50 dark:bg-white/5">
                   <tr>
                     {['Date', 'Category', 'Description', 'Amount', 'Recurring', 'Notes', 'Actions'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                      <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>

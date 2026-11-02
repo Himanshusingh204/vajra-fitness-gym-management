@@ -1,6 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
 import { assertGymCapacity } from '../services/entitlements.service';
 
@@ -11,14 +12,6 @@ import { assertGymCapacity } from '../services/entitlements.service';
 // booking cancellation (promotes the next waitlisted member).
 // Tenant safety: gym ownership is verified on every read/write.
 // =====================================================================
-
-// Helper: verify the requesting user owns the gym (or is SUPER_ADMIN).
-const assertGymOwner = async (gymId: string, userId: string | undefined, role: string | undefined) => {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, ownerId: true } });
-  if (!gym) return false;
-  if (role === 'SUPER_ADMIN') return true;
-  return gym.ownerId === userId;
-};
 
 // List classes for a gym (public).
 export const getClasses = async (req: AuthRequest, res: Response) => {
@@ -62,7 +55,7 @@ export const createClass = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -127,12 +120,12 @@ export const bookClass = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const member = await prisma.memberDetails.findFirst({ where: { userId, status: 'ACTIVE' } });
-    if (!member) return res.status(403).json({ error: 'Only active members can book classes' });
-
     const gymClass = await prisma.gymClass.findUnique({ where: { id: classId } });
     if (!gymClass) return res.status(404).json({ error: 'Class not found' });
-    if (gymClass.gymId !== member.gymId) return res.status(403).json({ error: 'You can only book classes at your gym' });
+
+    const member = await prisma.memberDetails.findUnique({ where: { userId_gymId: { userId, gymId: gymClass.gymId } } });
+    if (!member) return res.status(403).json({ error: 'You can only book classes at your gym' });
+    if (member.status !== 'ACTIVE') return res.status(403).json({ error: 'Only active members can book classes' });
 
     // Count current confirmed bookings.
     const currentBookings = await prisma.classBooking.count({
@@ -188,7 +181,7 @@ export const cancelClassBooking = async (req: AuthRequest, res: Response) => {
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
     const isSelf = booking.member.userId === userId;
-    const isGymOwner = await assertGymOwner(booking.gymClass.gymId, userId, req.user?.role);
+    const isGymOwner = await canAccessGym(req.user, booking.gymClass.gymId);
 
     if (!isSelf && !isGymOwner) {
       return res.status(403).json({ error: 'Unauthorized' });
@@ -200,7 +193,8 @@ export const cancelClassBooking = async (req: AuthRequest, res: Response) => {
       data: { status: 'CANCELLED' },
     });
 
-    if (updated.status === 'CANCELLED') {
+    // Only a confirmed seat frees capacity; cancelling a waitlist entry must not promote anyone.
+    if (booking.status === 'BOOKED') {
       const nextWaitlisted = await prisma.classBooking.findFirst({
         where: { classId: booking.classId, status: 'WAITLISTED' },
         orderBy: { createdAt: 'asc' },
@@ -228,7 +222,7 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
       include: { gym: { select: { ownerId: true } } },
     });
     if (!gymClass) return res.status(404).json({ error: 'Class not found' });
-    if (!(await assertGymOwner(gymClass.gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymClass.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -275,7 +269,7 @@ export const deleteClass = async (req: AuthRequest, res: Response) => {
       include: { gym: { select: { ownerId: true } } },
     });
     if (!gymClass) return res.status(404).json({ error: 'Class not found' });
-    if (!(await assertGymOwner(gymClass.gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymClass.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -297,7 +291,7 @@ export const getClassBookings = async (req: AuthRequest, res: Response) => {
       select: { id: true, gymId: true },
     });
     if (!gymClass) return res.status(404).json({ error: 'Class not found' });
-    if (!(await assertGymOwner(gymClass.gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymClass.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

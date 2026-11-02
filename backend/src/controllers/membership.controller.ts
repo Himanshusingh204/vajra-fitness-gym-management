@@ -1,7 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { logAudit } from '../utils/audit';
+import { canAccessGym, findMemberProfile, requestedGymId } from '../utils/tenant';
 import {
   createMembership,
   renewMembership,
@@ -20,11 +21,9 @@ export const getMemberships = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { status, memberId } = req.query as { status?: string; memberId?: string };
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     await syncThen();
 
@@ -55,7 +54,7 @@ export const getMyMemberships = async (req: AuthRequest, res: Response) => {
 
   try {
     await syncThen();
-    const member = await prisma.memberDetails.findUnique({ where: { userId } });
+    const member = await findMemberProfile(userId, requestedGymId(req));
     if (!member) return res.status(404).json({ error: 'Member profile not found' });
 
     const memberships = await prisma.membership.findMany({
@@ -75,11 +74,9 @@ export const getMyMemberships = async (req: AuthRequest, res: Response) => {
 export const createMembershipHandler = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const membership = await createMembership({ ...req.body, gymId });
 
@@ -108,11 +105,9 @@ export const createMembershipHandler = async (req: AuthRequest, res: Response) =
 export const renewMembershipHandler = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const membership = await renewMembership({ ...req.body, gymId });
 
@@ -150,12 +145,8 @@ export const getMembership = async (req: AuthRequest, res: Response) => {
     if (!membership) return res.status(404).json({ error: 'Membership not found' });
 
     const isSelf = membership.member.userId === req.user?.userId;
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    if (!isSelf && !isSuperAdmin) {
-      const gym = await prisma.gym.findUnique({ where: { id: membership.gymId } });
-      if (!gym || gym.ownerId !== req.user?.userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
+    if (!isSelf && !(await canAccessGym(req.user, membership.gymId))) {
+      return res.status(403).json({ error: 'Unauthorized' });
     }
 
     res.json(withDerivedStatus(membership));

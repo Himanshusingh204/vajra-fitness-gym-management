@@ -6,6 +6,7 @@ import {
   getPublicSiteContent,
   getPublicStats,
   getPublicGym,
+  getPublicSite,
   getSitemap,
 } from '../controllers/content.controller';
 import { validate } from '../middlewares/validate.middleware';
@@ -17,12 +18,18 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
+router.use((req, res, next) => {
+  if (req.method === 'GET') res.set('Cache-Control', 'public, max-age=120');
+  next();
+});
+
 router.get('/faqs', asyncHandler(getPublicFaqs));
 router.get('/testimonials', asyncHandler(getPublicTestimonials));
 router.get('/gym-branding', asyncHandler(getGymBranding));
 router.get('/site-content', asyncHandler(getPublicSiteContent));
 router.get('/stats', asyncHandler(getPublicStats));
 router.get('/gyms/:gymId', validate(gymIdParams, ['params']), asyncHandler(getPublicGym));
+router.get('/sites/:slug', asyncHandler(getPublicSite));
 // Served to crawlers as /sitemap.xml through a rewrite in vercel.json.
 router.get('/sitemap.xml', asyncHandler(getSitemap));
 

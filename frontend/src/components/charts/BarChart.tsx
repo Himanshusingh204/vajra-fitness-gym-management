@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import type { ChartSeries, ChartConfig } from './types';
+import { drawYAxis, drawEmpty } from './axis';
 
 interface BarChartProps {
   series: ChartSeries[];
@@ -17,7 +18,7 @@ const DEFAULT_COLORS = [
   'var(--color-accent)',
   'var(--color-primary-light)',
   'var(--color-secondary-light)',
-  '#ff7b00',
+  'var(--color-steel)',
 ];
 
 const BarChartImpl: React.FC<BarChartProps> = ({
@@ -79,6 +80,8 @@ const BarChartImpl: React.FC<BarChartProps> = ({
         }
         svg.appendChild(gridLines);
       }
+
+      drawYAxis(svg, pad, height, 0, maxValue);
 
       series.forEach((seriesItem, seriesIndex) => {
         const color = seriesItem.color || colors[seriesIndex % colors.length];
@@ -244,7 +247,11 @@ const BarChartImpl: React.FC<BarChartProps> = ({
 
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg || series.length === 0) return;
+    if (!svg) return;
+    if (series.length === 0 || series[0].data.length === 0) {
+      drawEmpty(svg, width, height);
+      return;
+    }
 
     const chartWidth = width - pad.left - pad.right;
     const chartHeight = height - pad.top - pad.bottom;

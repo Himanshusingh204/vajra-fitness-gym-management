@@ -10,7 +10,6 @@ import {
   PaymentDisabledError,
 } from '../services/payment.service';
 import {
-  activateSubscription,
   extendSubscription,
   cancelSubscription,
   upgradeSubscription,
@@ -138,6 +137,7 @@ export const deleteSaaSPlan = async (req: AuthRequest, res: Response) => {
     const plan = await prisma.saaSPlan.findUnique({ where: { id } });
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
     await prisma.saaSPlan.update({ where: { id }, data: { isActive: false } });
+    await logAudit({ action: 'SAAS_PLAN_DEACTIVATED', entity: 'SaaSPlan', entityId: id, userId: req.user?.userId ?? null });
     res.json({ message: 'Plan deactivated' });
   } catch {
     res.status(500).json({ error: 'Failed to deactivate plan' });
@@ -240,6 +240,13 @@ export const updateSubscriptionStatus = async (req: AuthRequest, res: Response) 
     if (!subscription) return res.status(404).json({ error: 'Subscription not found' });
 
     const updated = await prisma.gymSubscription.update({ where: { id }, data: { status } });
+    await logAudit({
+      action: 'SUBSCRIPTION_STATUS_UPDATED',
+      entity: 'GymSubscription',
+      entityId: id,
+      details: JSON.stringify({ from: subscription.status, to: status }),
+      userId: req.user?.userId ?? null,
+    });
 
     await createNotification({
       userId: subscription.gym.ownerId,
@@ -275,7 +282,7 @@ export const getMyGymSubscription = async (req: AuthRequest, res: Response) => {
 };
 
 interface SaaSQuote {
-  gym: { id: string; ownerId: string; name: string; isApproved: boolean };
+  gym: { id: string; ownerId: string; name: string; status: string };
   plan: { id: string; name: string };
   cycle: 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
   months: number;
@@ -303,7 +310,7 @@ const getSaaSQuote = async (input: {
     : await prisma.gym.findFirst({ where: { ownerId: input.userId } });
 
   if (!gym) throw quoteError(404, 'Gym not found');
-  if (!gym.isApproved) throw quoteError(403, 'Your gym must be approved before subscribing');
+  if (gym.status !== 'APPROVED') throw quoteError(403, 'Your gym must be approved before subscribing');
 
   const plan = await prisma.saaSPlan.findUnique({ where: { id: input.planId } });
   if (!plan || !plan.isActive) throw quoteError(404, 'Plan not found');

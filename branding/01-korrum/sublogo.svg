@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 220" fill="none">
+  <defs>
+    <linearGradient id="kSubBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Large Centered Icon -->
+  <g transform="translate(76, 16)">
+    <rect x="12" y="10" width="16" height="64" rx="5" fill="url(#kSubBlue)" />
+    <path d="M 36 42 L 64 12 L 82 12 L 50 44 Z" fill="url(#kSubBlue)" />
+    <path d="M 50 40 L 82 74 L 64 74 L 36 44 Z" fill="#22C55E" />
+    <rect x="26" y="36" width="14" height="14" rx="3.5" fill="#020617" stroke="#3B82F6" stroke-width="2.5"/>
+  </g>
+
+  <!-- Stacked Typography -->
+  <text x="120" y="145" font-family="'Outfit', -apple-system, system-ui, sans-serif" 
+        font-weight="900" font-size="34" letter-spacing="-0.5" fill="#020617" text-anchor="middle">
+    KORRUM
+  </text>
+  <text x="120" y="170" font-family="'Outfit', -apple-system, system-ui, sans-serif" 
+        font-weight="700" font-size="10" letter-spacing="3" fill="#64748B" text-anchor="middle">
+    GYM OPERATING SYSTEM
+  </text>
+</svg>

@@ -82,6 +82,20 @@ const futureDate = z
   }, { message: 'Date must be today or in the future' });
 const uuid = z.string().uuid('A valid id is required');
 
+// zod's url() accepts any scheme, so javascript: and data: links would pass.
+export const httpUrl = z
+  .string()
+  .trim()
+  .url('A valid URL is required')
+  .max(1000)
+  .refine((v) => /^https?:\/\//i.test(v), { message: 'URL must start with http:// or https://' });
+
+// Gym photos: an http(s) URL, or a path to an image we ship in frontend/public.
+// Uploaded gallery photos are served from /api/images/<document id>.
+const imageRef = z.union([httpUrl, z.string().trim().regex(/^\/[\w-]+(\/[\w-]+)*\.(jpe?g|png|webp|avif)$/i), z.string().regex(/^\/api\/images\/[0-9a-f-]{36}$/)], {
+  message: 'Image must be an http(s) URL',
+});
+
 // Pincode: exactly 6 digits, numeric only (India).
 const pincode = z
   .string()
@@ -180,6 +194,18 @@ export const registerMemberSchema = z.object({
   gymId: uuid.optional().nullable(),
   planId: uuid.optional().nullable(),
   preferredPaymentMethod: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'OTHER']).optional().nullable(),
+  referralCode: z.string().trim().max(40).optional(),
+});
+
+export const trainerInviteSchema = z.object({
+  email,
+  name: username.optional(),
+});
+
+export const acceptInviteSchema = z.object({
+  token: z.string().min(16).max(200),
+  name: username,
+  password,
 });
 
 export const registerTrainerSchema = z.object({
@@ -214,6 +240,7 @@ export const updateProfileSchema = z
 export const loginSchema = z.object({
   email: email,
   password: z.string().min(1).max(128),
+  rememberMe: z.boolean().optional(),
 });
 
 export const activateAccountSchema = z.object({
@@ -346,6 +373,11 @@ export const checkoutSchema = z.object({
   feeId: uuid,
 });
 
+export const createOrderSchema = z.object({
+  planId: uuid,
+  gymId: uuid,
+});
+
 export const verifyPaymentSchema = z.object({
   orderId: razorpayId,
   paymentId: razorpayId,
@@ -442,9 +474,19 @@ export const gymUpdateSchema = z.object({
   pincode: pincode.optional().nullable(),
   location: sanitize(300).optional().nullable(),
   gstNumber: z.string().trim().max(40).optional().nullable(),
-  logoUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
-  imageUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
-  facilities: sanitize(2000).optional().nullable(),
+  logoUrl: imageRef.optional().nullable(),
+  imageUrl: imageRef.optional().nullable(),
+  galleryUrls: z.array(imageRef).max(12, 'Up to 12 gallery photos').optional(),
+  facilities: z.array(sanitize(60)).max(40).optional(),
+  description: sanitize(2000).optional().nullable(),
+  openingHours: sanitize(200).optional().nullable(),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^(\+?\d[\d\s-]{6,18}\d)?$/, 'Enter a valid phone number')
+    .optional()
+    .nullable(),
+  email: z.union([email, z.literal('')]).optional().nullable(),
   // White-label branding
   brandColor: z
     .string()
@@ -526,7 +568,7 @@ export const testimonialSchema = z.object({
   name: sanitize(100).pipe(z.string().min(2, 'Name must be at least 2 characters')),
   role: sanitize(100).pipe(z.string().min(2, 'Role must be at least 2 characters')),
   content: sanitize(1000).pipe(z.string().min(3, 'Content must be at least 3 characters')),
-  imageUrl: z.string().trim().url('A valid image URL is required').max(1000).optional().nullable(),
+  imageUrl: httpUrl.optional().nullable(),
   gymName: sanitize(120).optional().nullable(),
   rating: z.number().int().min(1).max(5).optional(),
   featured: z.boolean().optional(),
@@ -566,6 +608,10 @@ export const createBookingSchema = z.object({
   notes: z.string().trim().max(500).optional().nullable(),
 });
 
+export const rescheduleBookingSchema = z.object({ date: bookingDate, time: bookingTime });
+
+export const slotsQuery = z.object({ trainerId: uuid, date: bookingDate });
+
 export const updateBookingSchema = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']).optional(),
 });
@@ -596,7 +642,7 @@ export const nutritionPlanSchema = z.object({
     .default('[]'),
 });
 
-// ---- Vajra SaaS plans (sold to gym owners) ----
+// ---- Kavach SaaS plans (sold to gym owners) ----
 export const saasPlanSchema = z.object({
   name: sanitize(100).pipe(z.string().min(2, 'Name must be at least 2 characters')),
   code: z
@@ -634,4 +680,43 @@ export const subscriptionSchema = z.object({
 
 export const subscriptionStatusSchema = z.object({
   status: z.enum(['ACTIVE', 'PENDING', 'EXPIRED', 'SUSPENDED', 'CANCELLED']),
+});
+
+export const websiteRequestSchema = z.object({
+  desiredSlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]([a-z0-9-]{1,28}[a-z0-9])?$/, 'Use 3-30 lowercase letters, numbers or hyphens'),
+  note: z.string().trim().max(500).optional(),
+});
+
+// ---- Referrals (gym admin) ----
+export const referralCreateSchema = z.object({
+  userId: uuid,
+  referredUserId: uuid,
+  rewardType: z.enum(['CREDIT', 'DISCOUNT', 'FREE_MONTH', 'FREE_DAYS', 'PT_SESSION']),
+  rewardValue: z.coerce.number().nonnegative().max(1e7),
+});
+
+export const referralStatusSchema = z.object({
+  status: z.enum(['PENDING', 'COMPLETED', 'REWARDED']),
+});
+
+// ---- Payroll ----
+export const payslipCreateSchema = z.object({
+  userId: uuid,
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2000).max(2100),
+  basicSalary: z.coerce.number().nonnegative().max(1e8),
+  bonuses: z.coerce.number().nonnegative().max(1e8).optional(),
+  deductions: z.coerce.number().nonnegative().max(1e8).optional(),
+  paymentMethod: paymentMethod,
+  notes: sanitize(1000).optional().nullable(),
+});
+
+export const payslipStatusSchema = z.object({
+  status: z.enum(['PENDING', 'PAID']),
+  paymentMethod,
+  transactionId: z.string().trim().max(120).optional().nullable(),
 });

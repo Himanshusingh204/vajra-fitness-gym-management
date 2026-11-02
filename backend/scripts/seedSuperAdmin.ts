@@ -8,7 +8,7 @@ async function main() {
     console.log('Refusing to seed credentials in production. Set ALLOW_PRODUCTION_SEED=1 to override.');
     return;
   }
-  const email = 'admin@vajrafitness.com';
+  const email = 'admin@kavachfitness.com';
   
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -28,7 +28,7 @@ async function main() {
     }
   });
 
-  console.log('Super Admin seeded successfully: admin@vajrafitness.com / admin123');
+  console.log('Super Admin seeded successfully: admin@kavachfitness.com / admin123');
 }
 
 main()

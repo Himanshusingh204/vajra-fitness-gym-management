@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
+import { ROUTES } from '../utils/routes';
 import { Link } from 'react-router';
 import {
   Target, Eye, Users, Briefcase, ChevronDown, ArrowRight, Mail, Sparkles, ShieldCheck, Rocket, HeartHandshake, TrendingUp,
@@ -17,7 +18,7 @@ const VALUES = [
 
 const FAQS = [
   {
-    q: 'Is Vajra Fitness a gym, or software for gyms?',
+    q: 'Is Kavach Fitness a gym, or software for gyms?',
     a: 'Software. We don\'t run gyms ourselves — gym owners sign up, register their business, and run their day-to-day membership, billing, and staff operations on our platform.',
   },
   {
@@ -74,8 +75,8 @@ const FaqItem = ({ q, a, open, onToggle }: { q: string; a: string; open: boolean
 
 const AboutPage = () => {
   usePageMeta(
-    'About Vajra Fitness',
-    'Learn about Vajra Fitness — the enterprise gym management platform built for Indian fitness businesses. Our story, mission, and vision.',
+    'About Kavach Fitness',
+    'Learn about Kavach Fitness — the enterprise gym management platform built for Indian fitness businesses. Our story, mission, and vision.',
     '/about',
   );
   const { hash } = useLocation();
@@ -102,38 +103,45 @@ const AboutPage = () => {
 
   return (
     <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
-      {/* ===== Hero ===== */}
-      <section className="relative pt-36 pb-20 md:pt-44 md:pb-24 overflow-hidden">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
-        <div className="absolute top-40 -right-32 w-[28rem] h-[28rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-6s]" />
-        <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-[var(--color-secondary)]/10 rounded-full blur-3xl animate-blob [animation-delay:-12s]" />
+      {/* Hero */}
+      <section className="relative isolate flex min-h-[34rem] items-center overflow-hidden py-16 sm:min-h-[39rem] md:py-20">
+        <img
+          src="/images/about-team.webp"
+          alt="A gym owner and coach reviewing a training plan together"
+          fetchPriority="high"
+          className="absolute inset-0 -z-20 h-full w-full object-cover object-[center_42%]"
+        />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-black/65 to-black/20" aria-hidden="true" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/45 via-transparent to-black/10" aria-hidden="true" />
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl text-left">
           <Reveal>
-            <span className="eyebrow">Who we are</span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/20 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur">Who we are</span>
           </Reveal>
           <Reveal delay={100}>
-            <h1 className="display mt-6 text-5xl sm:text-6xl md:text-7xl leading-[0.95]">
-              About <span className="text-gradient">Vajra Fitness</span>
+            <h1 className="mt-6 text-5xl font-extrabold leading-[0.95] tracking-tight text-white sm:text-6xl md:text-7xl">
+              About <span className="text-[#f28b91]">Kavach Fitness</span>
             </h1>
           </Reveal>
           <Reveal delay={200}>
-            <p className="section-lead mt-6 text-lg md:text-xl text-[var(--color-muted)]!">
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-white/80 md:text-xl">
               A SaaS platform built for gym owners and fitness professionals in India.
               We power {gymCountLabel} gyms with automated payments, attendance tracking, and digital
               workout plans — so you can focus on your members, not spreadsheets.
             </p>
           </Reveal>
-          <Reveal delay={300} className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/register" className="btn-primary">
+          <Reveal delay={300} className="mt-8 flex flex-col items-start gap-4 sm:flex-row">
+            <Link to={ROUTES.partnerRegister} className="btn-primary">
               Partner With Us <ArrowRight className="w-5 h-5" />
             </Link>
-            <Link to="/contact" className="btn-ghost">Talk to Our Team</Link>
+            <Link to="/contact" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-white/35 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">Talk to Our Team</Link>
           </Reveal>
+          </div>
         </div>
       </section>
 
-      {/* ===== Company ===== */}
+      {/* Company */}
       <section id="company" className="section-pad scroll-mt-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-14 items-center">
@@ -141,7 +149,7 @@ const AboutPage = () => {
               <span className="eyebrow">Our Story</span>
               <h2 className="section-title mt-4">Built by gym operators, for gym operators</h2>
               <p className="section-lead text-left!">
-                Vajra Fitness started with a simple frustration: gym owners were
+                Kavach Fitness started with a simple frustration: gym owners were
                 running multi-crore businesses on WhatsApp groups, paper registers, and Excel sheets.
               </p>
               <p className="mt-4 text-[var(--color-muted)] leading-relaxed">
@@ -164,7 +172,6 @@ const AboutPage = () => {
             </Reveal>
 
             <Reveal variant="right" className="relative">
-              <div className="absolute inset-0 bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-accent)] blur-3xl opacity-20 rounded-full" />
               <img
                 src="https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=2070&auto=format&fit=crop"
                 alt="Modern gym floor"
@@ -180,7 +187,7 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* ===== Mission & Vision ===== */}
+      {/* Mission & Vision */}
       <section id="mission-vision" className="section-pad scroll-mt-24 bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeading eyebrow="Purpose" title="Mission & Vision" />
@@ -225,7 +232,7 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* ===== Careers ===== */}
+      {/* Careers */}
       <section id="careers" className="section-pad scroll-mt-24 bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-14 items-center">
@@ -250,7 +257,7 @@ const AboutPage = () => {
                   </div>
                 ))}
               </div>
-              <a href="mailto:careers@vajrafitness.in" className="btn-primary mt-8">
+              <a href="mailto:careers@kavachfitness.in" className="btn-primary mt-8">
                 View Open Positions <Mail className="w-5 h-5" />
               </a>
             </Reveal>
@@ -267,7 +274,7 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* ===== FAQ ===== */}
+      {/* FAQ */}
       <section id="faq" className="section-pad scroll-mt-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeading eyebrow="FAQ" title="Frequently Asked Questions" lead="Everything you need to know about memberships, training, and the platform." />
@@ -292,21 +299,20 @@ const AboutPage = () => {
         </div>
       </section>
 
-      {/* ===== CTA ===== */}
+      {/* CTA */}
       <section className="relative py-20 md:py-28 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-section-dark)] to-[var(--color-section-dark-alt)]" />
-        <div className="absolute -top-20 right-0 w-[600px] h-[600px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-20 animate-blob" />
         <div className="relative z-10 max-w-3xl mx-auto px-4 text-center">
           <Reveal>
             <h2 className="display text-4xl md:text-6xl text-white leading-none mb-6">
               Ready to modernize your gym?
             </h2>
             <p className="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
-              Join {gymCountLabel} gyms across India running their business on Vajra Fitness.
+              Join {gymCountLabel} gyms across India running their business on Kavach Fitness.
               Start your 14-day free trial today — no credit card required.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link to="/register" className="btn-accent px-10! py-4! text-lg">
+              <Link to={ROUTES.partnerRegister} className="btn-accent px-10! py-4! text-lg">
                 Create Free Account
               </Link>
               <Link to="/contact" className="btn-outline px-10! py-4! text-lg border-white/20! text-white! hover:bg-white! hover:text-black!">

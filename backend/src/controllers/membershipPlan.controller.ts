@@ -1,7 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 
 // Get active plans for a gym (public)
 export const getPlans = async (req: AuthRequest, res: Response) => {
@@ -23,7 +24,7 @@ export const getAllPlans = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -44,7 +45,7 @@ export const createPlan = async (req: AuthRequest, res: Response) => {
     
     // Verify ownership
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || gym.ownerId !== req.user?.userId) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized to add plans to this gym' });
     }
 
@@ -80,10 +81,9 @@ export const updatePlan = async (req: AuthRequest, res: Response) => {
 
     const plan = await prisma.membershipPlan.findUnique({
       where: { id },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
-    if (req.user?.role !== 'SUPER_ADMIN' && plan.gym.ownerId !== req.user?.userId) {
+    if (!(await canAccessGym(req.user, plan.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -103,10 +103,9 @@ export const deletePlan = async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
     const plan = await prisma.membershipPlan.findUnique({
       where: { id },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
-    if (req.user?.role !== 'SUPER_ADMIN' && plan.gym.ownerId !== req.user?.userId) {
+    if (!(await canAccessGym(req.user, plan.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

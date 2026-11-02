@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
 
 // =====================================================================
@@ -12,22 +13,14 @@ import { logAudit } from '../utils/audit';
 // Admin of) the gym before reading or writing any payroll record.
 // =====================================================================
 
-// Helper: verify the requesting user owns the gym (or is SUPER_ADMIN).
-const assertGymOwner = async (gymId: string, userId: string | undefined, role: string | undefined) => {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, ownerId: true } });
-  if (!gym) return false;
-  if (role === 'SUPER_ADMIN') return true;
-  return gym.ownerId === userId;
-};
-
 // Helper: resolve the payslip's gym and verify ownership by id.
-const assertPayslipGymAccess = async (payslipId: string, userId: string | undefined, role: string | undefined) => {
+const assertPayslipGymAccess = async (payslipId: string, user: AuthRequest['user']) => {
   const payslip = await prisma.payslip.findUnique({
     where: { id: payslipId },
     select: { id: true, gymId: true },
   });
   if (!payslip) return { ok: false as const, payslip: null };
-  const ok = await assertGymOwner(payslip.gymId, userId, role);
+  const ok = await canAccessGym(user, payslip.gymId);
   return { ok, payslip };
 };
 
@@ -38,7 +31,7 @@ export const getPayslips = async (req: AuthRequest, res: Response) => {
     const { month, year, status, userId } = req.query as { month?: string; year?: string; status?: string; userId?: string };
 
     // Tenant isolation: verify the caller owns this gym.
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -72,7 +65,7 @@ export const createPayslip = async (req: AuthRequest, res: Response) => {
     }
 
     // Tenant isolation: verify the caller owns this gym.
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -129,7 +122,7 @@ export const updatePayslipStatus = async (req: AuthRequest, res: Response) => {
     }
 
     // Tenant isolation: verify the caller owns the payslip's gym.
-    const access = await assertPayslipGymAccess(id, req.user?.userId, req.user?.role);
+    const access = await assertPayslipGymAccess(id, req.user);
     if (!access.ok) return res.status(403).json({ error: 'Unauthorized' });
 
     // NOTE: the Prisma field is `paidAt` (see schema.prisma Payslip model).
@@ -164,7 +157,7 @@ export const deletePayslip = async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
 
     // Tenant isolation: verify the caller owns the payslip's gym.
-    const access = await assertPayslipGymAccess(id, req.user?.userId, req.user?.role);
+    const access = await assertPayslipGymAccess(id, req.user);
     if (!access.ok) return res.status(403).json({ error: 'Unauthorized' });
 
     await prisma.payslip.delete({ where: { id } });
@@ -191,7 +184,7 @@ export const getPayslipSummary = async (req: AuthRequest, res: Response) => {
     const { year } = req.query as { year?: string };
 
     // Tenant isolation: verify the caller owns this gym.
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

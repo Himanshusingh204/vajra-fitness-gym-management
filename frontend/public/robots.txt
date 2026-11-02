@@ -1,4 +1,18 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /owner
+Disallow: /trainer/
+Disallow: /trainer$
+Disallow: /staff
+Disallow: /dashboard
+Disallow: /bookings
+Disallow: /profile
+Disallow: /notifications
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /activate
 
-Sitemap: https://vajrafitness.in/sitemap.xml
+Sitemap: https://kavachfitness.in/sitemap.xml

@@ -85,6 +85,35 @@ describe('api client', () => {
     expect(tokens.refresh).toBe('r1');
   });
 
+  it('keeps the session when the database is down during refresh', async () => {
+    const tokens = memoryTokens('old', 'r1');
+    const onSessionEnded = vi.fn();
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) =>
+      String(url).endsWith('/auth/refresh')
+        ? json(503, { error: 'Database unreachable', code: 'DB_UNREACHABLE' })
+        : json(401, { error: 'expired' }),
+    );
+    const api = createApiClient({ baseUrl: 'https://x.test/api', tokens, fetchImpl, onSessionEnded });
+
+    await expect(api.get('/a')).rejects.toMatchObject({ status: 503, code: 'DB_UNREACHABLE' });
+    expect(onSessionEnded).not.toHaveBeenCalled();
+    expect(tokens.refresh).toBe('r1');
+  });
+
+  it('sends the chosen gym only when there is one', async () => {
+    let gymId: string | null = null;
+    const fetchImpl = vi.fn(async () => json(200, {}));
+    const api = createApiClient({ baseUrl: 'https://x.test/api', tokens: memoryTokens('a1', 'r1'), fetchImpl, getGymId: () => gymId });
+
+    await api.get('/members/my-profile');
+    gymId = 'g2';
+    await api.get('/members/my-profile');
+
+    const headers = fetchImpl.mock.calls.map((c) => (c as unknown as [string, RequestInit])[1].headers as Record<string, string>);
+    expect(headers[0]?.['X-Gym-Id']).toBeUndefined();
+    expect(headers[1]?.['X-Gym-Id']).toBe('g2');
+  });
+
   it('does not try to refresh for unauthenticated calls', async () => {
     const fetchImpl = vi.fn(async () => json(401, { error: 'Invalid credentials' }));
     const api = createApiClient({ baseUrl: 'https://x.test/api', tokens: memoryTokens(null, 'r1'), fetchImpl });

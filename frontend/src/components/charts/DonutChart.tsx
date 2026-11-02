@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useMemo, memo } from 'react';
 import type { ChartDataPoint, ChartConfig } from './types';
+import { drawEmpty } from './axis';
 
 interface DonutChartProps {
   data: ChartDataPoint[];
@@ -17,9 +18,9 @@ const DEFAULT_COLORS = [
   'var(--color-accent)',
   'var(--color-primary-light)',
   'var(--color-secondary-light)',
-  '#ff7b00',
+  'var(--color-steel)',
   'var(--color-primary-dark)',
-  '#022417',
+  'var(--color-muted)',
 ];
 
 const DonutChartImpl: React.FC<DonutChartProps> = ({
@@ -45,7 +46,11 @@ const DonutChartImpl: React.FC<DonutChartProps> = ({
 
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg || data.length === 0) return;
+    if (!svg) return;
+    if (data.length === 0 || data.every((d) => d.value <= 0)) {
+      drawEmpty(svg, width, height);
+      return;
+    }
 
     const chartWidth = width - pad.left - pad.right;
     const chartHeight = height - pad.top - pad.bottom;

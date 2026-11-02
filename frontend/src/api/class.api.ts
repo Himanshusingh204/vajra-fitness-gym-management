@@ -53,11 +53,6 @@ export const bookClass = async (classId: string) => {
   return response.data;
 };
 
-export const cancelClassBooking = async (bookingId: string) => {
-  const response = await api.delete(`/classes/bookings/${bookingId}`);
-  return response.data;
-};
-
 export const getClassBookings = async (classId: string) => {
   const response = await api.get<ClassBooking[]>(`/classes/${classId}/bookings`);
   return response.data;

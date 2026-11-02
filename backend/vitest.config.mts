@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING = 'true';
@@ -16,6 +18,7 @@ export default defineConfig({
       DATABASE_URL: TEST_DB,
       JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long!!',
       FRONTEND_URL: 'http://localhost:5173',
+      UPLOAD_DIR: path.join(os.tmpdir(), 'kavach-test-uploads'),
     },
     fileParallelism: false,
     isolate: false,

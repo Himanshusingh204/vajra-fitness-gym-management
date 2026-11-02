@@ -1,6 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
 
 // List products for a gym
@@ -11,7 +12,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -56,7 +57,7 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -101,10 +102,9 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!product) return res.status(404).json({ error: 'Product not found' });
-    if (product.gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, product.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -143,10 +143,9 @@ export const deleteProduct = async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!product) return res.status(404).json({ error: 'Product not found' });
-    if (product.gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, product.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -164,7 +163,7 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -186,7 +185,7 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -208,7 +207,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -258,14 +257,16 @@ export const createSale = async (req: AuthRequest, res: Response) => {
         include: { items: { include: { product: true } } },
       });
 
-      // Deduct stock — one update per distinct product, aggregated above.
+      // Deduct stock — one update per distinct product, aggregated above. The
+      // stock condition re-checks inside the transaction so two tills can't oversell.
       await Promise.all(
-        Array.from(quantityByProduct.entries()).map(([productId, quantity]) =>
-          tx.product.update({
-            where: { id: productId },
+        Array.from(quantityByProduct.entries()).map(async ([productId, quantity]) => {
+          const { count } = await tx.product.updateMany({
+            where: { id: productId, stock: { gte: quantity } },
             data: { stock: { decrement: quantity } },
-          }),
-        ),
+          });
+          if (count === 0) throw new Error('INSUFFICIENT_STOCK');
+        }),
       );
 
       return sale;
@@ -281,6 +282,9 @@ export const createSale = async (req: AuthRequest, res: Response) => {
 
     res.status(201).json(sale);
   } catch (error) {
+    if ((error as Error)?.message === 'INSUFFICIENT_STOCK') {
+      return res.status(409).json({ error: 'Stock changed while checking out. Refresh and try again.' });
+    }
     res.status(500).json({ error: 'Failed to create sale' });
   }
 };
@@ -292,7 +296,7 @@ export const getSales = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

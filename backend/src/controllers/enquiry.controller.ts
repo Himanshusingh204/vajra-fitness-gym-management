@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { getOrSetJSON } from '../utils/cache';
 
 // Get enquiries for a gym
@@ -9,7 +10,7 @@ export const getEnquiries = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -35,7 +36,7 @@ export const createEnquiry = async (req: AuthRequest, res: Response) => {
 
     // Only accept enquiries for gyms that actually exist and are approved.
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || !gym.isApproved) {
+    if (!gym || gym.status !== 'APPROVED') {
       return res.status(404).json({ error: 'Gym not found' });
     }
 
@@ -66,17 +67,9 @@ export const updateEnquiry = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Invalid enquiry status' });
     }
 
-    const enquiry = await prisma.enquiry.findUnique({
-      where: { id },
-      include: { gym: { select: { ownerId: true } } },
-    });
+    const enquiry = await prisma.enquiry.findUnique({ where: { id } });
     if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
-
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = enquiry.gym.ownerId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, enquiry.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const updated = await prisma.enquiry.update({
       where: { id },

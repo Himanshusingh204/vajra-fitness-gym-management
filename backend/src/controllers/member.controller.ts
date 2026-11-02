@@ -1,16 +1,17 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import argon2 from 'argon2';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
 import { getOrSetJSON } from '../utils/cache';
-import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
+import { generateSecureToken, hashToken, TOKEN_TTL } from '../utils/tokens';
 import { FRONTEND_URL } from '../utils/env';
 import { logger } from '../utils/logger';
 import { notifyGymOwner } from '../services/notification.service';
 import { createMembership } from '../services/membership.service';
 import { sendActivationEmail } from '../utils/email';
 import { assertGymCapacity } from '../services/entitlements.service';
+import { canAccessGym, findMemberProfile, requestedGymId } from '../utils/tenant';
 
 const MAX_IMPORT_ROWS = 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,11 +66,9 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { csv, planId } = req.body;
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     if (planId) {
       const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
@@ -159,12 +158,12 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
               phone: r.phone,
               password: await argon2.hash(generateSecureToken(24)),
               role: 'MEMBER',
-              memberDetails: { create: { gymId, planId: planId ?? null, status: 'PENDING' } },
+              memberProfiles: { create: { gymId, planId: planId ?? null, status: 'PENDING' } },
             },
           });
           const token = generateSecureToken();
           await tx.activationToken.create({
-            data: { token, userId: user.id, expiresAt: new Date(Date.now() + TOKEN_TTL.activation) },
+            data: { tokenHash: hashToken(token), userId: user.id, expiresAt: new Date(Date.now() + TOKEN_TTL.activation) },
           });
           created.push({ username: r.username, email: r.email, token });
         }
@@ -217,32 +216,15 @@ export const getMembers = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { branchId } = req.query;
     
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-
-    let isTrainerAtGym = false;
-    if (req.user?.role === 'TRAINER') {
-      const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId, status: 'ACTIVE' },
-      });
-      isTrainerAtGym = !!trainer;
-    }
-
-    let isStaffAtGym = false;
-    if (req.user?.role === 'STAFF') {
-      const staff = await prisma.staffDetails.findFirst({
-        where: { userId: req.user.userId, gymId },
-      });
-      isStaffAtGym = !!staff;
-    }
-
-    if (req.user?.role !== 'SUPER_ADMIN' && gym.ownerId !== req.user?.userId && !isTrainerAtGym && !isStaffAtGym) {
+    if (!(await canAccessGym(req.user, gymId, ['TRAINER', 'STAFF']))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
     // Trainers and staff need member names for workout/booking context but not
     // full PII (email/phone). Only the gym owner and super admin see those.
-    const isOwner = req.user?.role === 'SUPER_ADMIN' || gym.ownerId === req.user?.userId;
+    const isOwner = await canAccessGym(req.user, gymId);
 
     const where: any = { gymId };
     if (branchId) {
@@ -282,10 +264,7 @@ export const addMember = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { username, email, phone, planId, status, branchId } = req.body;
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(400).json({ error: 'Email already exists' });
@@ -293,6 +272,11 @@ export const addMember = async (req: AuthRequest, res: Response) => {
     if (branchId) {
       const branch = await prisma.branch.findFirst({ where: { id: branchId, gymId } });
       if (!branch) return res.status(400).json({ error: 'Branch does not belong to this gym' });
+    }
+
+    if (planId) {
+      const plan = await prisma.membershipPlan.findFirst({ where: { id: planId, gymId }, select: { id: true } });
+      if (!plan) return res.status(400).json({ error: 'Plan does not belong to this gym' });
     }
 
     // Enforce the gym's SaaS plan capacity before creating another member.
@@ -316,7 +300,7 @@ export const addMember = async (req: AuthRequest, res: Response) => {
         phone,
         password: placeholderPassword,
         role: 'MEMBER',
-        memberDetails: {
+        memberProfiles: {
           create: {
             gymId,
             planId,
@@ -325,13 +309,13 @@ export const addMember = async (req: AuthRequest, res: Response) => {
           },
         },
       },
-      include: { memberDetails: true },
+      include: { memberProfiles: true },
     });
 
     const activationToken = generateSecureToken();
     await prisma.activationToken.create({
       data: {
-        token: activationToken,
+        tokenHash: hashToken(activationToken),
         userId: member.id,
         expiresAt: new Date(Date.now() + TOKEN_TTL.activation),
       },
@@ -353,8 +337,8 @@ export const addMember = async (req: AuthRequest, res: Response) => {
       message: `${username} was added as a member.`,
     });
 
-    const { password: _pw, ...safeMember } = member;
-    res.status(201).json({ ...safeMember, activationLink });
+    const { password: _pw, memberProfiles, ...safeMember } = member;
+    res.status(201).json({ ...safeMember, memberDetails: memberProfiles[0], activationLink });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add member' });
   }
@@ -366,15 +350,10 @@ export const sendActivationLink = async (req: AuthRequest, res: Response) => {
     const memberId = req.params.id as string;
     const memberDetails = await prisma.memberDetails.findUnique({
       where: { id: memberId },
-      include: { user: { select: { id: true, username: true, email: true } }, gym: { select: { ownerId: true } } },
+      include: { user: { select: { id: true, username: true, email: true } } },
     });
     if (!memberDetails) return res.status(404).json({ error: 'Member not found' });
-
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = req.user?.userId && memberDetails.gym.ownerId === req.user.userId;
-    if (!isSuperAdmin && !isGymOwner) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, memberDetails.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     // Invalidate any previous unused activation tokens for this user.
     await prisma.activationToken.deleteMany({
@@ -384,7 +363,7 @@ export const sendActivationLink = async (req: AuthRequest, res: Response) => {
     const activationToken = generateSecureToken();
     await prisma.activationToken.create({
       data: {
-        token: activationToken,
+        tokenHash: hashToken(activationToken),
         userId: memberDetails.userId,
         expiresAt: new Date(Date.now() + TOKEN_TTL.activation),
       },
@@ -415,10 +394,8 @@ export const getMember = async (req: AuthRequest, res: Response) => {
     });
     if (!memberDetails) return res.status(404).json({ error: 'Member not found' });
 
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = memberDetails.gym.ownerId === req.user?.userId;
     const isSelf = memberDetails.userId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner && !isSelf) {
+    if (!isSelf && !(await canAccessGym(req.user, memberDetails.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
     res.json(memberDetails);
@@ -436,7 +413,7 @@ export const enrollMember = async (req: AuthRequest, res: Response) => {
     const { gymId, planId, preferredPaymentMethod } = req.body;
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || !gym.isApproved) return res.status(404).json({ error: 'Gym not found' });
+    if (!gym || gym.status !== 'APPROVED') return res.status(404).json({ error: 'Gym not found' });
 
     if (planId) {
       const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
@@ -444,32 +421,17 @@ export const enrollMember = async (req: AuthRequest, res: Response) => {
       if (plan.gymId !== gym.id) return res.status(400).json({ error: 'Plan does not belong to the selected gym' });
     }
 
-    const existing = await prisma.memberDetails.findFirst({ where: { userId } });
+    // Joining another gym adds a row; the user's memberships at other gyms stay as they are.
+    const existing = await prisma.memberDetails.findUnique({ where: { userId_gymId: { userId, gymId } } });
+
+    if (existing?.status === 'ACTIVE') {
+      return res.status(409).json({ error: 'You are already a member of this gym', code: 'ALREADY_MEMBER' });
+    }
 
     if (existing) {
-      // Gym transfer guard: a member may switch gyms only when they carry no
-      // active obligations at their current gym. This prevents bypassing
-      // billing/attendance history by silently re-enrolling elsewhere.
-      if (existing.gymId !== gymId) {
-        const [activeMemberships, unpaidFees] = await Promise.all([
-          prisma.membership.count({
-            where: { memberId: existing.id, status: { in: ['ACTIVE', 'SUSPENDED', 'FROZEN'] } },
-          }),
-          prisma.fee.count({
-            where: { memberId: existing.id, status: { in: ['PENDING', 'OVERDUE'] } },
-          }),
-        ]);
-        if (activeMemberships > 0 || unpaidFees > 0) {
-          return res.status(409).json({
-            error: 'You have an active membership or pending dues at your current gym. Resolve them before switching gyms.',
-          });
-        }
-      }
-
       const updated = await prisma.memberDetails.update({
         where: { id: existing.id },
         data: {
-          gymId,
           planId: planId || null,
           status: 'PENDING',
           ...(preferredPaymentMethod !== undefined ? { preferredPaymentMethod: preferredPaymentMethod || null } : {}),
@@ -498,10 +460,10 @@ export const getMyProfile = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const memberDetails = await prisma.memberDetails.findFirst({
-      where: { userId },
-      include: { gym: true, membershipPlan: true },
-    });
+    const profile = await findMemberProfile(userId, requestedGymId(req));
+    const memberDetails = profile
+      ? await prisma.memberDetails.findUnique({ where: { id: profile.id }, include: { gym: true, membershipPlan: true } })
+      : null;
 
     if (!memberDetails) return res.status(404).json({ error: 'Profile not found' });
     res.json(memberDetails);
@@ -517,15 +479,9 @@ export const updateMember = async (req: AuthRequest, res: Response) => {
 
     const memberDetails = await prisma.memberDetails.findUnique({
       where: { id: memberId },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!memberDetails) return res.status(404).json({ error: 'Member not found' });
-
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = req.user?.userId && memberDetails.gym.ownerId === req.user.userId;
-    if (!isSuperAdmin && !isGymOwner) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, memberDetails.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     if (planId) {
       const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
@@ -575,26 +531,29 @@ export const updateMember = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Delete a member permanently (their Gym Admin, or Super Admin). Cascades clean
-// up the member's fees, memberships, attendance, workout slips, bookings, and
-// profile through the schema's onDelete: Cascade relations.
+// Remove a member from a gym (their Gym Admin, or Super Admin). Cascades clean
+// up the member's fees, memberships, attendance and workout slips at that gym.
+// The account itself is deleted only when this was its last gym.
 export const deleteMember = async (req: AuthRequest, res: Response) => {
   try {
     const memberId = req.params.id as string;
 
     const memberDetails = await prisma.memberDetails.findUnique({
       where: { id: memberId },
-      include: { gym: { select: { ownerId: true, name: true } } },
+      include: { gym: { select: { name: true } } },
     });
     if (!memberDetails) return res.status(404).json({ error: 'Member not found' });
+    if (!(await canAccessGym(req.user, memberDetails.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = memberDetails.gym.ownerId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner) {
-      return res.status(403).json({ error: 'Unauthorized' });
+    const otherGyms = await prisma.memberDetails.count({ where: { userId: memberDetails.userId, id: { not: memberId } } });
+    if (otherGyms > 0) {
+      await prisma.$transaction([
+        prisma.booking.deleteMany({ where: { userId: memberDetails.userId, gymId: memberDetails.gymId } }),
+        prisma.memberDetails.delete({ where: { id: memberId } }),
+      ]);
+    } else {
+      await prisma.user.delete({ where: { id: memberDetails.userId } });
     }
-
-    await prisma.user.delete({ where: { id: memberDetails.userId } });
 
     await logAudit({
       action: 'MEMBER_DELETED',
@@ -607,5 +566,36 @@ export const deleteMember = async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Member deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete member' });
+  }
+};
+
+// Every gym the signed-in user is a member of, the default one (latest active membership) first.
+export const getMyGyms = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const rows = await prisma.memberDetails.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        gymId: true,
+        status: true,
+        joiningDate: true,
+        gym: { select: { id: true, name: true, city: true, logoUrl: true } },
+        memberships: {
+          where: { status: 'ACTIVE' },
+          orderBy: { startDate: 'desc' },
+          take: 1,
+          select: { id: true, status: true, startDate: true, endDate: true, planId: true },
+        },
+      },
+      orderBy: { joiningDate: 'desc' },
+    });
+    const started = (r: (typeof rows)[number]) => r.memberships[0]?.startDate.getTime() ?? -Infinity;
+    rows.sort((a, b) => started(b) - started(a));
+    res.json(rows.map(({ id, memberships, ...r }) => ({ memberId: id, ...r, activeMembership: memberships[0] ?? null })));
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch gyms' });
   }
 };

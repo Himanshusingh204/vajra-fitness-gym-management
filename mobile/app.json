@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "Vajra Fitness",
+    "name": "Kavach Fitness",
     "slug": "vajra-fitness",
-    "scheme": "vajrafitness",
+    "scheme": "kavachfitness",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#f7f6f3",
     "ios": {
-      "bundleIdentifier": "in.vajrafitness.app",
+      "bundleIdentifier": "in.kavachfitness.app",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "in.vajrafitness.app",
+      "package": "in.kavachfitness.app",
       "adaptiveIcon": {
         "backgroundColor": "#17181a",
         "foregroundImage": "./assets/android-icon-foreground.png",

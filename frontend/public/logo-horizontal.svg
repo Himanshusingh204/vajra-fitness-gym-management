@@ -32,7 +32,7 @@
 
   <!-- Typography -->
   <text x="110" y="52" font-family="'Outfit', 'Bebas Neue', ui-sans-serif, system-ui, sans-serif" font-size="36" font-weight="900" letter-spacing="1.5" fill="#FFFFFF">
-    VAJRA
+    KAVACH
   </text>
   <text x="245" y="52" font-family="'Outfit', 'Bebas Neue', ui-sans-serif, system-ui, sans-serif" font-size="36" font-weight="900" letter-spacing="1.5" fill="url(#hGold)">
     FITNESS

@@ -37,10 +37,20 @@ export const onSessionEnded = (listener: (() => void) | null) => {
   sessionEndedListener = listener;
 };
 
+// Kept in memory only: after a restart the backend picks the member's default gym again.
+let memberGymId: string | null = null;
+export const setMemberGymId = (gymId: string | null) => {
+  memberGymId = gymId;
+};
+
 export const api = createApiClient({
   baseUrl: API_URL,
   tokens,
-  onSessionEnded: () => sessionEndedListener?.(),
+  getGymId: () => memberGymId,
+  onSessionEnded: () => {
+    memberGymId = null;
+    sessionEndedListener?.();
+  },
 });
 
 export const saveSession = async (token: string, refreshToken: string) => {
@@ -49,6 +59,7 @@ export const saveSession = async (token: string, refreshToken: string) => {
 };
 
 export const clearSession = async () => {
+  memberGymId = null;
   tokens.setAccess(null);
   await tokens.setRefresh(null);
 };

@@ -16,10 +16,10 @@ export default function Welcome() {
           style={styles.logo}
           accessibilityIgnoresInvertColors
           accessible
-          accessibilityLabel="Vajra Fitness logo"
+          accessibilityLabel="Kavach Fitness logo"
         />
         <Text variant="title" style={styles.center}>
-          Vajra Fitness
+          Kavach Fitness
         </Text>
         <Text muted style={styles.center}>
           Your membership, workouts, attendance and fees in one place. Sign in with the account you use on the website.

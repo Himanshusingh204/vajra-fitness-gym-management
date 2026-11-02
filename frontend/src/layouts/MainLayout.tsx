@@ -1,30 +1,10 @@
-import React from 'react';
 import { Outlet, Link } from 'react-router';
+import { ROUTES } from '../utils/routes';
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY } from '../utils/constants';
 import Navbar from '../components/Navbar';
 import CookieConsent from '../components/CookieConsent';
 import PageTransition from '../components/PageTransition';
 import { MapPin, Phone, Mail, ArrowUpRight } from 'lucide-react';
-
-const InstagramIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-  </svg>
-);
-
-const FacebookIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-  </svg>
-);
-
-const YoutubeIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-    <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
-    <path d="m10 15 5-3-5-3z" />
-  </svg>
-);
 
 const FOOTER_LINKS = {
   'Quick Links': [
@@ -33,7 +13,7 @@ const FOOTER_LINKS = {
     ['Membership', '/membership'],
     ['Help Center', '/help'],
     ['Contact', '/contact'],
-    ['Register Your Gym', '/register'],
+    ['Register Your Gym', ROUTES.partnerRegister],
   ],
   Legal: [
     ['Terms & Conditions', '/terms'],
@@ -43,19 +23,14 @@ const FOOTER_LINKS = {
   ],
 };
 
-const SOCIALS = [
-  { label: 'Instagram', href: 'https://instagram.com/vajrafitness', icon: InstagramIcon },
-  { label: 'Facebook', href: 'https://facebook.com/vajrafitness', icon: FacebookIcon },
-  { label: 'YouTube', href: 'https://youtube.com/@vajrafitness', icon: YoutubeIcon },
-];
-
 const MainLayout = () => {
   const year = new Date().getFullYear();
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-base)] dark:bg-[var(--color-base)]">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-[var(--color-primary)] focus:text-white">Skip to content</a>
       <Navbar />
-      <main className="flex-grow pt-20 md:pt-[88px]">
+      <main id="main" className="flex-grow pt-20 md:pt-[88px]">
         <PageTransition>
           <Outlet />
         </PageTransition>
@@ -68,29 +43,15 @@ const MainLayout = () => {
 
           <div>
             <Link to="/" className="flex items-center gap-3 mb-4 w-fit">
-              <img src="/logo.svg" alt="Vajra Fitness" width="36" height="36" className="h-8 w-auto drop-shadow-[0_2px_6px_rgba(225,29,72,0.25)]" />
+              <img src="/logo.svg" alt="Kavach Fitness" width="36" height="36" className="h-8 w-auto drop-shadow-[0_2px_6px_rgba(225,29,72,0.25)]" />
               <span className="text-xl font-extrabold tracking-tight">
-                Vajra<span className="text-[var(--color-primary)]">Fitness</span>
+                Kavach<span className="text-red-400">Fitness</span>
               </span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed">
               Premium gym management platform for Indian fitness businesses. Building the modern
               operating system for gyms.
             </p>
-            <div className="flex gap-3 mt-6">
-              {SOCIALS.map(({ label, href, icon: Icon }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={label}
-                  className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[var(--color-primary)] text-gray-400 hover:text-white flex items-center justify-center transition-all duration-300 hover:-translate-y-1"
-                >
-                  <Icon className="w-4 h-4" />
-                </a>
-              ))}
-            </div>
           </div>
 
           {Object.entries(FOOTER_LINKS).map(([heading, links]) => (
@@ -118,25 +79,25 @@ const MainLayout = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 shrink-0 text-[var(--color-primary)]" />
-                <a href="tel:+919876543210" className="hover:text-white transition-colors">+91 98765 43210</a>
+                <a href={`tel:${SUPPORT_PHONE}`} className="hover:text-white transition-colors">{SUPPORT_PHONE_DISPLAY}</a>
               </li>
               <li className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 shrink-0 text-[var(--color-primary)]" />
-                <a href="mailto:support@vajrafitness.in" className="hover:text-white transition-colors">support@vajrafitness.in</a>
+                <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-white transition-colors">{SUPPORT_EMAIL}</a>
               </li>
             </ul>
 
-            <Link to="/register" className="btn-accent mt-6 w-full">Partner With Us</Link>
+            <Link to={ROUTES.partnerRegister} className="btn-accent mt-6 w-full">Partner With Us</Link>
           </div>
         </div>
 
         <div className="border-t border-white/10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-400">
-            <span>© {year} Vajra Fitness. All rights reserved.</span>
+            <span>© {year} Kavach Fitness. All rights reserved.</span>
             <div className="flex gap-5">
               <Link to="/about" className="hover:text-white transition-colors">About</Link>
               <Link to="/help" className="hover:text-white transition-colors">Help</Link>
-              <Link to="/login" className="hover:text-white transition-colors">Login</Link>
+              <Link to={ROUTES.login} className="hover:text-white transition-colors">Login</Link>
             </div>
           </div>
         </div>

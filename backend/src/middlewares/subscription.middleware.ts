@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { JWT_SECRET } from '../utils/env';
 import { AuthRequest } from './auth.middleware';
 import { loadSubscriptionInfo, SubscriptionInfo } from '../services/entitlements.service';
+import { findMemberProfile, requestedGymId } from '../utils/tenant';
 
 export type { SubscriptionInfo, SubscriptionStatus } from '../services/entitlements.service';
 
@@ -36,13 +37,13 @@ const identifyCaller = async (req: SubscriptionRequest): Promise<{ userId: strin
   }
 };
 
-const resolveOwnGymId = async (user: { userId: string; role: string }): Promise<string | null> => {
+const resolveOwnGymId = async (user: { userId: string; role: string }, req: SubscriptionRequest): Promise<string | null> => {
   const where = { userId: user.userId };
   switch (user.role) {
     case 'GYM_ADMIN':
       return (await prisma.gym.findFirst({ where: { ownerId: user.userId }, select: { id: true } }))?.id ?? null;
     case 'MEMBER':
-      return (await prisma.memberDetails.findFirst({ where, select: { gymId: true } }))?.gymId ?? null;
+      return (await findMemberProfile(user.userId, requestedGymId(req)))?.gymId ?? null;
     case 'TRAINER':
       return (await prisma.trainerDetails.findFirst({ where, select: { gymId: true } }))?.gymId ?? null;
     case 'STAFF':
@@ -78,7 +79,7 @@ export const requireValidSubscription = async (req: SubscriptionRequest, res: Re
     req.callerId = caller.userId;
     if (caller.role === 'SUPER_ADMIN') return next();
 
-    const gymId = await resolveOwnGymId(caller);
+    const gymId = await resolveOwnGymId(caller, req);
     if (!gymId) return next();
 
     req.gymId = gymId;

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 100" fill="none">
+  <defs>
+    <linearGradient id="korrumBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+    <linearGradient id="korrumCore" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+  </defs>
+
+  <!-- Icon Mark: Interlocked Dual-Hexagon Core 'K' -->
+  <g transform="translate(16, 12)">
+    <!-- Base Structural Pillar -->
+    <rect x="12" y="10" width="14" height="56" rx="4" fill="url(#korrumBlue)" />
+    <!-- Upper Kinetic Arm -->
+    <path d="M 32 38 L 56 12 L 72 12 L 44 40 Z" fill="url(#korrumBlue)" />
+    <!-- Lower Power Anchor Arm -->
+    <path d="M 44 36 L 72 66 L 56 66 L 32 40 Z" fill="#22C55E" />
+    <!-- Center Core Node -->
+    <rect x="24" y="32" width="12" height="12" rx="3" fill="#020617" stroke="#3B82F6" stroke-width="2"/>
+  </g>
+
+  <!-- Main Wordmark -->
+  <text x="116" y="60" font-family="'Outfit', -apple-system, system-ui, sans-serif" 
+        font-weight="900" font-size="44" letter-spacing="-0.5" fill="#020617">
+    KORRUM
+  </text>
+
+  <!-- Tag Pill -->
+  <rect x="312" y="38" width="48" height="20" rx="5" fill="#3B82F6" fill-opacity="0.12"/>
+  <text x="336" y="52" font-family="'Outfit', -apple-system, system-ui, sans-serif" 
+        font-weight="800" font-size="10" letter-spacing="1.5" fill="#1D4ED8" text-anchor="middle">
+    OS
+  </text>
+
+  <!-- Subtitle -->
+  <text x="118" y="78" font-family="'Outfit', -apple-system, system-ui, sans-serif" 
+        font-weight="700" font-size="10" letter-spacing="3.5" fill="#64748B">
+    THE CORE GYM PLATFORM
+  </text>
+</svg>

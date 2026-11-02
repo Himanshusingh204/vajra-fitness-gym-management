@@ -11,6 +11,7 @@ runScheduledJobs()
       `fee reminders: ${r.feeNudges}`,
       `payment reconciliation: ${r.paymentReconciliation.failedOrders} failed, ${r.paymentReconciliation.escalatedFees} fees overdue`,
       `subscription dunning: ${r.dunning.dunningReminders} reminders, ${r.dunning.escalatedToPastDue} escalated`,
+      `queued jobs: ${r.jobQueue.done} done, ${r.jobQueue.failed} failed`,
     ];
     console.log(`[Jobs] ${line.join(' | ')}`);
   })

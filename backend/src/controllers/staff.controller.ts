@@ -1,13 +1,14 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import argon2 from 'argon2';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { getOrSetJSON } from '../utils/cache';
-import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
+import { generateSecureToken, hashToken, TOKEN_TTL } from '../utils/tokens';
 import { FRONTEND_URL } from '../utils/env';
 import { createNotification, notifyGymOwner } from '../services/notification.service';
 import { logAudit } from '../utils/audit';
-import { sendActivationEmail } from '../utils/email';
+import { sendActivationEmail, sendTrainerInviteEmail } from '../utils/email';
 import { assertGymCapacity } from '../services/entitlements.service';
 import { logger } from '../utils/logger';
 
@@ -18,7 +19,7 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
     const { branchId } = req.query;
     
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -61,7 +62,7 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
     // roleSpecifics: specialization for Trainer, or role name for Staff
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -108,7 +109,7 @@ export const addStaff = async (req: AuthRequest, res: Response) => {
     const activationToken = generateSecureToken();
     await prisma.activationToken.create({
       data: {
-        token: activationToken,
+        tokenHash: hashToken(activationToken),
         userId: user.id,
         expiresAt: new Date(Date.now() + TOKEN_TTL.activation),
       },
@@ -154,10 +155,7 @@ export const getTrainerApplications = async (req: AuthRequest, res: Response) =>
     const gymId = req.params.gymId as string;
     const status = req.query.status === 'REJECTED' ? 'REJECTED' : 'PENDING';
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { ownerId: true } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const applications = await prisma.trainerDetails.findMany({
       where: { gymId, status },
@@ -266,18 +264,12 @@ export const deleteStaff = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
 
-    const staff = await prisma.staffDetails.findUnique({
-      where: { id },
-      include: { gym: { select: { ownerId: true } } },
-    });
-    const trainer = staff ? null : await prisma.trainerDetails.findUnique({
-      where: { id },
-      include: { gym: { select: { ownerId: true } } },
-    });
+    const staff = await prisma.staffDetails.findUnique({ where: { id } });
+    const trainer = staff ? null : await prisma.trainerDetails.findUnique({ where: { id } });
 
     const detail = staff || trainer;
     if (!detail) return res.status(404).json({ error: 'Staff member not found' });
-    if (detail.gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, detail.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -285,5 +277,65 @@ export const deleteStaff = async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Staff member removed' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove staff' });
+  }
+};
+
+// Trainer invites: the owner invites by email, the trainer sets a password from the link.
+export const createTrainerInvite = async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, name } = req.body as { email: string; name?: string };
+    const gym = await prisma.gym.findFirst({ where: { ownerId: req.user?.userId ?? '' } });
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    if (await prisma.user.findUnique({ where: { email } })) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const token = generateSecureToken();
+    const invite = await prisma.trainerInvite.create({
+      data: {
+        email,
+        name: name || null,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + TOKEN_TTL.activation),
+        gymId: gym.id,
+        invitedById: gym.ownerId,
+      },
+      select: { id: true, email: true, name: true, status: true, expiresAt: true, createdAt: true },
+    });
+
+    const link = `${FRONTEND_URL}/accept-invite?token=${token}`;
+    await sendTrainerInviteEmail(email, gym.name, link).catch((err) =>
+      logger.warn('trainer invite email failed', { email, error: String(err) }),
+    );
+    res.status(201).json({ ...invite, ...(process.env.NODE_ENV === 'development' ? { link } : {}) });
+  } catch {
+    res.status(500).json({ error: 'Failed to create invite' });
+  }
+};
+
+export const listTrainerInvites = async (req: AuthRequest, res: Response) => {
+  try {
+    const invites = await prisma.trainerInvite.findMany({
+      where: { gym: { ownerId: req.user?.userId ?? '' }, status: 'PENDING', expiresAt: { gt: new Date() } },
+      select: { id: true, email: true, name: true, status: true, expiresAt: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    // Only open invites are listed, so these two are always empty here.
+    res.json(invites.map((i) => ({ ...i, acceptedAt: null, revokedAt: null })));
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch invites' });
+  }
+};
+
+export const revokeTrainerInvite = async (req: AuthRequest, res: Response) => {
+  try {
+    const { count } = await prisma.trainerInvite.updateMany({
+      where: { id: req.params.id as string, status: 'PENDING', gym: { ownerId: req.user?.userId ?? '' } },
+      data: { status: 'REVOKED' },
+    });
+    if (!count) return res.status(404).json({ error: 'Invite not found' });
+    res.status(204).end();
+  } catch {
+    res.status(500).json({ error: 'Failed to revoke invite' });
   }
 };

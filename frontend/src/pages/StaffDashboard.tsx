@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
+import DashboardSignOut from '../components/DashboardSignOut';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMe } from '../api/auth.api';
 import { getGymMembers } from '../api/member.api';
@@ -62,7 +63,7 @@ const StaffDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] lg:flex">
+    <div className="dash min-h-screen bg-[var(--color-base)] lg:flex">
       {/* Mobile top bar */}
       <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-30">
         <div className="min-w-0">
@@ -107,7 +108,7 @@ const StaffDashboard = () => {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-0.5">
+        <nav className="min-h-0 flex-1 overflow-y-auto p-4 space-y-0.5">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -123,6 +124,9 @@ const StaffDashboard = () => {
             </button>
           ))}
         </nav>
+        <div className="border-t border-[var(--color-border)] p-4">
+          <DashboardSignOut />
+        </div>
       </aside>
 
       <div className="flex-1 min-w-0">
@@ -130,7 +134,7 @@ const StaffDashboard = () => {
         <div aria-live="polite" className="sr-only">{checkinAnnouncement}</div>
 
         {activeTab === 'checkin' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Mark Attendance</h2>
               <p className="text-sm text-gray-500 mt-0.5">Check in a member for today ({todayFormatted}).</p>
@@ -168,7 +172,7 @@ const StaffDashboard = () => {
                         <button
                           onClick={() => checkinMutation.mutate(m.id)}
                           disabled={checkinMutation.isPending}
-                          className="btn-primary text-sm px-4 py-2 flex items-center gap-1.5"
+                          className="btn-primary text-sm px-4 py-2 flex shrink-0 items-center gap-1.5 whitespace-nowrap"
                         >
                           {checkinMutation.isPending && checkinMutation.variables === m.id ? (
                             <><Loader2 className="w-4 h-4 animate-spin" /> Checking in…</>
@@ -189,7 +193,7 @@ const StaffDashboard = () => {
         )}
 
         {activeTab === 'attendance' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center">
               <h2 className="font-bold text-lg dark:text-white">Today's Attendance</h2>
               <span className="text-sm font-semibold text-gray-500">{attendance?.total ?? 0} check-ins</span>
@@ -199,7 +203,7 @@ const StaffDashboard = () => {
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-white/5">
                 {(attendance?.records || []).map((r: any) => (
-                  <div key={r.id} className="px-6 py-4 flex items-center justify-between">
+                  <div key={r.id} className="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold">
                         {(r.member?.user?.username || r.staff?.user?.username || '?').charAt(0).toUpperCase()}
@@ -225,7 +229,7 @@ const StaffDashboard = () => {
         )}
 
         {activeTab === 'members' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Member Lookup</h2>
             </div>
@@ -236,7 +240,7 @@ const StaffDashboard = () => {
               </div>
               <div className="divide-y divide-gray-100 dark:divide-white/5">
                 {filteredMembers.map((m: any) => (
-                  <div key={m.id} className="py-3 flex items-center justify-between">
+                  <div key={m.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center font-bold">
                         {m.user?.username?.charAt(0).toUpperCase()}

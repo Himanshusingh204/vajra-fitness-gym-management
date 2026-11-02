@@ -289,7 +289,7 @@ async function main() {
           password: hashedPassword,
           role: 'MEMBER',
           phone: `9${String(Math.floor(9000000000 + rand() * 999999999)).padStart(10, '0')}`,
-          memberDetails: {
+          memberProfiles: {
             create: {
               gymId: gym.id,
               planId: plan.id,
@@ -300,7 +300,7 @@ async function main() {
         },
       });
 
-      const details = await prisma.memberDetails.findUnique({ where: { userId: user.id } });
+      const details = await prisma.memberDetails.findUnique({ where: { userId_gymId: { userId: user.id, gymId: gym.id } } });
       if (!details) continue;
 
       memberSlots.push({
@@ -533,6 +533,35 @@ async function main() {
     console.log(
       `Seeded ${gym.name}: ${memberCountForGym} members, ${trainerSpecializations.length} trainers, ${staffRoles.length} staff, ${bookingSlots} bookings, ${enquiries} enquiries.`,
     );
+  }
+
+  // One demo member who belongs to two gyms, to try the gym switcher with.
+  const [firstGym, secondGym] = gyms;
+  const secondPlan = secondGym?.membershipPlans.find((p) => p.isActive);
+  const twoGymUser = firstGym && secondGym && secondPlan
+    ? await prisma.user.findFirst({
+        where: { email: { endsWith: '@demo.in' }, role: 'MEMBER', memberProfiles: { some: { gymId: firstGym.id } } },
+        orderBy: { createdAt: 'asc' },
+      })
+    : null;
+  if (twoGymUser && secondGym && secondPlan) {
+    const profile = await prisma.memberDetails.create({
+      data: { userId: twoGymUser.id, gymId: secondGym.id, planId: secondPlan.id, status: 'ACTIVE' },
+    });
+    await prisma.membership.create({
+      data: {
+        memberId: profile.id,
+        gymId: secondGym.id,
+        planId: secondPlan.id,
+        status: 'ACTIVE',
+        paymentStatus: 'PAID',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + secondPlan.duration * 86400000),
+        originalAmount: secondPlan.price,
+        finalAmount: secondPlan.price,
+      },
+    });
+    console.log(`${twoGymUser.email} is also a member at ${secondGym.name}.`);
   }
 
   console.log(`\nDone. Created ${memberCount} members, ${trainerCount} trainers, ${staffCount} staff across ${gyms.length} gyms.`);

@@ -176,22 +176,22 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {productsLoading || salesLoading ? (
-          [...Array(4)].map((_, i) => <div key={i} className="h-28 bg-[var(--color-border)]/30 rounded-2xl animate-pulse" />)
+          [...Array(4)].map((_, i) => <div key={i} className="h-28 bg-[var(--color-border)]/30 rounded-lg animate-pulse" />)
         ) : (
           <>
-            <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+            <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Products</p>
               <p className="text-2xl font-extrabold tabular-nums text-[var(--color-primary)]">{products.length}</p>
             </div>
-            <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+            <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Low Stock</p>
               <p className="text-2xl font-extrabold tabular-nums text-amber-500">{lowStockProducts.length}</p>
             </div>
-            <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+            <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Sales</p>
               <p className="text-2xl font-extrabold tabular-nums text-blue-500">{sales.length}</p>
             </div>
-            <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+            <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Revenue</p>
               <p className="text-2xl font-extrabold tabular-nums text-green-600">₹{totalRevenue.toLocaleString('en-IN')}</p>
             </div>
@@ -200,7 +200,7 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
       </div>
 
       {/* Products */}
-      <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
         <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
           <h2 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white flex items-center gap-2">
             <Package className="w-5 h-5 text-[var(--color-primary)]" /> Products ({products.length})
@@ -271,7 +271,7 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
 
         {productsLoading ? (
           <div className="p-6">
-            <div className="h-32 bg-[var(--color-border)]/30 rounded-xl animate-pulse" />
+            <div className="h-32 bg-[var(--color-border)]/30 rounded-lg animate-pulse" />
           </div>
         ) : products.length === 0 ? (
           <div className="p-8 text-center text-[var(--color-muted)]">No products yet.</div>
@@ -281,7 +281,7 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
               <thead className="bg-gray-50 dark:bg-white/5">
                 <tr>
                   {['Name', 'SKU', 'Category', 'Stock', 'Selling Price', 'Actions'].map((h) => (
-                    <th key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                    <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -330,7 +330,7 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
       </div>
 
       {/* Record Sale */}
-      <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
         <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
           <h2 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-[var(--color-primary)]" /> Record Sale
@@ -367,12 +367,12 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
             </div>
 
             {saleItems.length > 0 && (
-              <div className="border border-[var(--color-border)] rounded-xl overflow-hidden">
+              <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       {['Product', 'Qty', 'Line Total', ''].map((h) => (
-                        <th key={h} className="text-left px-4 py-2 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                        <th scope="col" key={h} className="text-left px-4 py-2 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -436,13 +436,13 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
       </div>
 
       {/* Recent Sales */}
-      <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
         <div className="px-6 py-4 border-b border-[var(--color-border)]">
           <h2 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white">Recent Sales ({sales.length})</h2>
         </div>
         {salesLoading ? (
           <div className="p-6">
-            <div className="h-32 bg-[var(--color-border)]/30 rounded-xl animate-pulse" />
+            <div className="h-32 bg-[var(--color-border)]/30 rounded-lg animate-pulse" />
           </div>
         ) : sales.length === 0 ? (
           <div className="p-8 text-center text-[var(--color-muted)]">No sales yet.</div>
@@ -452,7 +452,7 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
               <thead className="bg-gray-50 dark:bg-white/5">
                 <tr>
                   {['Date', 'Items', 'Final Amount', 'Payment Method'].map((h) => (
-                    <th key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                    <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -475,9 +475,9 @@ export default function InventoryTab({ gymId }: { gymId: string }) {
 
       {/* Edit product modal */}
       {editingProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditingProduct(null)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setEditingProduct(null)}>
           <div
-            className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-lg"
+            className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-4">Edit Product</h3>

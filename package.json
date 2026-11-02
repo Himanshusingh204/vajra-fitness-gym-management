@@ -7,6 +7,11 @@
   ],
   "scripts": {
     "build": "npm run postinstall --workspace=backend && npm run build --workspace=backend && npm run build --workspace=frontend",
+    "dev": "node -e \"const{spawn}=require('child_process');for(const w of['backend','frontend'])spawn('npm',['run','dev','--workspace='+w],{stdio:'inherit',shell:true})\"",
+    "lint": "npm run lint --workspace=frontend",
+    "typecheck": "npm run build --workspace=backend -- --noEmit && npx --workspace=frontend tsc -b",
+    "test": "npm test --workspace=backend",
+    "test:e2e": "npm run test:e2e --workspace=frontend",
     "vercel-build": "npm run build"
   }
 }

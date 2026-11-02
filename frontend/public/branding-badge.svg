@@ -25,7 +25,7 @@
   <!-- Curved Text Around Circle -->
   <text font-family="'Outfit', ui-sans-serif, system-ui, sans-serif" font-size="10.5" font-weight="700" fill="#E5E7EB" letter-spacing="3.2">
     <textPath href="#textCircle" startOffset="50%" text-anchor="middle">
-      VAJRA FITNESS • STRENGTH &amp; POWER • EST 2026 •
+      KAVACH FITNESS • STRENGTH &amp; POWER • EST 2026 •
     </textPath>
   </text>
 

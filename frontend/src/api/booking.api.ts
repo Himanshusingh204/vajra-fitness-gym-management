@@ -46,7 +46,14 @@ export const renewMembership = async (gymId: string, data: Record<string, unknow
   return res.data;
 };
 
-export const getMyGymSubscription = async () => {
-  const res = await api.get('/saas/my-subscription');
+export type Slot = { time: string; available: boolean };
+
+export const getSlots = async (trainerId: string, date: string): Promise<Slot[]> => {
+  const res = await api.get('/bookings/slots', { params: { trainerId, date } });
+  return res.data;
+};
+
+export const rescheduleBooking = async (id: string, data: { date: string; time: string }) => {
+  const res = await api.patch(`/bookings/${id}/reschedule`, data);
   return res.data;
 };

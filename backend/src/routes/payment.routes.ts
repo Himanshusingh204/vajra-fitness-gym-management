@@ -79,7 +79,7 @@ router.post('/webhook', async (req, res) => {
   try {
     const signature = (req.headers['x-razorpay-signature'] as string) ?? '';
     const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body);
-    const result = await handleWebhook(rawBody, signature);
+    const result = await handleWebhook(rawBody, signature, req.get('x-razorpay-event-id'));
     res.json(result);
   } catch (err: any) {
     const message = err?.message ?? '';

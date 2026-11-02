@@ -26,7 +26,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   ownedGyms      Gym[]           @relation("GymOwner")
-  memberDetails  MemberDetails?
+  memberProfiles MemberDetails[]
   trainerDetails TrainerDetails?
   staffDetails   StaffDetails?
   supportTickets SupportTicket[]
@@ -42,6 +42,13 @@ model User {
   passwordResetTokens PasswordResetToken[]
   refreshTokens       RefreshToken[]
   Payslip             Payslip[]
+  documents           Document[]
+
+  approvalRequests  ApprovalRequest[] @relation("ApprovalRequester")
+  reviewedApprovals ApprovalRequest[] @relation("ApprovalReviewer")
+  approvalEvents    ApprovalEvent[]
+  trainerInvites    TrainerInvite[]
+  orders            Order[]
 
   @@index([email])
 }
@@ -60,10 +67,23 @@ model Gym {
   gstNumber  String?
   logoUrl    String?
   imageUrl   String?
-  facilities String?
+  // Facility names, picked from the platform Facility list.
+  facilities String[] @default([])
+  // isApproved mirrors status == APPROVED until every read uses status.
   isApproved Boolean  @default(false)
+  status     String   @default("DRAFT") // DRAFT, PENDING_REVIEW, CHANGES_REQUESTED, APPROVED, REJECTED, SUSPENDED
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  slug            String? @unique
+  category        String?
+  lat             Float?
+  lng             Float?
+  postalCode      String?
+  establishedYear Int?
+  parking         String?
+  accessibility   String?
+  rules           String?
 
   // White-label branding (Phase 2 #9)
   brandColor   String? // hex, e.g. #800020
@@ -71,9 +91,17 @@ model Gym {
   subdomain    String? @unique // e.g. "andheri" -> andheri.<base>.com
   customDomain String? @unique // fully-qualified custom domain, e.g. gym.example.com
 
+  // Public profile shown on /gyms/:id and /g/:slug
+  description  String?
+  phone        String?
+  email        String?
+  openingHours String?
+  galleryUrls  String[] @default([])
+
   ownerId         String
   owner           User                  @relation("GymOwner", fields: [ownerId], references: [id])
   membershipPlans MembershipPlan[]
+  websiteRequests GymWebsiteRequest[]
   members         MemberDetails[]
   trainers        TrainerDetails[]
   staff           StaffDetails[]
@@ -93,6 +121,15 @@ model Gym {
   sales           Sale[]
   invoices        SubscriptionInvoice[]
   payrollRecords  Payslip[]
+  documents       Document[]
+  approvals       ApprovalRequest[]
+  trainerInvites  TrainerInvite[]
+  orders          Order[]
+  ledgerEntries   LedgerEntry[]
+  commissionRule  CommissionRule?
+
+  @@index([status, city])
+  @@index([lat, lng])
 }
 
 model Branch {
@@ -143,6 +180,7 @@ model MembershipPlan {
   gym         Gym             @relation(fields: [gymId], references: [id], onDelete: Cascade)
   members     MemberDetails[]
   memberships Membership[]
+  orders      Order[]
 
   @@index([gymId])
 }
@@ -163,7 +201,8 @@ model MemberDetails {
   referralCode           String?   @unique
   referredBy             String?
 
-  userId         String          @unique
+  // One row per user per gym: a user can be a member at several gyms.
+  userId         String
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   gymId          String
   gym            Gym             @relation(fields: [gymId], references: [id], onDelete: Cascade)
@@ -178,6 +217,7 @@ model MemberDetails {
   memberships   Membership[]
   classBookings ClassBooking[]
 
+  @@unique([userId, gymId])
   @@index([gymId])
   @@index([userId])
   @@index([branchId])
@@ -189,29 +229,80 @@ model MemberDetails {
 // =====================================================================
 
 model TrainerDetails {
-  id             String   @id @default(uuid())
-  specialization String?
-  bio            String?
-  commissionRate Decimal? @db.Decimal(5, 2) // percentage commission on PT revenue
-  hourlyRate     Decimal? @db.Decimal(10, 2)
-  joiningDate    DateTime @default(now())
-  // Self-registered trainers start PENDING until the gym admin approves them.
-  // Trainers added by a gym admin are ACTIVE straight away.
-  status          String  @default("ACTIVE") // ACTIVE, PENDING, REJECTED
+  id              String   @id @default(uuid())
+  specialization  String?
+  bio             String?
+  commissionRate  Decimal? @db.Decimal(5, 2) // percentage commission on PT revenue
+  hourlyRate      Decimal? @db.Decimal(10, 2)
+  joiningDate     DateTime @default(now())
+  // Invited and self-registered trainers need the gym owner's approval.
+  // Trainers added by a gym admin are APPROVED straight away.
+  status          String   @default("ACTIVE") // INVITED, DRAFT, PENDING_REVIEW, CHANGES_REQUESTED, APPROVED, REJECTED, SUSPENDED
   experienceYears Int?
   city            String?
 
-  userId      String        @unique
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gymId       String
-  gym         Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  branchId    String?
-  branch      Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  WorkoutSlip WorkoutSlip[]
-  classes     GymClass[]
+  userId         String                 @unique
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gymId          String
+  gym            Gym                    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  branchId       String?
+  branch         Branch?                @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  WorkoutSlip    WorkoutSlip[]
+  classes        GymClass[]
+  qualifications TrainerQualification[]
+  availability   TrainerAvailability[]
 
   @@index([gymId])
   @@index([branchId])
+}
+
+model TrainerQualification {
+  id         String    @id @default(uuid())
+  title      String
+  issuer     String?
+  year       Int?
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  trainerId  String
+  trainer    TrainerDetails @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   Document?      @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([trainerId])
+}
+
+// Weekly hours a trainer takes sessions, in minutes from midnight (gym time).
+model TrainerAvailability {
+  id          String @id @default(uuid())
+  weekday     Int // 0 = Sunday
+  startMinute Int
+  endMinute   Int
+
+  trainerId String
+  trainer   TrainerDetails @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId, weekday])
+}
+
+// Only the sha256 of the invite token is stored; the plain token is in the emailed link.
+model TrainerInvite {
+  id         String    @id @default(uuid())
+  email      String
+  name       String?
+  tokenHash  String    @unique
+  status     String    @default("PENDING") // PENDING, ACCEPTED, REVOKED (expiry is read from expiresAt)
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  gymId       String
+  gym         Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  invitedById String
+  invitedBy   User   @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([gymId])
+  @@index([email])
 }
 
 // =====================================================================
@@ -270,6 +361,7 @@ model Fee {
   @@index([status])
   @@index([gymId, status])
   @@index([gymId, dueDate])
+  @@index([gymId, paymentDate])
 }
 
 model PaymentOrder {
@@ -287,6 +379,103 @@ model PaymentOrder {
 
   @@index([feeId])
   @@index([status])
+  @@index([orderId])
+}
+
+// =====================================================================
+// MARKETPLACE ORDERS & LEDGER
+// =====================================================================
+
+// A member buying a plan through Kavach. All amounts are paise; see splitOrder.
+model Order {
+  id                 String    @id @default(uuid())
+  idempotencyKey     String
+  planSnapshot       Json // name, duration, price at the time of purchase
+  basePaise          Int
+  gstPaise           Int
+  totalPaise         Int
+  commissionBps      Int
+  commissionPaise    Int
+  commissionGstPaise Int
+  gymNetPaise        Int
+  status             String    @default("CREATED") // CREATED, PAID, FAILED, REFUNDED
+  razorpayOrderId    String?   @unique
+  razorpayPaymentId  String?
+  paidAt             DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  memberUserId String
+  memberUser   User            @relation(fields: [memberUserId], references: [id], onDelete: Restrict)
+  gymId        String
+  gym          Gym             @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  planId       String?
+  plan         MembershipPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  membershipId String?         @unique
+  membership   Membership?     @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  ledgerEntries LedgerEntry[]
+  refunds       Refund[]
+
+  @@unique([memberUserId, idempotencyKey])
+  @@index([gymId, status])
+}
+
+// Raw Razorpay webhook events, kept for audit and so a redelivery is a no-op.
+model PaymentEvent {
+  id              String    @id @default(uuid())
+  providerEventId String    @unique
+  type            String
+  payload         Json
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+// gymId null is the platform default; a row with a gymId overrides it.
+model CommissionRule {
+  id         String   @id @default(uuid())
+  percentBps Int // 1000 = 10%
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  gymId String? @unique
+  gym   Gym?    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+}
+
+// Append-only. The rows for one order sum to zero: MEMBER_PAID is -total, and
+// GYM_PAYABLE, PLATFORM_COMMISSION and GST_PAYABLE are the positive shares.
+// A gym's payable balance is SUM(amountPaise) of its GYM_PAYABLE (and later PAYOUT) rows.
+model LedgerEntry {
+  id          String   @id @default(uuid())
+  account     String // MEMBER_PAID, GYM_PAYABLE, PLATFORM_COMMISSION, GST_PAYABLE
+  amountPaise Int
+  sourceType  String // ORDER, REFUND
+  sourceId    String
+  createdAt   DateTime @default(now())
+
+  gymId   String
+  gym     Gym     @relation(fields: [gymId], references: [id], onDelete: Restrict)
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceType, sourceId, account])
+  @@index([gymId, account])
+  @@index([orderId])
+}
+
+model Refund {
+  id               String   @id @default(uuid())
+  amountPaise      Int
+  reason           String?
+  status           String   @default("REQUESTED") // REQUESTED, PROCESSED, FAILED
+  razorpayRefundId String?  @unique
+  requestedById    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
   @@index([orderId])
 }
 
@@ -325,7 +514,8 @@ model Membership {
   previousMembership   Membership?  @relation("RenewalChain", fields: [previousMembershipId], references: [id], onDelete: SetNull)
   renewals             Membership[] @relation("RenewalChain")
 
-  fees Fee[]
+  fees  Fee[]
+  order Order?
 
   @@index([memberId])
   @@index([gymId])
@@ -363,9 +553,10 @@ model Notification {
 // AUTH TOKENS
 // =====================================================================
 
+// Only the sha256 of a one-time token is stored; the plain token lives in the emailed link.
 model ActivationToken {
   id        String    @id @default(uuid())
-  token     String    @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
@@ -373,12 +564,12 @@ model ActivationToken {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([token])
+  @@index([tokenHash])
 }
 
 model PasswordResetToken {
   id        String    @id @default(uuid())
-  token     String    @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
@@ -386,7 +577,7 @@ model PasswordResetToken {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([token])
+  @@index([tokenHash])
 }
 
 model RefreshToken {
@@ -448,7 +639,7 @@ model GymSubscription {
   status             String    @default("PENDING")
   startDate          DateTime
   endDate            DateTime
-  amount             Decimal @db.Decimal(10, 2)
+  amount             Decimal   @db.Decimal(10, 2)
   billingCycle       String    @default("MONTHLY") // MONTHLY, QUARTERLY, HALF_YEARLY, YEARLY
   paymentMethod      String?
   razorpayOrderId    String?
@@ -488,14 +679,14 @@ model SubscriptionInvoice {
   gstin          String?
   planName       String
   billingPeriod  String // e.g., "Jan 2026" or "Q1 2026"
-  subtotal       Decimal @default(0) @db.Decimal(10, 2)
-  taxRate        Decimal @default(0) @db.Decimal(5, 2)
-  taxAmount      Decimal @default(0) @db.Decimal(10, 2)
-  cgst           Decimal @default(0) @db.Decimal(10, 2)
-  sgst           Decimal @default(0) @db.Decimal(10, 2)
-  igst           Decimal @default(0) @db.Decimal(10, 2)
-  discount       Decimal @default(0) @db.Decimal(10, 2)
-  total          Decimal @db.Decimal(10, 2)
+  subtotal       Decimal   @default(0) @db.Decimal(10, 2)
+  taxRate        Decimal   @default(0) @db.Decimal(5, 2)
+  taxAmount      Decimal   @default(0) @db.Decimal(10, 2)
+  cgst           Decimal   @default(0) @db.Decimal(10, 2)
+  sgst           Decimal   @default(0) @db.Decimal(10, 2)
+  igst           Decimal   @default(0) @db.Decimal(10, 2)
+  discount       Decimal   @default(0) @db.Decimal(10, 2)
+  total          Decimal   @db.Decimal(10, 2)
   status         String    @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
   paymentMethod  String?
   transactionId  String?
@@ -610,14 +801,14 @@ model Notice {
 // =====================================================================
 
 model FAQ {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   question  String
   answer    String
-  category  String?   // GENERAL, BILLING, MEMBERSHIP, BOOKING, TECH, etc.
-  isActive  Boolean   @default(true)
-  order     Int       @default(0)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  category  String? // GENERAL, BILLING, MEMBERSHIP, BOOKING, TECH, etc.
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive, order])
 }
@@ -628,7 +819,7 @@ model Testimonial {
   role      String
   content   String
   imageUrl  String?
-  gymName   String?  // originating gym for credibility context
+  gymName   String? // originating gym for credibility context
   rating    Int      @default(5)
   featured  Boolean  @default(false) // pinned to the public homepage
   isActive  Boolean  @default(true)
@@ -645,7 +836,7 @@ model SiteContent {
   id        String   @id @default(uuid())
   key       String   @unique // e.g. hero_title, hero_subtitle, announcement, pricing_banner
   value     String   @default("")
-  section   String?  // HERO, FEATURES, PRICING, ABOUT, FOOTER, ANNOUNCEMENT, etc.
+  section   String? // HERO, FEATURES, PRICING, ABOUT, FOOTER, ANNOUNCEMENT, etc.
   isActive  Boolean  @default(true)
   updatedBy String?
   createdAt DateTime @default(now())
@@ -868,10 +1059,10 @@ model Product {
 
 model Sale {
   id            String   @id @default(uuid())
-  total         Decimal @db.Decimal(10, 2)
-  discount      Decimal @default(0) @db.Decimal(10, 2)
-  tax           Decimal @default(0) @db.Decimal(10, 2)
-  finalAmount   Decimal @db.Decimal(10, 2)
+  total         Decimal  @db.Decimal(10, 2)
+  discount      Decimal  @default(0) @db.Decimal(10, 2)
+  tax           Decimal  @default(0) @db.Decimal(10, 2)
+  finalAmount   Decimal  @db.Decimal(10, 2)
   paymentMethod String?
   status        String   @default("COMPLETED") // COMPLETED, REFUNDED, PARTIAL
   receiptNumber String?
@@ -886,7 +1077,7 @@ model Sale {
 }
 
 model SaleItem {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   quantity  Int
   unitPrice Decimal @db.Decimal(10, 2)
   total     Decimal @db.Decimal(10, 2)
@@ -908,7 +1099,7 @@ model Expense {
   id          String   @id @default(uuid())
   category    String // RENT, ELECTRICITY, INTERNET, SALARIES, MAINTENANCE, EQUIPMENT, MARKETING, CLEANING, SOFTWARE, MISC
   description String
-  amount      Decimal @db.Decimal(10, 2)
+  amount      Decimal  @db.Decimal(10, 2)
   date        DateTime @default(now())
   isRecurring Boolean  @default(false)
   receiptUrl  String?
@@ -921,6 +1112,7 @@ model Expense {
   @@index([gymId])
   @@index([category])
   @@index([date])
+  @@index([gymId, date])
 }
 
 // =====================================================================
@@ -932,7 +1124,7 @@ model Equipment {
   name           String
   serialNumber   String?
   purchaseDate   DateTime?
-  purchaseCost   Decimal? @db.Decimal(10, 2)
+  purchaseCost   Decimal?  @db.Decimal(10, 2)
   warrantyExpiry DateTime?
   location       String?
   condition      String    @default("OPERATIONAL") // OPERATIONAL, MAINTENANCE, DAMAGED, RETIRED
@@ -952,7 +1144,7 @@ model EquipmentMaintenance {
   id          String    @id @default(uuid())
   type        String // PREVENTIVE, CORRECTIVE, INSPECTION
   description String
-  cost        Decimal  @default(0) @db.Decimal(10, 2)
+  cost        Decimal   @default(0) @db.Decimal(10, 2)
   date        DateTime  @default(now())
   nextDue     DateTime?
   createdAt   DateTime  @default(now())
@@ -971,10 +1163,10 @@ model Payslip {
   id            String    @id @default(uuid())
   month         Int // 1-12
   year          Int
-  basicSalary   Decimal @db.Decimal(10, 2)
-  bonuses       Decimal @default(0) @db.Decimal(10, 2)
-  deductions    Decimal @default(0) @db.Decimal(10, 2)
-  netPay        Decimal @db.Decimal(10, 2)
+  basicSalary   Decimal   @db.Decimal(10, 2)
+  bonuses       Decimal   @default(0) @db.Decimal(10, 2)
+  deductions    Decimal   @default(0) @db.Decimal(10, 2)
+  netPay        Decimal   @db.Decimal(10, 2)
   paymentMethod String?
   status        String    @default("PENDING") // PENDING, PAID
   paidAt        DateTime?
@@ -1035,14 +1227,153 @@ model FeatureFlag {
 // Super Admins can view these in the admin console.
 
 model PlatformMessage {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
   phone     String?
   email     String
   subject   String?
   message   String
-  status    String    @default("NEW") // NEW, READ, ARCHIVED
-  createdAt DateTime  @default(now())
+  status    String   @default("NEW") // NEW, READ, ARCHIVED
+  createdAt DateTime @default(now())
 
   @@index([status, createdAt])
+}
+
+// =====================================================================
+// PARTNER WEBSITES (paid add-on)
+// =====================================================================
+
+model GymWebsiteRequest {
+  id          String   @id @default(uuid())
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  desiredSlug String   @unique
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([gymId])
+}
+
+// =====================================================================
+// BACKGROUND JOBS (polled by the scheduler / cron)
+// =====================================================================
+
+model Job {
+  id          String   @id @default(uuid())
+  type        String // EMAIL, ...
+  payload     Json     @default("{}")
+  status      String   @default("QUEUED") // QUEUED, RUNNING, DONE, FAILED
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  runAt       DateTime @default(now())
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, runAt])
+}
+
+// =====================================================================
+// DOCUMENTS (private uploads, served only through signed links)
+// =====================================================================
+
+model Document {
+  id         String   @id @default(uuid())
+  kind       String // ID_PROOF, BUSINESS_PROOF, GST_CERT, QUALIFICATION, GALLERY
+  storageKey String   @unique
+  mime       String
+  sizeBytes  Int
+  sha256     String
+  status     String   @default("UPLOADED") // UPLOADED, VERIFIED, REJECTED, DELETED
+  createdAt  DateTime @default(now())
+
+  ownerUserId String
+  owner       User    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  gymId       String?
+  gym         Gym?    @relation(fields: [gymId], references: [id], onDelete: SetNull)
+
+  approvals      ApprovalDocument[]
+  qualifications TrainerQualification[]
+
+  @@index([ownerUserId])
+  @@index([gymId])
+}
+
+// =====================================================================
+// APPROVALS (one engine for every change that needs a reviewer)
+// =====================================================================
+// The real tables only hold approved data; a proposed change waits in
+// proposedValue until a reviewer approves it.
+
+model ApprovalRequest {
+  id            String    @id @default(uuid())
+  seq           Int       @unique @default(autoincrement())
+  ref           String    @unique // APR-2026-000123
+  type          String // GYM_REGISTRATION, GYM_PROFILE_CHANGE, PAYOUT_ACCOUNT, PLAN_PRICE_CHANGE, TRAINER_VERIFICATION, ACCOUNT_REACTIVATION, BRANCH, WEBSITE_SLUG
+  resourceType  String // Gym, MembershipPlan, TrainerDetails, User
+  resourceId    String
+  status        String    @default("DRAFT") // DRAFT, PENDING_REVIEW, CHANGES_REQUESTED, APPROVED, REJECTED, CANCELLED
+  currentValue  Json?
+  proposedValue Json?
+  // "type:resourceType:resourceId" while open and null once closed, so the
+  // unique index allows one open request per resource and type.
+  openKey       String?   @unique
+  requesterRole String
+  reviewNote    String?
+  submittedAt   DateTime?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  gymId       String?
+  gym         Gym?    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User    @relation("ApprovalRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewerId  String?
+  reviewer    User?   @relation("ApprovalReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  events    ApprovalEvent[]
+  documents ApprovalDocument[]
+
+  @@index([status, type])
+  @@index([gymId])
+  @@index([requesterId])
+}
+
+// Append-only history of every status change.
+model ApprovalEvent {
+  id         String   @id @default(uuid())
+  fromStatus String?
+  toStatus   String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  requestId String
+  request   ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+}
+
+model ApprovalDocument {
+  requestId  String
+  request    ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([requestId, documentId])
+  @@index([documentId])
+}
+
+// Platform list of facilities a gym can pick from, managed by the super admin.
+model Facility {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  icon      String?
+  createdAt DateTime @default(now())
 }

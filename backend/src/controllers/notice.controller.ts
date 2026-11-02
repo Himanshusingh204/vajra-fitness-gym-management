@@ -2,21 +2,13 @@ import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { logAudit } from '../utils/audit';
-
-// Ensure the caller can manage notices for this gym (owner or Super Admin).
-const assertManager = async (gymId: string, userId?: string, role?: string) => {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-  if (!gym) return { gym: null as null, ok: false };
-  const ok = role === 'SUPER_ADMIN' || (userId != null && gym.ownerId === userId);
-  return { gym, ok };
-};
+import { canAccessGym, findMemberProfile, requestedGymId } from '../utils/tenant';
 
 // List announcements for a gym (Gym Admin / Super Admin)
 export const getGymNotices = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
-    const { ok } = await assertManager(gymId, req.user?.userId, req.user?.role);
-    if (!ok) return res.status(403).json({ error: 'Unauthorized' });
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const notices = await prisma.notice.findMany({
       where: { gymId },
@@ -32,8 +24,7 @@ export const getGymNotices = async (req: AuthRequest, res: Response) => {
 export const createNotice = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
-    const { ok } = await assertManager(gymId, req.user?.userId, req.user?.role);
-    if (!ok) return res.status(403).json({ error: 'Unauthorized' });
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const { title, content } = req.body;
     const notice = await prisma.notice.create({
@@ -61,8 +52,7 @@ export const updateNotice = async (req: AuthRequest, res: Response) => {
     const notice = await prisma.notice.findUnique({ where: { id }, select: { id: true, gymId: true } });
     if (!notice) return res.status(404).json({ error: 'Notice not found' });
 
-    const { ok } = await assertManager(notice.gymId, req.user?.userId, req.user?.role);
-    if (!ok) return res.status(403).json({ error: 'Unauthorized' });
+    if (!(await canAccessGym(req.user, notice.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const { title, content } = req.body;
     const updated = await prisma.notice.update({
@@ -82,8 +72,7 @@ export const deleteNotice = async (req: AuthRequest, res: Response) => {
     const notice = await prisma.notice.findUnique({ where: { id }, select: { id: true, gymId: true } });
     if (!notice) return res.status(404).json({ error: 'Notice not found' });
 
-    const { ok } = await assertManager(notice.gymId, req.user?.userId, req.user?.role);
-    if (!ok) return res.status(403).json({ error: 'Unauthorized' });
+    if (!(await canAccessGym(req.user, notice.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     await prisma.notice.delete({ where: { id } });
     res.json({ message: 'Notice deleted' });
@@ -99,7 +88,7 @@ export const getMyGymNotices = async (req: AuthRequest, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const [member, trainer, staff] = await Promise.all([
-      prisma.memberDetails.findUnique({ where: { userId }, select: { gymId: true } }),
+      findMemberProfile(userId, requestedGymId(req)),
       prisma.trainerDetails.findUnique({ where: { userId }, select: { gymId: true } }),
       prisma.staffDetails.findUnique({ where: { userId }, select: { gymId: true } }),
     ]);

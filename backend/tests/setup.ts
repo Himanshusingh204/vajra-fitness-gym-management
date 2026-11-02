@@ -4,6 +4,9 @@
 import { prisma } from '../src/utils/prisma';
 
 const TABLES = [
+  'PaymentEvent',
+  'Job',
+  'Document',
   'NutritionPlan',
   'ProgressLog',
   'Booking',
@@ -28,6 +31,9 @@ const TABLES = [
   'TrainerDetails',
   'MemberDetails',
   'MembershipPlan',
+  'Facility',
+  'ApprovalEvent',
+  'ApprovalRequest',
   'Gym',
   'User',
 ];

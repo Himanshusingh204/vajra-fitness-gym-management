@@ -1,6 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
 import { assertGymCapacity, isFeatureEnabled } from '../services/entitlements.service';
 import { createNotification } from '../services/notification.service';
@@ -21,21 +22,13 @@ const requireSuperAdmin = (req: AuthRequest, res: Response): boolean => {
 // gym (or the caller is SUPER_ADMIN).
 // =====================================================================
 
-// Helper: verify the requesting user owns the gym (or is SUPER_ADMIN).
-const assertGymOwner = async (gymId: string, userId: string | undefined, role: string | undefined) => {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, ownerId: true } });
-  if (!gym) return false;
-  if (role === 'SUPER_ADMIN') return true;
-  return gym.ownerId === userId;
-};
-
 // List branches for a gym (Gym Admin / Super Admin). Includes per-branch
 // headcounts so the dashboard can show load at a glance.
 export const getBranches = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
 
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -65,7 +58,7 @@ export const createBranch = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { name, address, city, state, phone } = req.body;
 
-    if (!(await assertGymOwner(gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -108,7 +101,7 @@ export const updateBranch = async (req: AuthRequest, res: Response) => {
 
     const branch = await prisma.branch.findUnique({ where: { id } });
     if (!branch) return res.status(404).json({ error: 'Branch not found' });
-    if (!(await assertGymOwner(branch.gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, branch.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -155,7 +148,7 @@ export const deleteBranch = async (req: AuthRequest, res: Response) => {
 
     const branch = await prisma.branch.findUnique({ where: { id } });
     if (!branch) return res.status(404).json({ error: 'Branch not found' });
-    if (!(await assertGymOwner(branch.gymId, req.user?.userId, req.user?.role))) {
+    if (!(await canAccessGym(req.user, branch.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

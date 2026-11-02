@@ -96,8 +96,4 @@ export const getGymAnalytics = (gymId: string): Promise<GymAnalytics> =>
 export const getTrainerPerformance = (gymId: string, params?: { from?: string; to?: string }): Promise<TrainerPerformance[]> =>
   api.get(`/reports/gym/${gymId}/trainers`, { params }).then((r) => r.data);
 
-export const getGymStats = (gymId: string): Promise<any> =>
-  api.get(`/reports/gym/${gymId}/stats`).then((r) => r.data);
-
-export const getRevenueReport = (gymId: string, params?: { from?: string; to?: string }): Promise<any> =>
-  api.get(`/reports/gym/${gymId}/revenue`, { params }).then((r) => r.data);
+

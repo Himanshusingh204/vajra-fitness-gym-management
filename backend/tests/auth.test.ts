@@ -31,6 +31,18 @@ describe('Auth', () => {
     expect(res.status).toBe(409);
   });
 
+  it('returns field-level validation issues for invalid vendor registration', async () => {
+    const res = await agent.post('/api/auth/register/vendor').send({
+      username: 'Gym Owner', email: uniq('vendor-validation'), password: PASSWORD,
+      phone: '1111111111', gymName: '<b></b>', address: '12 Road', city: 'Pune', state: 'MH',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'phone' }),
+      expect.objectContaining({ path: 'gymName' }),
+    ]));
+  });
+
   it('logs in with correct credentials and rejects bad ones', async () => {
     const { user } = await seedAdmin();
     const ok = await login(user.email);
@@ -70,6 +82,24 @@ describe('Auth', () => {
     // The legitimately rotated token in the same family is now revoked too.
     const revoked = await agent.post('/api/auth/refresh').set('Cookie', cookie2!);
     expect(revoked.status).toBe(401);
+  });
+
+  it('keeps the refresh cookie session-only when remember me is off', async () => {
+    const { user } = await seedAdmin();
+    const res = await agent.post('/api/auth/login').send({ email: user.email, password: PASSWORD, rememberMe: false });
+    expect(res.status).toBe(200);
+    const raw = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+    expect(raw).not.toMatch(/Max-Age|Expires/i);
+
+    const marker = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('sessionOnly='))!.split(';')[0];
+    const refreshed = await agent.post('/api/auth/refresh').set('Cookie', [refreshCookie(res)!, marker]);
+    expect(refreshed.status).toBe(200);
+    const rotated = (refreshed.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+    expect(rotated).not.toMatch(/Max-Age|Expires/i);
+
+    const remembered = await login(user.email);
+    const persistent = (remembered.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+    expect(persistent).toMatch(/Max-Age/i);
   });
 
   it('rejects a refresh request from an unconfigured browser origin', async () => {
@@ -153,5 +183,19 @@ describe('Auth', () => {
     const res = await login(admin.email);
     expect(res.status).toBe(200);
     expect(res.body.user.role).toBe('SUPER_ADMIN');
+  });
+});
+
+describe('API origin browser entry points', () => {
+  it('redirects the API root to the configured frontend', async () => {
+    const res = await agent.get('/');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(process.env.FRONTEND_URL);
+  });
+
+  it('redirects the conventional favicon URL to the frontend mark', async () => {
+    const res = await agent.get('/favicon.ico');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(`${process.env.FRONTEND_URL}/favicon.svg`);
   });
 });

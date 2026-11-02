@@ -23,7 +23,7 @@ export interface SaaSPlan {
   sortOrder: number;
 }
 
-export interface GymSubscription {
+interface GymSubscription {
   id: string;
   status: string;
   startDate: string;
@@ -97,15 +97,6 @@ export const getMyGymSubscription = async () => {
   return response.data;
 };
 
-export const purchaseSubscription = async (data: {
-  planId: string;
-  billingCycle?: 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY';
-  paymentMethod?: string;
-}) => {
-  const response = await api.post<GymSubscription>('/saas/purchase', data);
-  return response.data;
-};
-
 export type SaaSSubscriptionCheckout =
   | { mode: 'online'; keyId: string; orderId: string; amount: number; currency: string; subscription: GymSubscription }
   | { mode: 'manual'; subscription: GymSubscription };
@@ -122,21 +113,6 @@ export const checkoutSubscription = async (data: {
 
 export const verifySubscriptionPayment = async (params: { orderId: string; paymentId: string; signature: string }) => {
   const response = await api.post('/saas/verify', params);
-  return response.data;
-};
-
-export const startTrial = async (data: { planId: string; trialDays?: number }) => {
-  const response = await api.post<GymSubscription>('/saas/trial', data);
-  return response.data;
-};
-
-export const upgradePlan = async (data: { planId: string }) => {
-  const response = await api.post<GymSubscription>('/saas/upgrade', data);
-  return response.data;
-};
-
-export const downgradePlan = async (data: { planId: string }) => {
-  const response = await api.post<GymSubscription>('/saas/downgrade', data);
   return response.data;
 };
 
@@ -157,15 +133,5 @@ export interface AdminSubscription {
 
 export const getAllSubscriptions = async () => {
   const response = await api.get<AdminSubscription[]>('/saas/subscriptions');
-  return response.data;
-};
-
-export const extendSubscription = async (id: string, days: number) => {
-  const response = await api.post(`/saas/subscriptions/${id}/extend`, { days });
-  return response.data;
-};
-
-export const cancelSubscription = async (id: string, reason: string) => {
-  const response = await api.post(`/saas/subscriptions/${id}/cancel`, { reason });
   return response.data;
 };

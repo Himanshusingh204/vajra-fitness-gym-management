@@ -3,7 +3,11 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyProfile, getMyWorkouts, getMyFees } from '../api/member.api';
 import { getMyMemberships, getMyAttendance } from '../api/membership.api';
-import { listTrainers, createBooking, getMyBookings, updateBookingStatus } from '../api/booking.api';
+import EmptyState from '../components/ui/EmptyState';
+import SlotPicker from '../components/ui/SlotPicker';
+import { LineChart } from '../components/charts';
+import { CheckInButton, ReferralCard } from './member/SelfService';
+import { listTrainers, createBooking, getMyBookings, updateBookingStatus, rescheduleBooking } from '../api/booking.api';
 import { getMyNotifications, markAllNotificationsRead, markNotificationRead } from '../api/notification.api';
 import { getMyGymNotices } from '../api/notice.api';
 import { getPaymentConfig, createCheckout, verifyPayment, loadRazorpayScript } from '../api/payment.api';
@@ -14,7 +18,8 @@ import { getClasses, bookClass } from '../api/class.api';
 import { ExercisePlanView } from '../components/ExercisePlan';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreditCard, Dumbbell, Calendar, Activity, ChevronRight, MapPin, Building2, BadgeCheck, Download, Users, XCircle, Clock, Bell, CalendarDays, KeyRound, UserCircle, Megaphone, ExternalLink, Loader2, TrendingUp, Salad, Trash2, Dumbbell as DumbbellIcon } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, Navigate, useNavigate, useOutletContext } from 'react-router';
+import { GymDirectory } from '../components/GymDirectory';
 import { formatPrice, localDateString } from '../utils/format';
 import { downloadFile } from '../services/api';
 
@@ -61,13 +66,24 @@ const ActivityChart = ({ data, color }: { data: { label: string; value: number }
 const MemberDashboard = () => {
   const user = useAuthStore(state => state.user);
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('overview');
+  const activeTab = useOutletContext<string | undefined>();
+  const navigate = useNavigate();
+  const [profileMissing, setProfileMissing] = useState(false);
 
   const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: ['myProfile'],
-    queryFn: getMyProfile,
+    queryFn: async () => {
+      try {
+        const result = await getMyProfile();
+        setProfileMissing(false);
+        return result;
+      } catch (error: any) {
+        setProfileMissing(error.response?.status === 404);
+        throw error;
+      }
+    },
     refetchInterval: 30000,
-    retry: false, // a missing profile means "hasn't joined a gym yet", not a transient failure
+    retry: false,
   });
 
   const { data: memberships } = useQuery({
@@ -94,7 +110,7 @@ const MemberDashboard = () => {
   const { data: attendance, isLoading: attendanceLoading } = useQuery({
     queryKey: ['myAttendance'],
     queryFn: getMyAttendance,
-    enabled: activeTab === 'overview' || activeTab === 'attendance',
+    enabled: activeTab === 'overview' || activeTab === 'attendance' || activeTab === 'progress',
     refetchInterval: 30000
   });
 
@@ -122,13 +138,21 @@ const MemberDashboard = () => {
   const { data: trainers } = useQuery({
     queryKey: ['trainers', profile?.gymId],
     queryFn: () => listTrainers(profile?.gymId),
-    enabled: activeTab === 'pt' && !!profile?.gymId,
+    enabled: activeTab === 'pt' && !!profile?.gymId && profile?.status === 'ACTIVE',
     refetchInterval: 60000
   });
 
+  const nowStamp = `${localDateString()} ${new Date().toTimeString().slice(0, 5)}`;
+  const isUpcoming = (b: any) => ['PENDING', 'CONFIRMED'].includes(b.status) && `${b.date} ${b.time}` >= nowStamp;
+  const upcomingBookings = (bookings ?? []).filter(isUpcoming);
+  const pastBookings = (bookings ?? []).filter((b: any) => !isUpcoming(b)).reverse();
+
   const cancelMutation = useMutation({
     mutationFn: (id: string) => updateBookingStatus(id, 'CANCELLED'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myBookings'] })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myBookings'] });
+      queryClient.invalidateQueries({ queryKey: ['slots'] });
+    }
   });
 
   const markAllMutation = useMutation({
@@ -204,7 +228,7 @@ const MemberDashboard = () => {
         key: checkout.keyId,
         amount: checkout.amount,
         currency: checkout.currency,
-        name: 'Vajra Fitness',
+        name: 'Kavach Fitness',
         description: `Fee payment · ${formatPrice(fee.amount)}`,
         order_id: checkout.orderId,
         handler: async (response) => {
@@ -230,9 +254,14 @@ const MemberDashboard = () => {
     }
   };
 
+  if (!activeTab) return <Navigate to="/dashboard" replace />;
+
   if (profileLoading) return (
-    <div className="min-h-screen pt-32 pb-12 flex items-center justify-center bg-[var(--color-base)] dark:bg-[var(--color-base)]">
-      <div className="animate-pulse text-gray-500">Loading your profile...</div>
+    <div className="p-4 md:p-10 max-w-5xl space-y-6" aria-busy="true" aria-label="Loading your dashboard">
+      <div className="h-10 w-56 rounded-lg bg-gray-100 dark:bg-white/5 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 rounded-lg bg-gray-100 dark:bg-white/5 animate-pulse" />)}
+      </div>
     </div>
   );
 
@@ -241,6 +270,20 @@ const MemberDashboard = () => {
     const d = new Date(r.checkIn);
     return d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
   }).length ?? 0;
+
+  // Consecutive days with a check-in, counting back from today (or yesterday if
+  // they have not been in yet today).
+  const streak = (() => {
+    const days = new Set(((attendance?.records ?? []) as { checkIn: string }[]).map((r) => localDateString(new Date(r.checkIn))));
+    const cursor = new Date();
+    if (!days.has(localDateString(cursor))) cursor.setDate(cursor.getDate() - 1);
+    let count = 0;
+    while (days.has(localDateString(cursor))) {
+      count++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  })();
 
   // Nearest upcoming/unpaid fee (fees arrive ordered dueDate desc, so scan all).
   const nextFee = fees?.filter((f: any) => f.status !== 'PAID' && new Date(f.dueDate) >= new Date())
@@ -278,82 +321,33 @@ const MemberDashboard = () => {
     return months;
   };
 
-  if (!profileLoading && profileError) {
+  if (!profileLoading && profileError && profileMissing) {
     return (
-      <div className="min-h-screen pt-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] flex items-center justify-center px-4">
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="card max-w-md w-full p-10 text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white flex items-center justify-center shadow-lg shadow-[var(--color-primary)]/25">
+          <div className="w-16 h-16 mx-auto rounded-lg bg-[var(--color-primary)] text-white flex items-center justify-center">
             <Building2 className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-extrabold text-[var(--color-deepgray)] dark:text-white mt-6">You haven't joined a gym yet</h1>
-          <p className="text-[var(--color-muted)] mt-2">
-            Welcome, {user?.username}! Browse gyms near you and send a membership request whenever you're ready.
-          </p>
-          <Link to="/membership" className="btn-primary w-full mt-8 py-3! justify-center">
-            <Dumbbell className="w-5 h-5" /> Browse Gyms
-          </Link>
+          <h1 className="text-2xl font-extrabold text-[var(--color-deepgray)] dark:text-white mt-6">Your gym membership is not set up yet</h1>
+          <p className="text-[var(--color-muted)] mt-2">Welcome, {user?.username}! Browse gyms and request a membership whenever you're ready.</p>
+          <Link to="/gyms" className="btn-primary w-full mt-8 py-3! justify-center"><Dumbbell className="w-5 h-5" /> Browse Gyms</Link>
         </div>
       </div>
     );
   }
-
-  const tabs = [
-    { key: 'overview', label: 'Overview', icon: Activity },
-    { key: 'membership', label: 'My Membership', icon: Building2 },
-    { key: 'attendance', label: 'Attendance', icon: CalendarDays },
-    { key: 'workouts', label: 'My Workouts', icon: Dumbbell },
-    { key: 'progress', label: 'My Progress', icon: TrendingUp },
-    { key: 'nutrition', label: 'Nutrition', icon: Salad },
-    { key: 'fees', label: 'Payments', icon: CreditCard },
-    { key: 'pt', label: 'Book a PT', icon: Users },
-    { key: 'classes', label: 'Group Classes', icon: DumbbellIcon },
-    { key: 'notifications', label: 'Notifications', icon: Bell },
-    { key: 'settings', label: 'Settings', icon: UserCircle },
-  ];
+  if (!profileLoading && profileError) return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="card max-w-md w-full p-8 text-center">
+        <h1 className="text-xl font-bold text-[var(--color-deepgray)] dark:text-white">We couldn’t load your dashboard</h1>
+        <p className="mt-2 text-sm text-[var(--color-muted)]">Your account may be temporarily unavailable. Check your connection and try again.</p>
+        <button type="button" onClick={() => queryClient.invalidateQueries({ queryKey: ['myProfile'] })} className="btn-primary mt-6 w-full justify-center">Try again</button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen pt-20 bg-[var(--color-base)] dark:bg-[var(--color-base)] flex flex-col md:flex-row">
-      <div className="md:hidden sticky top-20 z-20 border-y border-[var(--color-border)] bg-[var(--color-base)]/95 px-4 py-3 backdrop-blur">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-extrabold text-[var(--color-deepgray)] dark:text-white">{user?.username}</p>
-            <p className="text-xs font-semibold text-[var(--color-primary)]">{profile?.gym?.name || 'Member dashboard'}</p>
-          </div>
-          <span className="text-xs font-bold text-[var(--color-muted)]">Menu</span>
-        </div>
-        <nav className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Member dashboard sections">
-          {tabs.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => setActiveTab(key)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${activeTab === key ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-charcoal)] dark:text-white border border-[var(--color-border)]'}`}>
-              <Icon className="h-4 w-4" /> {label}
-            </button>
-          ))}
-        </nav>
-      </div>
-      {/* Sidebar */}
-      <aside className="hidden w-full md:block md:w-64 bg-[var(--color-surface)]/50 backdrop-blur-xl border-r border-[var(--color-border)] md:h-[calc(100vh-5rem)] sticky top-20 flex-shrink-0">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white font-bold text-xl">
-              {user?.username?.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p className="font-bold text-[var(--color-deepgray)] dark:text-white truncate">{user?.username}</p>
-              <p className="text-xs text-[var(--color-primary)] font-semibold">{profile?.status}</p>
-            </div>
-          </div>
-
-          <nav className="space-y-2">
-            {tabs.map(({ key, label, icon: Icon }) => (
-              <button key={key} onClick={() => setActiveTab(key)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-[background-color,color,box-shadow] ${activeTab === key ? 'bg-[var(--color-primary)] text-white shadow-lg shadow-[var(--color-primary)]/20' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}>
-                <Icon className="w-5 h-5" /> {label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto">
+    <>
+      <div className="p-4 md:p-10">
         {activeTab === 'overview' && (
           <div className="max-w-5xl">
             <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 border-b border-[var(--color-border)] pb-6 gap-4">
@@ -372,9 +366,8 @@ const MemberDashboard = () => {
 
             {/* Membership summary */}
             <div className="card-hover p-8 mb-10 relative overflow-hidden">
-              <div className="absolute -right-10 -top-10 w-52 h-52 bg-[var(--color-primary)]/10 rounded-full blur-2xl" />
               <div className="flex flex-col md:flex-row md:items-center gap-6 relative">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white flex items-center justify-center shrink-0 shadow-lg shadow-[var(--color-primary)]/25">
+                <div className="w-16 h-16 rounded-lg bg-[var(--color-primary)] text-white flex items-center justify-center shrink-0">
                   <Building2 className="w-8 h-8" />
                 </div>
                 <div className="flex-1">
@@ -408,17 +401,17 @@ const MemberDashboard = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-3 mt-6 relative">
-                <button onClick={() => setActiveTab('membership')} className="text-sm font-semibold text-[var(--color-primary)] hover:underline inline-flex items-center gap-1.5">
+                <button onClick={() => navigate('/dashboard/membership')} className="text-sm font-semibold text-[var(--color-primary)] hover:underline inline-flex items-center gap-1.5">
                   View membership details <ChevronRight className="w-4 h-4" />
                 </button>
-                <Link to="/membership" className="text-sm font-semibold text-[var(--color-muted)] hover:underline inline-flex items-center gap-1.5">
-                  Browse other gyms <ChevronRight className="w-4 h-4" />
+                <Link to="/dashboard/gyms" className="text-sm font-semibold text-[var(--color-muted)] hover:underline inline-flex items-center gap-1.5">
+                  Join another gym <ChevronRight className="w-4 h-4" />
                 </Link>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-              <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
+              <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-[var(--color-primary)]/5 rounded-full group-hover:scale-150 transition-transform duration-500" />
                 <Activity className="w-8 h-8 text-[var(--color-primary)] mb-4" />
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Current Plan</h3>
@@ -427,7 +420,7 @@ const MemberDashboard = () => {
                 </p>
               </div>
 
-              <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
+              <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-500/5 rounded-full group-hover:scale-150 transition-transform duration-500" />
                 <CreditCard className="w-8 h-8 text-amber-500 mb-4" />
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Next Payment</h3>
@@ -436,7 +429,7 @@ const MemberDashboard = () => {
                 </p>
               </div>
 
-              <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
+              <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] shadow-sm relative overflow-hidden group">
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/5 rounded-full group-hover:scale-150 transition-transform duration-500" />
                 <CalendarDays className="w-8 h-8 text-emerald-500 mb-4" />
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">This Month</h3>
@@ -447,8 +440,8 @@ const MemberDashboard = () => {
 
               <button
                 type="button"
-                onClick={() => setActiveTab('pt')}
-                className="bg-[var(--color-primary)] p-6 rounded-2xl border border-[var(--color-primary)] shadow-sm relative overflow-hidden group text-white flex flex-col justify-center text-left w-full hover:bg-[var(--color-accent)] transition-colors"
+                onClick={() => navigate('/bookings')}
+                className="bg-[var(--color-primary)] p-6 rounded-lg border border-[var(--color-primary)] shadow-sm relative overflow-hidden group text-white flex flex-col justify-center text-left w-full hover:bg-[var(--color-accent)] transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold">Book a PT</h3>
@@ -459,10 +452,10 @@ const MemberDashboard = () => {
             </div>
 
             {/* Activity chart */}
-            <div className="mt-8 bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm">
+            <div className="mt-8 bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                     <TrendingUp className="w-5 h-5" />
                   </div>
                   <div>
@@ -470,7 +463,7 @@ const MemberDashboard = () => {
                     <p className="text-xs text-gray-500">Check-ins per day at your gym</p>
                   </div>
                 </div>
-                <button onClick={() => setActiveTab('attendance')} className="text-sm font-semibold text-[var(--color-primary)] hover:underline inline-flex items-center gap-1.5">
+                <button onClick={() => navigate('/dashboard/attendance')} className="text-sm font-semibold text-[var(--color-primary)] hover:underline inline-flex items-center gap-1.5">
                   View full history <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -488,17 +481,17 @@ const MemberDashboard = () => {
             {/* Announcements */}
             <div className="mt-10">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                   <Megaphone className="w-5 h-5" />
                 </div>
                 <h2 className="text-xl font-bold dark:text-white">Announcements</h2>
               </div>
               {noticesLoading ? (
-                <div className="p-8 text-center text-[var(--color-muted)] bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)]">Loading announcements...</div>
+                <div className="p-8 text-center text-[var(--color-muted)] bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">Loading announcements...</div>
               ) : notices && notices.length > 0 ? (
                 <div className="space-y-3">
                   {notices.map((n: any) => (
-                    <div key={n.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
+                    <div key={n.id} className="bg-[var(--color-surface)] p-5 rounded-lg border border-[var(--color-border)]">
                       <div className="flex items-start justify-between gap-3">
                         <h3 className="font-bold dark:text-white">{n.title}</h3>
                         <span className="text-xs text-gray-400 shrink-0">{new Date(n.createdAt).toLocaleDateString('en-IN')}</span>
@@ -508,7 +501,7 @@ const MemberDashboard = () => {
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
+                <div className="p-8 text-center bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                   No announcements from your gym right now.
                 </div>
               )}
@@ -520,7 +513,7 @@ const MemberDashboard = () => {
         {activeTab === 'membership' && (
           <div className="max-w-4xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                 <Building2 className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">My Memberships</h2>
@@ -528,7 +521,7 @@ const MemberDashboard = () => {
 
             <div className="space-y-4">
               {memberships?.map((m: any) => (
-                <div key={m.id} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+                <div key={m.id} className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -549,7 +542,7 @@ const MemberDashboard = () => {
                     </div>
                   </div>
                   {(m.paymentMethod || m.transactionId) && (
-                    <div className="mt-4 p-3 bg-gray-50 dark:bg-white/5 rounded-xl text-sm text-gray-600 dark:text-gray-300">
+                    <div className="mt-4 p-3 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-600 dark:text-gray-300">
                       {m.paymentMethod && <span className="mr-4">Method: <b>{m.paymentMethod}</b></span>}
                       {m.transactionId && <span>Transaction: <b className="font-mono">{m.transactionId}</b></span>}
                     </div>
@@ -557,11 +550,10 @@ const MemberDashboard = () => {
                 </div>
               ))}
               {(!memberships || memberships.length === 0) && (
-                <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
-                  No membership records yet.
-                </div>
+                <div className="bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)]"><EmptyState icon={<BadgeCheck className="h-8 w-8" />} title="No membership records yet" hint="Once your gym starts a membership for you, it shows up here." /></div>
               )}
             </div>
+            <ReferralCard />
           </div>
         )}
 
@@ -569,17 +561,18 @@ const MemberDashboard = () => {
         {activeTab === 'attendance' && (
           <div className="max-w-4xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                 <CalendarDays className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">My Attendance</h2>
               <span className="ml-auto text-sm font-semibold text-gray-500">Total visits: {attendance?.total ?? 0}</span>
             </div>
 
+            <CheckInButton />
             {attendanceLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading attendance...</div> : (
               <div className="space-y-3">
                 {attendance?.records?.map((r: any) => (
-                  <div key={r.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)] flex justify-between items-center">
+                  <div key={r.id} className="bg-[var(--color-surface)] p-5 rounded-lg border border-[var(--color-border)] flex justify-between items-center">
                     <div>
                       <p className="font-bold dark:text-white">{new Date(r.checkIn).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</p>
                       <p className="text-xs text-gray-500">Checked in at {new Date(r.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
@@ -590,7 +583,7 @@ const MemberDashboard = () => {
                   </div>
                 ))}
                 {(!attendance?.records || attendance.records.length === 0) && (
-                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No attendance records yet.
                   </div>
                 )}
@@ -604,7 +597,7 @@ const MemberDashboard = () => {
           <div className="max-w-3xl">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                   <Bell className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-bold dark:text-white">Notifications</h2>
@@ -621,7 +614,7 @@ const MemberDashboard = () => {
                     type="button"
                     key={n.id}
                     onClick={() => markReadMutation.mutate(n.id)}
-                    className={`w-full text-left p-5 rounded-2xl border transition-colors ${n.isRead ? 'bg-[var(--color-surface)] border-[var(--color-border)]' : 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20'}`}
+                    className={`w-full text-left p-5 rounded-lg border transition-colors ${n.isRead ? 'bg-[var(--color-surface)] border-[var(--color-border)]' : 'bg-[var(--color-primary)]/5 border-[var(--color-primary)]/20'}`}
                   >
                     <div className="flex items-center justify-between">
                       <p className="font-bold dark:text-white flex items-center gap-2">
@@ -634,7 +627,7 @@ const MemberDashboard = () => {
                   </button>
                 ))}
                 {(!notifications?.notifications || notifications.notifications.length === 0) && (
-                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No notifications yet.
                   </div>
                 )}
@@ -647,7 +640,7 @@ const MemberDashboard = () => {
         {activeTab === 'progress' && (
           <div className="max-w-4xl space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                 <TrendingUp className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">My Progress</h2>
@@ -655,26 +648,49 @@ const MemberDashboard = () => {
 
             {progressLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading progress...</div> : (
               <>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 stagger">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Latest Weight</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress?.latest ? `${progress.latest.weight} kg` : '—'}</p>
                   </div>
-                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">BMI</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress?.bmi ?? '—'}</p>
                   </div>
-                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Weight Change</p>
                     <p className={`text-2xl font-extrabold ${(progress?.weightChange ?? 0) > 0 ? 'text-red-500' : (progress?.weightChange ?? 0) < 0 ? 'text-green-500' : 'dark:text-white'}`}>
                       {progress?.weightChange != null ? `${progress.weightChange > 0 ? '+' : ''}${progress.weightChange} kg` : '—'}
                     </p>
                   </div>
-                  <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
                     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Log Entries</p>
                     <p className="text-2xl font-extrabold dark:text-white">{progress?.entries ?? 0}</p>
                   </div>
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Workouts This Month</p>
+                    <p className="text-2xl font-extrabold dark:text-white">{thisMonthAttendance}</p>
+                  </div>
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
+                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Current Streak</p>
+                    <p className="text-2xl font-extrabold dark:text-white">{streak} {streak === 1 ? 'day' : 'days'}</p>
+                  </div>
                 </div>
+
+                {(progress?.logs?.length ?? 0) >= 2 && (
+                  <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
+                    <h3 className="text-lg font-bold dark:text-white mb-4">Weight trend</h3>
+                    <LineChart
+                      series={[{
+                        name: 'Weight (kg)',
+                        data: [...progress!.logs]
+                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                          .map((l) => ({ label: new Date(l.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }), value: l.weight })),
+                      }]}
+                      config={{ height: 240 }}
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <ProgressLogForm onSubmit={(data) => addProgressMutation.mutate(data)} />
@@ -684,7 +700,7 @@ const MemberDashboard = () => {
                     {progress?.logs && progress.logs.length > 0 ? (
                       <div className="space-y-3">
                         {progress.logs.map((log) => (
-                          <div key={log.id} className="bg-[var(--color-surface)] p-4 rounded-2xl border border-[var(--color-border)] flex justify-between items-center">
+                          <div key={log.id} className="bg-[var(--color-surface)] p-4 rounded-lg border border-[var(--color-border)] flex justify-between items-center">
                             <div>
                               <p className="font-bold dark:text-white">{new Date(log.date).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</p>
                               <p className="text-xs text-gray-500 mt-0.5">
@@ -697,7 +713,7 @@ const MemberDashboard = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
+                      <div className="p-8 text-center bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                         No progress entries yet. Add your first weight log.
                       </div>
                     )}
@@ -712,7 +728,7 @@ const MemberDashboard = () => {
         {activeTab === 'nutrition' && (
           <div className="max-w-4xl space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-orange-500/10 text-orange-500 flex items-center justify-center">
                 <Salad className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">Nutrition Plans</h2>
@@ -728,7 +744,7 @@ const MemberDashboard = () => {
                     {nutritionPlans.map((plan) => {
                       const meals = parseNutritionMeals(plan.meals);
                       return (
-                        <div key={plan.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
+                        <div key={plan.id} className="bg-[var(--color-surface)] p-5 rounded-lg border border-[var(--color-border)]">
                           <div className="flex justify-between items-start gap-3">
                             <div>
                               <h4 className="font-bold dark:text-white">{plan.title}</h4>
@@ -757,7 +773,7 @@ const MemberDashboard = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No nutrition plans yet. Create one to track your daily meals.
                   </div>
                 )}
@@ -774,15 +790,15 @@ const MemberDashboard = () => {
         {activeTab === 'workouts' && (
           <div className="max-w-4xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                 <Dumbbell className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">My Workout Slips</h2>
             </div>
 
-            <div className="mb-8 bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm">
+            <div className="mb-8 bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                   <TrendingUp className="w-5 h-5" />
                 </div>
                 <div>
@@ -798,7 +814,7 @@ const MemberDashboard = () => {
             {workoutsLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading workouts...</div> : (
               <div className="space-y-4">
                 {workouts?.map((slip: any) => (
-                  <div key={slip.id} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] hover:border-[var(--color-primary)] dark:hover:border-[var(--color-primary)] transition-colors group">
+                  <div key={slip.id} className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] dark:hover:border-[var(--color-primary)] transition-colors group">
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="font-bold text-lg dark:text-white">{slip.title || 'Workout Plan'}</h3>
@@ -811,15 +827,13 @@ const MemberDashboard = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                    <div className="p-4 bg-gray-50 dark:bg-white/5 rounded-lg">
                       <ExercisePlanView exercises={slip.exercises} />
                     </div>
                   </div>
                 ))}
                 {(!workouts || workouts.length === 0) && (
-                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
-                    No workouts assigned yet. Ask your trainer!
-                  </div>
+                  <div className="bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)]"><EmptyState icon={<Dumbbell className="h-8 w-8" />} title="No workouts assigned yet" hint="Your trainer can assign a plan, or you can book a personal training session." actionLabel="Book a PT" onAction={() => navigate('/bookings')} /></div>
                 )}
               </div>
             )}
@@ -829,26 +843,26 @@ const MemberDashboard = () => {
         {activeTab === 'fees' && (
           <div className="max-w-4xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
                 <CreditCard className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">Payment History</h2>
             </div>
 
             {payConfigLoading ? (
-              <div className="p-4 mb-6 bg-gray-50 dark:bg-white/5 border border-[var(--color-border)] rounded-xl text-sm text-gray-400 animate-pulse">Checking payment options…</div>
+              <div className="p-4 mb-6 bg-gray-50 dark:bg-white/5 border border-[var(--color-border)] rounded-lg text-sm text-gray-400 animate-pulse">Checking payment options…</div>
             ) : !payConfig?.enabled ? (
-              <div className="p-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl text-sm text-amber-700 dark:text-amber-400">
+              <div className="p-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-lg text-sm text-amber-700 dark:text-amber-400">
                 Online payments aren’t configured yet — contact your gym front desk to pay. Receipts are available here once paid.
               </div>
             ) : (
-              <div className="p-4 mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/40 rounded-xl text-sm text-green-700 dark:text-green-400">
+              <div className="p-4 mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/40 rounded-lg text-sm text-green-700 dark:text-green-400">
                 Pay any pending fee securely online with Razorpay — UPI, cards, and net banking supported.
               </div>
             )}
 
             {profile?.preferredPaymentMethod && (
-              <div className="p-4 mb-6 bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/15 rounded-xl text-sm text-[var(--color-charcoal)] dark:text-gray-300 flex items-start gap-2.5">
+              <div className="p-4 mb-6 bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/15 rounded-lg text-sm text-[var(--color-charcoal)] dark:text-gray-300 flex items-start gap-2.5">
                 <CreditCard className="w-4 h-4 text-[var(--color-primary)] mt-0.5 shrink-0" />
                 <span>
                   You chose to pay{' '}
@@ -871,7 +885,7 @@ const MemberDashboard = () => {
             {feesLoading ? <div className="p-8 text-center text-[var(--color-muted)]">Loading history...</div> : (
               <div className="space-y-4">
                 {fees?.map((fee: any) => (
-                  <div key={fee.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)] flex justify-between items-center hover:border-gray-300 dark:hover:border-white/20 transition-colors">
+                  <div key={fee.id} className="bg-[var(--color-surface)] p-5 rounded-lg border border-[var(--color-border)] flex justify-between items-center hover:border-gray-300 dark:hover:border-white/20 transition-colors">
                     <div>
                       <h3 className="font-extrabold text-xl dark:text-white">₹{fee.amount.toLocaleString('en-IN')}</h3>
                       <p className="text-sm font-medium text-gray-500 mt-1">Due: {new Date(fee.dueDate).toLocaleDateString('en-IN')}</p>
@@ -903,7 +917,7 @@ const MemberDashboard = () => {
                   </div>
                 ))}
                 {(!fees || fees.length === 0) && (
-                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
+                  <div className="p-8 text-center bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
                     No payment history found.
                   </div>
                 )}
@@ -915,56 +929,37 @@ const MemberDashboard = () => {
         {activeTab === 'pt' && (
           <div className="max-w-6xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center">
                 <Users className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">Personal Training</h2>
             </div>
 
+            {profile?.status !== 'ACTIVE' && (
+              <div role="status" className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm text-[var(--color-muted)]">
+                Personal training booking is available after your gym membership is active. Contact your gym if you think this is a mistake.
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div>
-                <PTBookingForm trainers={trainers || []} onSuccess={() => queryClient.invalidateQueries({ queryKey: ['myBookings'] })} />
+                {profile?.status === 'ACTIVE' ? <PTBookingForm trainers={trainers || []} onSuccess={() => queryClient.invalidateQueries({ queryKey: ['myBookings'] })} /> : null}
               </div>
 
               <div>
                 <h3 className="text-xl font-bold dark:text-white mb-4">My Bookings</h3>
                 {bookingsLoading ? <div className="text-[var(--color-muted)]">Loading bookings...</div> : (
                   <div className="space-y-4">
-                    {bookings?.map((b: any) => (
-                      <div key={b.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 className="font-bold dark:text-white">Trainer: {b.trainer?.username}</h4>
-                            <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                              <Calendar className="w-4 h-4" /> {b.date} <Clock className="w-4 h-4 ml-2" /> {b.time}
-                            </p>
-                          </div>
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${
-                            b.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                            b.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-700' :
-                            b.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>{b.status}</span>
-                        </div>
-                        {b.notes && <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 bg-gray-50 dark:bg-white/5 p-2 rounded">Notes: {b.notes}</p>}
-
-                        {(b.status === 'PENDING' || b.status === 'CONFIRMED') && (
-                          <div className="mt-4 flex justify-end">
-                            <button
-                              onClick={() => setConfirmAction({ type: 'cancelBooking', id: b.id })}
-                              disabled={cancelMutation.isPending}
-                              className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1"
-                            >
-                              <XCircle className="w-4 h-4" /> Cancel Session
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    {upcomingBookings.length > 0 && <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Upcoming</h4>}
+                    {upcomingBookings.map((b: any) => (
+                      <BookingCard key={b.id} booking={b} upcoming onCancel={() => setConfirmAction({ type: 'cancelBooking', id: b.id })} cancelling={cancelMutation.isPending} />
+                    ))}
+                    {pastBookings.length > 0 && <h4 className="pt-2 text-xs font-bold uppercase tracking-wider text-gray-400">Past</h4>}
+                    {pastBookings.map((b: any) => (
+                      <BookingCard key={b.id} booking={b} />
                     ))}
                     {(!bookings || bookings.length === 0) && (
-                      <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
-                        No PT sessions booked yet.
-                      </div>
+                      <div className="bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)]"><EmptyState icon={<Calendar className="h-8 w-8" />} title="No PT sessions booked yet" hint="Pick a trainer, date and time above to book your first session." /></div>
                     )}
                   </div>
                 )}
@@ -973,10 +968,23 @@ const MemberDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'gyms' && (
+          <div className="max-w-6xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <h2 className="text-2xl font-bold dark:text-white">Find Gyms</h2>
+            </div>
+            <p className="-mt-3 mb-6 text-sm text-[var(--color-muted)]">Join another gym and keep your current membership. Each gym approves its own members.</p>
+            <GymDirectory />
+          </div>
+        )}
+
         {activeTab === 'classes' && (
           <div className="max-w-6xl">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                 <DumbbellIcon className="w-5 h-5" />
               </div>
               <h2 className="text-2xl font-bold dark:text-white">Group Classes</h2>
@@ -985,13 +993,11 @@ const MemberDashboard = () => {
             {classesLoading ? (
               <div className="text-[var(--color-muted)]">Loading classes...</div>
             ) : gymClasses.length === 0 ? (
-              <div className="p-8 text-center bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] text-[var(--color-muted)]">
-                No group classes available at your gym yet.
-              </div>
+              <div className="bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)]"><EmptyState icon={<CalendarDays className="h-8 w-8" />} title="No group classes yet" hint="Classes your gym schedules will appear here so you can book a spot." /></div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {gymClasses.map((cls: any) => (
-                  <div key={cls.id} className="bg-[var(--color-surface)] p-5 rounded-2xl border border-[var(--color-border)]">
+                  <div key={cls.id} className="bg-[var(--color-surface)] p-5 rounded-lg border border-[var(--color-border)]">
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-bold text-lg dark:text-white">{cls.name}</h3>
                       <span className={`px-2 py-1 rounded text-xs font-bold ${cls.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -1021,7 +1027,7 @@ const MemberDashboard = () => {
             )}
           </div>
         )}
-      </main>
+      </div>
 
       <ConfirmDialog
         open={confirmAction !== null}
@@ -1044,12 +1050,78 @@ const MemberDashboard = () => {
         }}
         onCancel={() => setConfirmAction(null)}
       />
+    </>
+  );
+};
+
+const BOOKING_BADGE: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+  CONFIRMED: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  COMPLETED: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400',
+  CANCELLED: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+};
+
+const BookingCard = ({ booking: b, upcoming, onCancel, cancelling }: { booking: any; upcoming?: boolean; onCancel?: () => void; cancelling?: boolean }) => {
+  const queryClient = useQueryClient();
+  const [moving, setMoving] = useState(false);
+  const [slot, setSlot] = useState({ date: b.date as string, time: '' });
+  const [error, setError] = useState('');
+
+  const move = useMutation({
+    mutationFn: () => rescheduleBooking(b.id, slot),
+    onSuccess: () => {
+      setMoving(false);
+      setError('');
+      queryClient.invalidateQueries({ queryKey: ['myBookings'] });
+      queryClient.invalidateQueries({ queryKey: ['slots'] });
+    },
+    onError: (err: any) => setError(err.response?.data?.error || 'Could not reschedule this session.'),
+  });
+
+  return (
+    <div className="bg-[var(--color-surface)] p-5 rounded-lg border border-[var(--color-border)]">
+      <div className="flex justify-between items-start mb-2 gap-3">
+        <div className="min-w-0">
+          <h4 className="font-bold dark:text-white truncate">Trainer: {b.trainer?.username}</h4>
+          <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+            <Calendar className="w-4 h-4" /> {b.date} <Clock className="w-4 h-4 ml-2" /> {b.time}
+          </p>
+        </div>
+        <span className={`px-2 py-1 rounded text-xs font-bold ${BOOKING_BADGE[b.status] ?? BOOKING_BADGE.CANCELLED}`}>{b.status}</span>
+      </div>
+      {b.notes && <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 bg-gray-50 dark:bg-white/5 p-2 rounded">Notes: {b.notes}</p>}
+
+      {upcoming && !moving && (
+        <div className="mt-4 flex justify-end gap-4">
+          <button onClick={() => setMoving(true)} className="text-xs font-bold text-[var(--color-primary)] hover:underline flex items-center gap-1">
+            <Calendar className="w-4 h-4" /> Reschedule
+          </button>
+          <button onClick={onCancel} disabled={cancelling} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1">
+            <XCircle className="w-4 h-4" /> Cancel Session
+          </button>
+        </div>
+      )}
+
+      {upcoming && moving && (
+        <div className="mt-4 space-y-3 border-t border-[var(--color-border)] pt-4">
+          <p className="text-sm font-semibold dark:text-white">Pick a new time. Your trainer will need to confirm it again.</p>
+          <SlotPicker trainerId={b.trainerId} date={slot.date} time={slot.time} onChange={setSlot} />
+          {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+          <div className="flex justify-end gap-3">
+            <button onClick={() => { setMoving(false); setError(''); }} className="text-sm font-semibold text-gray-500">Keep current time</button>
+            <button onClick={() => move.mutate()} disabled={!slot.time || move.isPending} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
+              {move.isPending ? 'Moving…' : 'Move session'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: () => void }) => {
-  const [formData, setFormData] = useState({ trainerId: '', date: '', time: '', notes: '' });
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({ trainerId: '', date: localDateString(), time: '', notes: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1060,7 +1132,8 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
     try {
       await createBooking(formData);
       setSuccess('Booking created successfully!');
-      setFormData({ trainerId: '', date: '', time: '', notes: '' });
+      setFormData({ trainerId: '', date: localDateString(), time: '', notes: '' });
+      queryClient.invalidateQueries({ queryKey: ['slots'] });
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create booking.');
@@ -1070,7 +1143,7 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
       <h3 className="text-xl font-bold dark:text-white mb-4">Book a Session</h3>
       {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded">{error}</div>}
       {success && <div className="text-green-500 mb-4 bg-green-50 dark:bg-green-900/20 p-3 rounded">{success}</div>}
@@ -1092,24 +1165,25 @@ const PTBookingForm = ({ trainers, onSuccess }: { trainers: any[], onSuccess: ()
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="pt-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
-            <input id="pt-date" type="date" required className="input-field" min={localDateString()} value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-          </div>
-          <div>
-            <label htmlFor="pt-time" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time</label>
-            <input id="pt-time" type="time" required className="input-field" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} />
-          </div>
-        </div>
+        <SlotPicker
+          trainerId={formData.trainerId}
+          date={formData.date}
+          time={formData.time}
+          onChange={(next) => setFormData({ ...formData, ...next })}
+        />
 
         <div>
           <label htmlFor="pt-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (Optional)</label>
           <textarea id="pt-notes" className="input-field" rows={2} placeholder="Focus areas, injuries…" value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})}></textarea>
         </div>
 
-        <button type="submit" disabled={loading} className="btn-primary w-full mt-4">
-          {loading ? 'Booking…' : 'Confirm Booking'}
+        {formData.time && (
+          <p className="rounded-lg bg-[var(--color-primary)]/10 px-3 py-2 text-sm font-semibold text-[var(--color-primary)]">
+            {new Date(`${formData.date}T00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })} at {formData.time}
+          </p>
+        )}
+        <button type="submit" disabled={loading || !formData.trainerId || !formData.time} className="btn-primary w-full mt-4 disabled:opacity-50">
+          {loading ? 'Booking…' : formData.time ? 'Confirm Booking' : 'Pick a time to continue'}
         </button>
       </div>
     </form>
@@ -1139,7 +1213,7 @@ const ProgressLogForm = ({ onSubmit }: { onSubmit: (data: { weight: number; heig
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg self-start">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] self-start">
       <h3 className="text-xl font-bold dark:text-white mb-1">Log Your Progress</h3>
       <p className="text-sm text-gray-500 mb-4">Track weight, height and body fat over time.</p>
       <div className="space-y-4">
@@ -1161,7 +1235,7 @@ const ProgressLogForm = ({ onSubmit }: { onSubmit: (data: { weight: number; heig
           />
           {error && <p id="progress-weight-error" className="mt-1 text-sm text-red-500">{error}</p>}
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="progress-height" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Height (cm)</label>
             <input id="progress-height" type="number" step="0.1" min="1" className="input-field" placeholder="e.g. 175" value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} />
@@ -1221,7 +1295,7 @@ const NutritionPlanForm = ({ onCreated }: { onCreated: () => void }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-lg self-start">
+    <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)] self-start">
       <h3 className="text-xl font-bold dark:text-white mb-1">Create a Nutrition Plan</h3>
       <p className="text-sm text-gray-500 mb-4">Write each meal on its own line, e.g. <code className="text-xs">Breakfast: Oats + eggs</code></p>
       {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
@@ -1298,13 +1372,13 @@ const SettingsTab = () => {
   return (
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3 mb-2">
-        <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+        <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
           <UserCircle className="w-5 h-5" />
         </div>
         <h2 className="text-2xl font-bold dark:text-white">Account Settings</h2>
       </div>
 
-      <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+      <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
         <h3 className="font-bold dark:text-white mb-4">Profile</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
@@ -1318,7 +1392,7 @@ const SettingsTab = () => {
         </div>
       </div>
 
-      <div className="bg-[var(--color-surface)] p-6 rounded-2xl border border-[var(--color-border)]">
+      <div className="bg-[var(--color-surface)] p-6 rounded-lg border border-[var(--color-border)]">
         <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2"><KeyRound className="w-4 h-4" /> Change Password</h3>
         {error && <div className="text-red-500 mb-4 bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm">{error}</div>}
         {success && <div className="text-green-500 mb-4 bg-green-50 dark:bg-green-900/20 p-3 rounded text-sm">{success}</div>}

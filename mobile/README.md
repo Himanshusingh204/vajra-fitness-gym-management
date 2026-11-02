@@ -1,4 +1,4 @@
-# Vajra Fitness mobile app
+# Kavach Fitness mobile app
 
 Expo (React Native) app for members, trainers, partners (gym owners) and staff. It uses the same REST API as the website, so there is no separate backend to run.
 
@@ -24,7 +24,7 @@ npm start
 
 `EXPO_PUBLIC_` values end up inside the app bundle. Never put secrets in them.
 
-To use a local API from a phone, point `EXPO_PUBLIC_API_URL` at your computer's LAN address (for example `http://192.168.1.20:3000/api`), not `localhost`.
+To use a local API from a phone, point `EXPO_PUBLIC_API_URL` at your computer's LAN address (for example `http://192.168.1.20:5000/api`), not `localhost`.
 
 ## Running on a phone
 
@@ -82,7 +82,7 @@ Every request sends `X-Client: mobile`. With that header the API returns the ref
 
 Trainers waiting for approval see an "awaiting approval" screen. An expired gym subscription makes the API read-only; the app shows a plain message when a change is refused.
 
-Online fee payment, plans, staff management and reports stay on the website for now. Gym owners register on the website too.
+Online fee payment, plans, staff management and reports stay on the website for now. Gym owners register on the website too (`/partner/register`).
 
 ## Project layout
 
@@ -101,6 +101,7 @@ assets/           icons and splash, generated from frontend/public/favicon.svg
 
 - An Expo account (free) to run EAS builds.
 - A Google Play developer account and an Apple Developer Program membership to publish.
-- The bundle id. `app.json` uses `in.vajrafitness.app` for both iOS and Android as a placeholder. Replace it with a reverse domain you own before the first store build; it cannot be changed after publishing.
+- The bundle id. `app.json` uses `in.kavachfitness.app` for both iOS and Android as a placeholder. Replace it with a reverse domain you own before the first store build; it cannot be changed after publishing.
 - A review of the icons and splash in `assets/`. They were generated from the web favicon and are fine for testing, but check them against the store guidelines.
+- A decision on the domain: `kavachfitness.in` is not registered yet, so the privacy policy URL and bundle id cannot use it.
 - Store listing text, screenshots and a privacy policy URL.

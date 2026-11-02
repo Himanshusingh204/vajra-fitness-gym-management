@@ -1,14 +1,22 @@
 import PDFDocument from 'pdfkit';
 import { Response } from 'express';
 
+const INK = '#111827';
+const MUTED = '#6B7280';
+const BRAND = '#800020';
+const LINE = '#E5E7EB';
+const STRIPE = '#F9FAFB';
+
 export const sendPdf = (res: Response, filename: string, build: (doc: PDFKit.PDFDocument) => void) => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Cache-Control', 'no-store');
-  const doc = new PDFDocument({ margin: 48, size: 'A4' });
+  // bufferPages lets us stamp "Page X of Y" once the page count is known.
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 48, bottom: 60, left: 48, right: 48 }, bufferPages: true });
   doc.pipe(res);
   try {
     build(doc);
+    addFooters(doc);
     doc.end();
   } catch {
     doc.destroy();
@@ -18,12 +26,132 @@ export const sendPdf = (res: Response, filename: string, build: (doc: PDFKit.PDF
   }
 };
 
+const addFooters = (doc: PDFKit.PDFDocument) => {
+  const { start, count } = doc.bufferedPageRange();
+  for (let i = start; i < start + count; i++) {
+    doc.switchToPage(i);
+    const { left, right, bottom } = doc.page.margins;
+    const width = doc.page.width - left - right;
+    const y = doc.page.height - bottom + 20;
+    // the footer sits inside the bottom margin, which pdfkit would treat as overflow
+    doc.page.margins.bottom = 0;
+    doc.moveTo(left, y - 8).lineTo(left + width, y - 8).lineWidth(0.5).strokeColor(LINE).stroke();
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED);
+    doc.text('Kavach Fitness · computer-generated document, no signature required', left, y, { width, lineBreak: false });
+    doc.text(`Page ${i - start + 1} of ${count}`, left, y, { width, align: 'right', lineBreak: false });
+    doc.page.margins.bottom = bottom;
+  }
+};
+
+// Helvetica has no ₹ glyph, so amounts use "Rs."
 const money = (n: number) =>
-  `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `Rs. ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const fmtDate = (d: Date | string | null | undefined) => {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const contentWidth = (doc: PDFKit.PDFDocument) => doc.page.width - doc.page.margins.left - doc.page.margins.right;
+const pageBottom = (doc: PDFKit.PDFDocument) => doc.page.height - doc.page.margins.bottom;
+
+const drawHeader = (doc: PDFKit.PDFDocument, gymName: string, title: string) => {
+  const left = doc.page.margins.left;
+  const top = doc.page.margins.top;
+  const width = contentWidth(doc);
+
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND).text('KAVACH FITNESS', left, top, { characterSpacing: 1.5 });
+  doc.font('Helvetica-Bold').fontSize(18).fillColor(INK).text(gymName, left, top + 14, { width: width * 0.6 });
+  const nameBottom = doc.y;
+
+  doc.font('Helvetica-Bold').fontSize(14).fillColor(INK).text(title, left, top + 14, { width, align: 'right' });
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED)
+    .text(`Generated ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`, left, doc.y + 2, { width, align: 'right' });
+
+  const y = Math.max(nameBottom, doc.y) + 10;
+  doc.rect(left, y, width, 2).fill(BRAND);
+  doc.x = left;
+  doc.y = y + 18;
+};
+
+type Field = [string, string];
+
+const fieldBlock = (doc: PDFKit.PDFDocument, heading: string, fields: Field[], x: number, y: number, width: number) => {
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(MUTED).text(heading.toUpperCase(), x, y, { width, characterSpacing: 1 });
+  doc.y += 4;
+  for (const [label, value] of fields) {
+    const rowY = doc.y;
+    doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(label, x, rowY, { width: 85 });
+    const labelBottom = doc.y;
+    doc.font('Helvetica').fontSize(10).fillColor(INK).text(value, x + 85, rowY, { width: width - 85 });
+    doc.y = Math.max(doc.y, labelBottom) + 3;
+  }
+  return doc.y;
+};
+
+// Side-by-side blocks of labelled fields, e.g. "Billed to" next to "Receipt details".
+const fieldColumns = (doc: PDFKit.PDFDocument, blocks: Array<{ heading: string; fields: Field[] }>) => {
+  const left = doc.page.margins.left;
+  const gap = 24;
+  const colWidth = (contentWidth(doc) - gap * (blocks.length - 1)) / blocks.length;
+  const top = doc.y;
+  const bottom = Math.max(...blocks.map((b, i) => fieldBlock(doc, b.heading, b.fields, left + i * (colWidth + gap), top, colWidth)));
+  doc.x = left;
+  doc.y = bottom + 16;
+};
+
+// width is a fraction of the content width
+type Column = { label: string; width: number; align?: 'left' | 'right' | 'center' };
+
+const drawTable = (doc: PDFKit.PDFDocument, columns: Column[], rows: string[][], total?: [string, string]) => {
+  const left = doc.page.margins.left;
+  const width = contentWidth(doc);
+  const pad = 6;
+  const widths = columns.map((c) => c.width * width);
+
+  const rowHeight = (cells: string[], font: string) => {
+    doc.font(font).fontSize(9);
+    return Math.max(...cells.map((c, i) => doc.heightOfString(c, { width: widths[i]! - pad * 2 }))) + pad * 2;
+  };
+
+  const drawRow = (cells: string[], font: string, color: string, fill?: string) => {
+    const h = rowHeight(cells, font);
+    const y = doc.y;
+    if (fill) doc.rect(left, y, width, h).fill(fill);
+    let x = left;
+    cells.forEach((cell, i) => {
+      doc.font(font).fontSize(9).fillColor(color)
+        .text(cell, x + pad, y + pad, { width: widths[i]! - pad * 2, align: columns[i]!.align ?? 'left' });
+      x += widths[i]!;
+    });
+    doc.y = y + h;
+  };
+
+  const drawHead = () => drawRow(columns.map((c) => c.label), 'Helvetica-Bold', '#FFFFFF', INK);
+
+  drawHead();
+  rows.forEach((cells, i) => {
+    if (doc.y + rowHeight(cells, 'Helvetica') > pageBottom(doc)) {
+      doc.addPage();
+      drawHead();
+    }
+    drawRow(cells, 'Helvetica', INK, i % 2 ? STRIPE : undefined);
+    doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(0.5).strokeColor(LINE).stroke();
+  });
+
+  if (total) {
+    // label goes in the second-to-last column, amount in the last
+    const cells = columns.map((_, i) => (i === columns.length - 2 ? total[0] : i === columns.length - 1 ? total[1] : ''));
+    if (doc.y + rowHeight(cells, 'Helvetica-Bold') > pageBottom(doc)) doc.addPage();
+    doc.rect(left, doc.y, width, 1).fill(INK);
+    drawRow(cells, 'Helvetica-Bold', INK, '#F3F4F6');
+  }
+  doc.x = left;
+  doc.y += 16;
+};
+
+const note = (doc: PDFKit.PDFDocument, text: string) => {
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED).text(text, doc.page.margins.left, doc.y, { width: contentWidth(doc) });
 };
 
 export const parseExercises = (raw: string): string[] => {
@@ -63,92 +191,40 @@ type ReceiptData = {
 };
 
 export const buildFeeReceipt = (doc: PDFKit.PDFDocument, data: ReceiptData) => {
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  drawHeader(doc, data.gymName, 'Fee Receipt');
 
-  doc
-    .rect(0, 0, doc.page.width, 130)
-    .fill('#111827');
-  doc.fill('#ffffff').fontSize(22).font('Helvetica-Bold')
-    .text('VAJRA FITNESS', doc.page.margins.left, 36, { width: pageWidth, align: 'center' });
-  doc.fontSize(12).font('Helvetica').text('Fee Payment Receipt', 0, 68, { width: doc.page.width, align: 'center' });
+  const member: Field[] = [['Name', data.memberName]];
+  if (data.memberEmail) member.push(['Email', data.memberEmail]);
+  if (data.memberPhone) member.push(['Phone', data.memberPhone]);
 
-  doc.y = 160;
-  doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text('Payment Information');
-  doc.moveDown(0.4);
-
-  const leftX = doc.page.margins.left;
-  const rightX = pageWidth / 2 + doc.page.margins.left;
-  const colWidth = pageWidth / 2 - 10;
-
-  // Single-column row: label then value, stacked line by line.
-  const row = (label: string, value: string, x: number = leftX, width: number = pageWidth) => {
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#6B7280').text(label, x, doc.y, { width: 150, continued: true });
-    doc.font('Helvetica').fillColor('#111827').text(value, { width: width - 150 });
-    doc.moveDown(0.2);
-  };
-
-  // True two-column grid: each pair of entries shares one line, left/right
-  // aligned at leftX/rightX, so labels don't zigzag down a single column.
-  const grid = (entries: Array<[string, string]>) => {
-    for (let i = 0; i < entries.length; i += 2) {
-      const rowY = doc.y;
-      const [l1, v1] = entries[i]!;
-      row(l1, v1, leftX, colWidth);
-      const right = entries[i + 1];
-      if (right) {
-        doc.y = rowY;
-        const [l2, v2] = right;
-        row(l2, v2, rightX, colWidth);
-      }
-    }
-  };
-
-  doc.y += 4;
-  // Short fields pair up in the two-column grid; longer free-text fields
-  // (transaction ID, notes) get their own full-width row so they don't
-  // get squeezed into a half-width column and wrap awkwardly.
-  const paymentEntries: Array<[string, string]> = [
+  const receipt: Field[] = [
     ['Receipt No.', data.feeId.slice(0, 8).toUpperCase()],
     ['Status', data.status],
-    ['Amount', money(data.amount)],
-    ['Payment Date', fmtDate(data.paymentDate)],
-    ['Due Date', fmtDate(data.dueDate)],
   ];
-  if (data.paymentMethod) paymentEntries.push(['Payment Method', data.paymentMethod]);
-  grid(paymentEntries);
-  if (data.transactionId) row('Transaction ID', data.transactionId);
-  if (data.notes) row('Notes', data.notes);
+  if (data.transactionId) receipt.push(['Transaction ID', data.transactionId]);
+  if (data.gymAddress) receipt.push(['Gym address', data.gymAddress]);
+  if (data.gymGst) receipt.push(['GSTIN', data.gymGst]);
 
-  doc.moveDown(0.8);
-  doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text('Member Details');
-  doc.moveDown(0.4);
-  doc.y += 4;
-  row('Name', data.memberName);
-  if (data.memberEmail) row('Email', data.memberEmail);
-  if (data.memberPhone) row('Phone', data.memberPhone);
+  fieldColumns(doc, [
+    { heading: 'Billed to', fields: member },
+    { heading: 'Receipt details', fields: receipt },
+  ]);
 
-  doc.moveDown(0.8);
-  doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text('Gym Details');
-  doc.moveDown(0.4);
-  doc.y += 4;
-  row('Gym', data.gymName);
-  if (data.gymAddress) row('Address', data.gymAddress);
-  if (data.gymGst) row('GST No.', data.gymGst);
+  const paid = data.status === 'PAID';
+  drawTable(
+    doc,
+    [
+      { label: 'Description', width: 0.36 },
+      { label: 'Due date', width: 0.15 },
+      { label: 'Paid on', width: 0.15 },
+      { label: 'Method', width: 0.14 },
+      { label: 'Amount', width: 0.2, align: 'right' },
+    ],
+    [[data.notes || 'Membership fee', fmtDate(data.dueDate), paid ? fmtDate(data.paymentDate) : '-', data.paymentMethod || '-', money(data.amount)]],
+    [paid ? 'Total paid' : 'Amount due', money(data.amount)]
+  );
 
-  doc.moveDown(2);
-  doc
-    .rect(0, doc.page.height - 90, doc.page.width, 90)
-    .fill('#F3F4F6');
-  // The footer band deliberately bleeds into the page's bottom margin, but
-  // pdfkit still checks new text against the margin box and silently starts
-  // a blank second page once a line's height crosses it — zero the bottom
-  // margin for these two lines so they stay pinned to page 1.
-  const savedBottomMargin = doc.page.margins.bottom;
-  doc.page.margins.bottom = 0;
-  doc.fill('#6B7280').fontSize(9).font('Helvetica')
-    .text('This is a computer-generated receipt and does not require a physical signature.', doc.page.margins.left, doc.page.height - 74, { width: pageWidth, align: 'center' });
-  doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Vajra Fitness`, doc.page.margins.left, doc.page.height - 52, { width: pageWidth, align: 'center' });
-  doc.page.margins.bottom = savedBottomMargin;
+  note(doc, 'Thank you for training with us. Please keep this receipt for your records.');
 };
 
 type SlipData = {
@@ -163,53 +239,37 @@ type SlipData = {
 };
 
 export const buildWorkoutSlip = (doc: PDFKit.PDFDocument, data: SlipData) => {
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  drawHeader(doc, data.gymName, 'Workout Slip');
 
-  doc
-    .rect(0, 0, doc.page.width, 130)
-    .fill('#111827');
-  doc.fill('#ffffff').fontSize(22).font('Helvetica-Bold')
-    .text('VAJRA FITNESS', doc.page.margins.left, 36, { width: pageWidth, align: 'center' });
-  doc.fontSize(12).font('Helvetica').text('Workout Slip', 0, 68, { width: doc.page.width, align: 'center' });
+  const plan: Field[] = [
+    ['Plan', data.title || 'Personalized Workout Plan'],
+    ['Slip No.', data.slipId.slice(0, 8).toUpperCase()],
+    ['Assigned', fmtDate(data.assignedDate)],
+  ];
+  if (data.validUntil) plan.push(['Valid until', fmtDate(data.validUntil)]);
 
-  doc.y = 160;
-  doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text(data.title || 'Personalized Workout Plan');
-  doc.moveDown(0.4);
+  const people: Field[] = [['Member', data.memberName]];
+  if (data.trainerName) people.push(['Trainer', data.trainerName]);
 
-  const row = (label: string, value: string) => {
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#6B7280').text(label, { width: 150, continued: true });
-    doc.font('Helvetica').fillColor('#111827').text(value, { width: 300 });
-    doc.moveDown(0.2);
-  };
-
-  doc.y += 4;
-  row('Slip No.', data.slipId.slice(0, 8).toUpperCase());
-  row('Member', data.memberName);
-  row('Gym', data.gymName);
-  if (data.trainerName) row('Trainer', data.trainerName);
-  row('Assigned', fmtDate(data.assignedDate));
-  if (data.validUntil) row('Valid Until', fmtDate(data.validUntil));
-
-  doc.moveDown(0.8);
-  doc.fill('#111827').fontSize(11).font('Helvetica-Bold').text('Exercises');
-  doc.moveDown(0.3);
+  fieldColumns(doc, [
+    { heading: 'Plan', fields: plan },
+    { heading: 'Assigned to', fields: people },
+  ]);
 
   const exercises = parseExercises(data.exercises);
-
   if (exercises.length === 0) {
-    doc.fontSize(10).fillColor('#6B7280').text('No exercises listed.');
+    note(doc, 'No exercises listed.');
+    doc.moveDown(1);
   } else {
-    doc.y += 2;
-    exercises.forEach((ex, i) => {
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#111827').text(`${i + 1}.`);
-      const x = doc.x;
-      doc.font('Helvetica').fontSize(10).fillColor('#374151').text(ex, x + 4);
-      doc.moveDown(0.25);
-    });
+    drawTable(
+      doc,
+      [
+        { label: '#', width: 0.08, align: 'center' },
+        { label: 'Exercise', width: 0.92 },
+      ],
+      exercises.map((ex, i) => [String(i + 1), ex])
+    );
   }
 
-  doc.moveDown(1.5);
-  doc.fill('#6B7280').fontSize(9).font('Helvetica')
-    .text('Please warm up before exercising and consult a trainer for correct form.', doc.page.margins.left, undefined, { width: pageWidth });
-  doc.text(`Generated on ${new Date().toLocaleString('en-IN')} · Vajra Fitness`, undefined, undefined, { width: pageWidth });
+  note(doc, 'Please warm up before exercising and consult a trainer for correct form.');
 };

@@ -1,4 +1,4 @@
-name: E2E and audits
+name: E2E
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   e2e-audit:
-    name: Playwright, SEO, accessibility and Lighthouse
+    name: Playwright smoke tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -111,24 +111,9 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      # The four scripts below are added to frontend/package.json separately.
-      # --if-present makes each one a no-op until it exists. Each step runs even
-      # when an earlier one failed, so one report shows every problem.
       - name: Playwright end-to-end tests
         if: ${{ !cancelled() && steps.ready.conclusion == 'success' }}
-        run: npm run test:e2e --workspace=frontend --if-present
-
-      - name: SEO audit
-        if: ${{ !cancelled() && steps.ready.conclusion == 'success' }}
-        run: npm run audit:seo --workspace=frontend --if-present
-
-      - name: Accessibility audit
-        if: ${{ !cancelled() && steps.ready.conclusion == 'success' }}
-        run: npm run audit:a11y --workspace=frontend --if-present
-
-      - name: Lighthouse
-        if: ${{ !cancelled() && steps.ready.conclusion == 'success' }}
-        run: npm run lighthouse --workspace=frontend --if-present
+        run: npm run test:e2e --workspace=frontend
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
@@ -147,15 +132,6 @@ jobs:
           path: |
             frontend/test-results/
             frontend/screenshots/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload Lighthouse reports
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: lighthouse
-          path: frontend/lighthouse-reports/
           if-no-files-found: ignore
           retention-days: 7
 

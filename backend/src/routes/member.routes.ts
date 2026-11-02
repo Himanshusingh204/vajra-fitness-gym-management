@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { getMembers, getMember, updateMember, addMember, getMyProfile, enrollMember, sendActivationLink, deleteMember, importMembers } from '../controllers/member.controller';
+import { getMembers, getMember, updateMember, addMember, getMyProfile, enrollMember, sendActivationLink, deleteMember, importMembers, getMyGyms } from '../controllers/member.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { memberAddSchema, updateMemberSchema, enrollSchema, memberImportSchema, idParams, gymIdParams } from '../utils/validators';
@@ -12,6 +12,7 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 
 // Route for Member self-access
 router.get('/my-profile', authenticate, authorize(['MEMBER']), asyncHandler(getMyProfile));
+router.get('/my-gyms', authenticate, authorize(['MEMBER']), asyncHandler(getMyGyms));
 router.post('/enroll', authenticate, authorize(['MEMBER']), validate(enrollSchema), asyncHandler(enrollMember));
 
 // Members of a gym (Gym Admin, Super Admin, Trainer or Staff at that gym)

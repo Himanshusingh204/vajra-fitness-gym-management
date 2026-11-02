@@ -10,7 +10,7 @@ const seedPublicGym = async () => {
   const { user: owner, gym } = await seedAdmin();
   await prisma.gym.update({
     where: { id: gym.id },
-    data: { gstNumber: '27ABCDE1234F1Z5', tagline: 'Lift heavy, rest well', facilities: 'Free weights, Sauna', brandColor: '#800020' },
+    data: { gstNumber: '27ABCDE1234F1Z5', tagline: 'Lift heavy, rest well', facilities: ['Free weights', 'Sauna'], brandColor: '#800020' },
   });
   await seedPlan(gym.id, { name: 'Quarterly', price: 4000, duration: 90 });
   await seedPlan(gym.id, { name: 'Monthly', price: 1500, duration: 30 });
@@ -23,6 +23,8 @@ const seedPublicGym = async () => {
   await prisma.trainerDetails.update({ where: { id: pending.id }, data: { status: 'PENDING' } });
 
   await prisma.branch.create({ data: { gymId: gym.id, name: 'Kothrud', address: '4 Road', city: 'Pune', state: 'MH' } });
+  await prisma.gymClass.create({ data: { gymId: gym.id, name: 'Morning Yoga', dayOfWeek: 'MONDAY', startTime: '06:00', endTime: '07:00' } });
+  await prisma.gymClass.create({ data: { gymId: gym.id, name: 'Old Zumba', isActive: false } });
   await prisma.branch.create({ data: { gymId: gym.id, name: 'Waiting', address: '5 Road', city: 'Pune', state: 'MH', status: 'PENDING' } });
 
   return { owner, gym, coach, applicant };
@@ -42,7 +44,8 @@ describe('Public gym page', () => {
       brandColor: '#800020',
       trainerCount: 1,
       trainers: [{ name: 'Coach', specialization: 'Strength', experienceYears: 6 }],
-      branches: [{ name: 'Kothrud', city: 'Pune' }],
+      branches: [{ name: 'Kothrud', city: 'Pune', address: '4 Road', phone: null }],
+      classes: [{ name: 'Morning Yoga', dayOfWeek: 'MONDAY', startTime: '06:00' }],
     });
     expect(res.body.plans.map((p: { name: string }) => p.name)).toEqual(['Monthly', 'Quarterly']);
     expect(res.body.plans[0].price).toBe(1500);
@@ -59,6 +62,17 @@ describe('Public gym page', () => {
     expect(res.body.ownerId).toBeUndefined();
     expect(res.body.gstNumber).toBeUndefined();
     expect(Object.keys(res.body.trainers[0]).sort()).toEqual(['experienceYears', 'name', 'specialization']);
+  });
+
+  it('serves the same page by approved subdomain', async () => {
+    const { gym } = await seedPublicGym();
+    await prisma.gym.update({ where: { id: gym.id }, data: { subdomain: 'peak-club' } });
+    const res = await agent.get('/api/public/sites/Peak-Club');
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(gym.id);
+    expect(res.body.plans).toHaveLength(2);
+    expect(JSON.stringify(res.body)).not.toContain('27ABCDE1234F1Z5');
   });
 
   it('404s for an unapproved or unknown gym and 400s for a bad id', async () => {
@@ -113,5 +127,54 @@ describe('Sitemap', () => {
     } finally {
       delete process.env.PUBLIC_SITE_URL;
     }
+  });
+});
+
+describe('Gym discovery filters', () => {
+  const seedGym = async (data: Record<string, unknown>, price?: number) => {
+    const { gym } = await seedAdmin();
+    await prisma.gym.update({ where: { id: gym.id }, data });
+    if (price) await seedPlan(gym.id, { name: 'Monthly', price, duration: 30 });
+    return gym;
+  };
+  const names = (res: { body: { items: { name: string }[] } }) => res.body.items.map((g) => g.name);
+
+  it('filters by text, city, facility, category and price', async () => {
+    await seedGym({ name: 'Iron Den', city: 'Pune', facilities: ['Sauna'], category: 'CROSSFIT' }, 2000);
+    await seedGym({ name: 'Zen Studio', city: 'Mumbai', facilities: ['Yoga'], category: 'YOGA' }, 800);
+    await seedGym({ name: 'No Plans', city: 'Pune' });
+    const get = (qs: string) => agent.get(`/api/gym?paged=1&${qs}`);
+
+    expect(names(await get('q=iron'))).toEqual(['Iron Den']);
+    expect(names(await get('q=yoga'))).toEqual(['Zen Studio']);
+    expect(names(await get('city=pune&sort=newest'))).toEqual(['No Plans', 'Iron Den']);
+    expect(names(await get('facility=Sauna'))).toEqual(['Iron Den']);
+    expect(names(await get('category=yoga'))).toEqual(['Zen Studio']);
+    expect(names(await get('minPrice=1000'))).toEqual(['Iron Den']);
+    expect(names(await get('maxPrice=1000'))).toEqual(['Zen Studio']);
+    expect(names(await get('sort=price'))).toEqual(['Zen Studio', 'Iron Den', 'No Plans']);
+    expect((await get('lat=95&lng=0')).status).toBe(400);
+    expect((await agent.get('/api/gym/cities')).body).toEqual(['Mumbai', 'Pune']);
+  });
+
+  it('paginates and returns a plain array without paged', async () => {
+    for (const n of ['A', 'B', 'C']) await seedGym({ name: `Gym ${n}` });
+    const res = await agent.get('/api/gym?paged=1&limit=2&page=2');
+    expect(res.body).toMatchObject({ total: 3, page: 2 });
+    expect(names(res)).toEqual(['Gym C']);
+    expect((await agent.get('/api/gym?limit=51&paged=1')).status).toBe(400);
+    expect(Array.isArray((await agent.get('/api/gym')).body)).toBe(true);
+  });
+
+  it('keeps gyms inside the radius, nearest first', async () => {
+    await seedGym({ name: 'Far', lat: 19.2, lng: 72.9 }); // ~25 km from origin
+    await seedGym({ name: 'Near', lat: 19.0, lng: 72.85 });
+    await seedGym({ name: 'Elsewhere', lat: 28.6, lng: 77.2 });
+    await seedGym({ name: 'Unlocated' });
+    const res = await agent.get('/api/gym?paged=1&lat=19.0&lng=72.85&radiusKm=50&sort=distance');
+    expect(names(res)).toEqual(['Near', 'Far']);
+    expect(res.body.items[0].distanceKm).toBe(0);
+    expect(res.body.items[1].distanceKm).toBeGreaterThan(20);
+    expect(names(await agent.get('/api/gym?paged=1&lat=19.0&lng=72.85&radiusKm=5'))).toEqual(['Near']);
   });
 });

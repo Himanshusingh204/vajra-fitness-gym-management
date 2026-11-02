@@ -11,9 +11,9 @@ const stored = localStorage.getItem('vf-theme');
 if (stored) {
   try {
     const { state } = JSON.parse(stored);
-    if (state?.theme && state.theme !== 'light') {
-      document.documentElement.setAttribute('data-theme', state.theme);
-      if (state.theme === 'dark') document.documentElement.classList.add('dark');
+    if (state?.theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.classList.add('dark');
     }
   } catch {
     // ignore parse errors

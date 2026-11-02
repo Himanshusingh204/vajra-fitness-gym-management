@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "tsx watch src/server.ts",
+    "dev:local": "node scripts/devLocal.mjs",
     "build": "tsc",
     "start": "node dist/server.js",
     "db:push": "prisma db push --skip-generate",
@@ -24,6 +25,7 @@
     "@types/pdfkit": "^0.17.6",
     "argon2": "^0.45.1",
     "bcrypt": "^6.0.0",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
@@ -40,7 +42,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "@types/better-sqlite3": "^9.6.0",
+    "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

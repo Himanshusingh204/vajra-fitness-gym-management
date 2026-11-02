@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useMemo, memo } from 'react';
 import type { ChartSeries, ChartConfig } from './types';
+import { drawYAxis, drawEmpty } from './axis';
 
 interface LineChartProps {
   series: ChartSeries[];
@@ -15,7 +16,7 @@ const DEFAULT_COLORS = [
   'var(--color-accent)',
   'var(--color-primary-light)',
   'var(--color-secondary-light)',
-  '#ff7b00',
+  'var(--color-steel)',
 ];
 
 const LineChartImpl: React.FC<LineChartProps> = ({
@@ -43,7 +44,11 @@ const LineChartImpl: React.FC<LineChartProps> = ({
 
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg || series.length === 0) return;
+    if (!svg) return;
+    if (series.length === 0 || series[0].data.length === 0) {
+      drawEmpty(svg, width, height);
+      return;
+    }
 
     const chartWidth = width - pad.left - pad.right;
     const chartHeight = height - pad.top - pad.bottom;
@@ -87,6 +92,8 @@ const LineChartImpl: React.FC<LineChartProps> = ({
       }
       svg.appendChild(gridLines);
     }
+
+    drawYAxis(svg, pad, height, minValue, maxValue);
 
     series.forEach((seriesItem, seriesIndex) => {
       const color = seriesItem.color || colors[seriesIndex % colors.length];
@@ -133,7 +140,7 @@ const LineChartImpl: React.FC<LineChartProps> = ({
           circle.setAttribute('cy', String(p.y));
           circle.setAttribute('r', '4');
           circle.setAttribute('fill', color);
-          circle.setAttribute('stroke', '#fff');
+          circle.setAttribute('stroke', 'var(--color-surface)');
           circle.setAttribute('stroke-width', '2');
           if (animate) {
             circle.style.opacity = '0';

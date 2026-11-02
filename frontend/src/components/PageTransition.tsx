@@ -7,7 +7,7 @@ import { useLocation } from 'react-router';
  * while keeping the actual route component's mounting behaviour untouched.
  * Reduced-motion users get the animation stripped by the global CSS media query.
  */
-export const PageTransition = ({ children }: { children: React.ReactNode }) => {
+const PageTransition = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
   return (
     <div key={location.pathname} className="animate-page">

@@ -1,9 +1,8 @@
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
+import { hashToken } from '../utils/tokens';
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-const hashToken = (raw: string) => crypto.createHash('sha256').update(raw).digest('hex');
 
 // Issues a new refresh token for a user. Returns the raw token to hand to the client
 // (only its SHA-256 hash is stored server-side).

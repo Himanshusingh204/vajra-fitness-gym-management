@@ -31,11 +31,6 @@ export const createBranch = async (
   return response.data;
 };
 
-export const updateBranch = async (id: string, data: Partial<GymBranch>) => {
-  const response = await api.put(`/branches/${id}`, data);
-  return response.data;
-};
-
 export const deleteBranch = async (id: string) => {
   const response = await api.delete(`/branches/${id}`);
   return response.data;
