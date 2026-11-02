@@ -45,13 +45,13 @@ export const getPublicSiteContent = async (_req: Request, res: Response) => {
 export const getPublicStats = async (_req: Request, res: Response) => {
   try {
     const [gyms, members, trainers, allGymCities] = await Promise.all([
-      prisma.gym.count({ where: { isApproved: true } }).catch(() => 0),
-      prisma.memberDetails.count({ where: { status: 'ACTIVE', gym: { isApproved: true } } }).catch(() => 0),
+      prisma.gym.count({ where: { status: 'APPROVED' } }).catch(() => 0),
+      prisma.memberDetails.count({ where: { status: 'ACTIVE', gym: { status: 'APPROVED' } } }).catch(() => 0),
       prisma.user.count({
-        where: { role: 'TRAINER', isActive: true, trainerDetails: { status: 'ACTIVE', gym: { isApproved: true } } },
+        where: { role: 'TRAINER', isActive: true, trainerDetails: { status: 'ACTIVE', gym: { status: 'APPROVED' } } },
       }).catch(() => 0),
       prisma.gym.findMany({
-        where: { isApproved: true },
+        where: { status: 'APPROVED' },
         select: { city: true },
       }).catch(() => []),
     ]);
@@ -70,58 +70,82 @@ export const getPublicStats = async (_req: Request, res: Response) => {
   }
 };
 
-// Public gym page. Approved gyms only, and only what a visitor should see:
+// Public gym page payload. Approved gyms only, and only what a visitor should see:
 // no owner details, no GSTIN, no trainer contact details.
+const fetchPublicGym = (where: { id: string } | { subdomain: string }) => {
+  const key = 'id' in where ? where.id : `site:${where.subdomain}`;
+  return getOrSetJSON(`public-gym:${key}`, 60, async () => {
+    const row = await prisma.gym.findFirst({
+      where: { ...where, status: 'APPROVED' },
+      select: {
+        id: true,
+        name: true,
+        tagline: true,
+        address: true,
+        city: true,
+        state: true,
+        location: true,
+        facilities: true,
+        brandColor: true,
+        imageUrl: true,
+        logoUrl: true,
+        galleryUrls: true,
+        description: true,
+        openingHours: true,
+        phone: true,
+        email: true,
+        membershipPlans: {
+          where: { isActive: true },
+          orderBy: { price: 'asc' },
+          select: { id: true, name: true, description: true, price: true, duration: true },
+        },
+        trainers: {
+          where: { status: 'ACTIVE', user: { isActive: true } },
+          orderBy: { joiningDate: 'asc' },
+          select: { specialization: true, experienceYears: true, user: { select: { username: true } } },
+        },
+        branches: {
+          where: { status: 'APPROVED', isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, address: true, city: true, phone: true },
+        },
+        classes: {
+          where: { isActive: true },
+          orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+          select: { id: true, name: true, dayOfWeek: true, startTime: true, endTime: true, duration: true, location: true },
+        },
+      },
+    });
+    if (!row) return null;
+
+    const { membershipPlans, trainers, ...rest } = row;
+    return {
+      ...rest,
+      plans: membershipPlans.map((p) => ({ ...p, price: Number(p.price) })),
+      trainerCount: trainers.length,
+      trainers: trainers.map((t) => ({
+        name: t.user.username,
+        specialization: t.specialization,
+        experienceYears: t.experienceYears,
+      })),
+    };
+  });
+};
+
 export const getPublicGym = async (req: Request, res: Response) => {
   try {
-    const gymId = req.params.gymId as string;
-    const gym = await getOrSetJSON(`public-gym:${gymId}`, 60, async () => {
-      const row = await prisma.gym.findFirst({
-        where: { id: gymId, isApproved: true },
-        select: {
-          id: true,
-          name: true,
-          tagline: true,
-          address: true,
-          city: true,
-          state: true,
-          location: true,
-          facilities: true,
-          brandColor: true,
-          imageUrl: true,
-          logoUrl: true,
-          membershipPlans: {
-            where: { isActive: true },
-            orderBy: { price: 'asc' },
-            select: { id: true, name: true, description: true, price: true, duration: true },
-          },
-          trainers: {
-            where: { status: 'ACTIVE', user: { isActive: true } },
-            orderBy: { joiningDate: 'asc' },
-            select: { specialization: true, experienceYears: true, user: { select: { username: true } } },
-          },
-          branches: {
-            where: { status: 'APPROVED', isActive: true },
-            orderBy: { name: 'asc' },
-            select: { id: true, name: true, city: true },
-          },
-        },
-      });
-      if (!row) return null;
+    const gym = await fetchPublicGym({ id: req.params.gymId as string });
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    res.json(gym);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch gym' });
+  }
+};
 
-      const { membershipPlans, trainers, ...rest } = row;
-      return {
-        ...rest,
-        plans: membershipPlans.map((p) => ({ ...p, price: Number(p.price) })),
-        trainerCount: trainers.length,
-        trainers: trainers.map((t) => ({
-          name: t.user.username,
-          specialization: t.specialization,
-          experienceYears: t.experienceYears,
-        })),
-      };
-    });
-
+// GET /api/public/sites/:slug: same payload, looked up by approved subdomain.
+export const getPublicSite = async (req: Request, res: Response) => {
+  try {
+    const gym = await fetchPublicGym({ subdomain: String(req.params.slug).toLowerCase() });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
     res.json(gym);
   } catch {
@@ -161,7 +185,7 @@ export const getSitemap = async (_req: Request, res: Response) => {
   try {
     const base = (process.env.PUBLIC_SITE_URL || 'https://vajra-fitness-gym-management.vercel.app').replace(/\/+$/, '');
     const gyms = await prisma.gym.findMany({
-      where: { isApproved: true },
+      where: { status: 'APPROVED' },
       select: { id: true, updatedAt: true },
       orderBy: { createdAt: 'asc' },
     });

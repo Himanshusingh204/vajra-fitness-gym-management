@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getExpenses, recordExpense, deleteExpense, getExpenseSummary } from '../controllers/expense.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { gymIdParams, idParams } from '../utils/validators';
+import { gymIdParams, idParams, httpUrl } from '../utils/validators';
 import { z } from 'zod';
 
 const router = Router();
@@ -17,7 +17,7 @@ const recordExpenseSchema = z.object({
   amount: z.number().positive().max(1e8),
   date: z.string().optional(),
   isRecurring: z.boolean().optional(),
-  receiptUrl: z.string().trim().max(1000).optional().nullable(),
+  receiptUrl: httpUrl.optional().nullable(),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
 

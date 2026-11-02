@@ -12,8 +12,13 @@ const GYMS = [
       city: 'Indore',
       state: 'Madhya Pradesh',
       location: 'Indore, MP',
-      imageUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+      imageUrl: '/gym/1.webp',
       facilities: 'Cardio Zone, Free Weights, CrossFit Area, Personal Training, Locker & Shower, Nutrition Bar',
+      description: 'A no-frills strength gym in Vijay Nagar with coaches on the floor all day.',
+      openingHours: 'Mon-Sat 5:30 AM - 10:30 PM, Sun 7 AM - 12 PM',
+      phone: '9000000001',
+      email: 'hello@ironvalley.com',
+      galleryUrls: ['/gym/2.webp', '/gym/3.webp', '/gym/4.webp'],
     },
     plans: [
       { name: 'Monthly', description: 'Full gym access for 1 month', duration: 30, price: 999 },
@@ -29,8 +34,13 @@ const GYMS = [
       city: 'Mumbai',
       state: 'Maharashtra',
       location: 'Mumbai, MH',
-      imageUrl: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1200&q=80',
+      imageUrl: '/gym/5.webp',
       facilities: 'Strength Training, Yoga Studio, Cardio Theatre, Sauna, Steam, Parking',
+      description: 'Big floor, yoga studio and sauna on the fourth floor of Orbit Mall.',
+      openingHours: 'Daily 6 AM - 11 PM',
+      phone: '9000000002',
+      email: 'hello@powerhouse.com',
+      galleryUrls: ['/gym/3.webp', '/gym/1.webp', '/gym/4.webp', '/gym/2.webp'],
     },
     plans: [
       { name: 'Monthly', description: 'Full gym access for 1 month', duration: 30, price: 1499 },
@@ -48,6 +58,8 @@ async function main() {
   for (const { owner, gym, plans } of GYMS) {
     const existing = await prisma.user.findUnique({ where: { email: owner.email } });
     if (existing) {
+      // Older seeds had no photos or contact details; fill them in once.
+      await prisma.gym.updateMany({ where: { ownerId: existing.id, galleryUrls: { isEmpty: true } }, data: gym });
       console.log(`Skipping ${gym.name} — owner already exists.`);
       continue;
     }
@@ -70,7 +82,13 @@ async function main() {
             location: gym.location,
             imageUrl: gym.imageUrl,
             facilities: gym.facilities,
+            description: gym.description,
+            openingHours: gym.openingHours,
+            phone: gym.phone,
+            email: gym.email,
+            galleryUrls: gym.galleryUrls,
             isApproved: true,
+            status: 'APPROVED',
             membershipPlans: {
               create: plans.map((p) => ({
                 name: p.name,

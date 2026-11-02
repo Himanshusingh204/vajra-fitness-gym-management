@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
@@ -43,6 +43,7 @@ export const getMyTickets = async (req: AuthRequest, res: Response) => {
     const tickets = await prisma.supportTicket.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      take: 200,
     });
     res.json(tickets);
   } catch {

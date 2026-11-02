@@ -51,7 +51,7 @@
     <!-- Right Lower Facet tapering to V apex -->
     <polygon points="72,58 94,72 74,108 64,92" fill="url(#vajraGold)" />
 
-    <!-- Central Vajra Thunderbolt (The Cutting Energy Beam) -->
+    <!-- Central Kavach Thunderbolt (The Cutting Energy Beam) -->
     <polygon points="62,12 40,56 58,56 46,112 78,50 60,50" fill="url(#vajraGold)" filter="url(#vajraGlow)" />
     <!-- Inner Thunderbolt Specular Core -->
     <polygon points="61,16 45,53 58,53 50,96 72,52 59,52" fill="url(#vajraHighlight)" opacity="0.65" />

@@ -27,3 +27,8 @@ export const getMyAttendance = async () => {
   const response = await api.get('/attendance/my');
   return response.data;
 };
+
+export const checkInToday = async () => {
+  const response = await api.post('/attendance/my/check-in');
+  return response.data;
+};

@@ -1,5 +1,5 @@
 import { prisma } from '../utils/prisma';
-import { createNotification, notifyGymOwner } from './notification.service';
+import { createNotification } from './notification.service';
 import { logAudit } from '../utils/audit';
 import { clearSubscriptionCache } from '../middlewares/subscription.middleware';
 import { DAY_MS, GRACE_PERIOD_DAYS, getGraceEnd } from './entitlements.service';
@@ -34,7 +34,7 @@ export const activateSubscription = async (subscriptionId: string) => {
   // Ensure gym is approved when subscription is activated
   await prisma.gym.update({
     where: { id: sub.gymId },
-    data: { isApproved: true },
+    data: { isApproved: true, status: 'APPROVED' },
   });
 
   // Re-activate gym owner if they were suspended
@@ -412,7 +412,7 @@ export const generateSaaSInvoice = async (subscriptionId: string) => {
   const invoiceNumber = `INV-${sub.gymId.slice(0, 4).toUpperCase()}-${timestamp}`;
 
   const subtotal = sub.amount.toNumber();
-  const taxRate = 18; // GST rate in India
+  const taxRate = Number(process.env.GST_RATE) || 18;
   const isInterstate = false; // Simplified: assume intrastate
   const taxAmount = (subtotal * taxRate) / 100;
   const cgst = isInterstate ? 0 : taxAmount / 2;

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   getGyms,
@@ -5,6 +6,7 @@ import {
   suspendGym,
   deleteGym,
   getPlatformAnalytics,
+  getPlatformOverview,
   getUsers,
   getFaqs,
   createFaq,
@@ -27,10 +29,13 @@ import {
   getAllFees,
   getPlatformMessages,
   updatePlatformMessage,
+  getApprovals,
+  decideApproval,
 } from '../controllers/admin.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { listOrders } from '../services/order.service';
 import { validate } from '../middlewares/validate.middleware';
-import { userStatusSchema, faqSchema, updateFaqSchema, testimonialSchema, updateTestimonialSchema, siteContentSchema, updateSiteContentSchema, ticketAdminSchema, gymIdParams, userIdParams, idParams, faqIdParams, testimonialIdParams } from '../utils/validators';
+import { userStatusSchema, faqSchema, updateFaqSchema, testimonialSchema, updateTestimonialSchema, siteContentSchema, updateSiteContentSchema, ticketAdminSchema, gymUpdateSchema, gymIdParams, userIdParams, idParams, faqIdParams, testimonialIdParams } from '../utils/validators';
 
 const router = Router();
 
@@ -44,12 +49,24 @@ router.use(authenticate, authorize(['SUPER_ADMIN']));
 router.get('/gyms', asyncHandler(getGyms));
 router.put('/gyms/:gymId/approve', validate(gymIdParams, ['params']), asyncHandler(approveGym));
 router.put('/gyms/:gymId/suspend', validate(gymIdParams, ['params']), asyncHandler(suspendGym));
-router.put('/gyms/:gymId', validate(gymIdParams, ['params']), asyncHandler(updateGymProfile));
+router.put('/gyms/:gymId', validate(gymIdParams, ['params']), validate(gymUpdateSchema), asyncHandler(updateGymProfile));
 router.delete('/gyms/:gymId', validate(gymIdParams, ['params']), asyncHandler(deleteGym));
+const decisionSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  note: z.string().trim().max(500).optional(),
+});
+router.get('/approvals', asyncHandler(getApprovals));
+router.post('/approvals/:id/decide', validate(idParams, ['params']), validate(decisionSchema), asyncHandler(decideApproval));
+
 router.get('/fees', asyncHandler(getAllFees));
+router.get('/orders', asyncHandler(async (req: Request, res: Response) => {
+  const pick = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+  res.json(await listOrders({ status: pick(req.query.status), gymId: pick(req.query.gymId) }));
+}));
 router.get('/messages', asyncHandler(getPlatformMessages));
 router.put('/messages/:id', validate(idParams, ['params']), asyncHandler(updatePlatformMessage));
 router.get('/analytics', asyncHandler(getPlatformAnalytics));
+router.get('/overview', asyncHandler(getPlatformOverview));
 router.get('/users', asyncHandler(getUsers));
 router.put('/users/:id/status', validate(userIdParams, ['params']), validate(userStatusSchema), asyncHandler(setUserActive));
 router.delete('/users/:id', validate(userIdParams, ['params']), asyncHandler(deleteUserAccount));

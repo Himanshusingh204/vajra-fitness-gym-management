@@ -55,7 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         if (cancelled) return;
-        setStatus(err instanceof ApiError && err.code === 'NETWORK' ? 'unreachable' : 'signedOut');
+        // Offline or the database is down: the session is still good, so offer a retry instead of sign in.
+        const unreachable = err instanceof ApiError && (err.code === 'NETWORK' || err.code === 'DB_UNREACHABLE');
+        setStatus(unreachable ? 'unreachable' : 'signedOut');
       }
     })();
     return () => {

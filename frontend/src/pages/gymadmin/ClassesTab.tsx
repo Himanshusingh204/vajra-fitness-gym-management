@@ -182,15 +182,15 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
     <div className="space-y-6">
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+        <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Active Classes</p>
           <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{totalClasses}</p>
         </div>
-        <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+        <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Capacity</p>
           <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{totalCapacity}</p>
         </div>
-        <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+        <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
           <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Bookings</p>
           <p className="text-2xl font-extrabold tabular-nums text-[var(--color-primary)]">{totalBookings}</p>
         </div>
@@ -198,7 +198,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Create / Edit form */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+        <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
           <h3 className="font-bold text-lg dark:text-white mb-4">{editingClass ? 'Edit Class' : 'Create Class'}</h3>
           <form className="grid sm:grid-cols-2 gap-4" onSubmit={handleSubmit}>
             <div className="sm:col-span-2">
@@ -253,12 +253,12 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
             </div>
 
             {formError && (
-              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
                 {formError}
               </div>
             )}
             {(createMut.isError || updateMut.isError) && (
-              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+              <div className="sm:col-span-2 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
                 {(createMut.error as any)?.response?.data?.error || (updateMut.error as any)?.response?.data?.error || 'Failed to save class'}
               </div>
             )}
@@ -285,7 +285,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
         </div>
 
         {/* Classes list */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+        <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
             <h2 className="font-bold text-lg dark:text-white">Classes ({totalClasses})</h2>
             <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden flex-wrap">
@@ -308,7 +308,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
           {classesLoading ? (
             <div className="p-6 space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-[var(--color-muted)]/10 rounded-xl animate-pulse" />
+                <div key={i} className="h-16 bg-[var(--color-muted)]/10 rounded-lg animate-pulse" />
               ))}
             </div>
           ) : classes.length === 0 ? (
@@ -321,7 +321,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                 <thead className="bg-gray-50 dark:bg-white/5">
                   <tr>
                     {['Class', 'Schedule', 'Capacity', 'Location', 'Trainer', 'Actions'].map((h) => (
-                      <th key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                      <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -412,7 +412,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                                     <thead>
                                       <tr>
                                         {['Member', 'Email', 'Status'].map((h) => (
-                                          <th key={h} className="text-left px-3 py-2 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
+                                          <th scope="col" key={h} className="text-left px-3 py-2 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider">{h}</th>
                                         ))}
                                       </tr>
                                     </thead>

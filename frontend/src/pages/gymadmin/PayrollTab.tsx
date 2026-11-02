@@ -147,24 +147,24 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
       {summaryLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />
+            <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Paid</p>
             <p className="text-2xl font-extrabold tabular-nums text-green-600">₹{(summary?.totalPaid ?? 0).toLocaleString('en-IN')}</p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Pending</p>
             <p className="text-2xl font-extrabold tabular-nums text-amber-500">₹{(summary?.totalPending ?? 0).toLocaleString('en-IN')}</p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Payslips</p>
             <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{summary?.totalPayslips ?? 0}</p>
           </div>
-          <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+          <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-2">Monthly Totals</p>
             {summary && summary.monthlyTotals.some((m) => m.total > 0) ? (
               <div className="flex items-end gap-1 h-12">
@@ -186,10 +186,10 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Create Payslip */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+        <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
           <h3 className="font-bold text-lg dark:text-white mb-4">Create Payslip</h3>
           {createMutation.isError && (
-            <div className="mb-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+            <div className="mb-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
               {(createMutation.error as any)?.response?.data?.error || 'Failed to create payslip'}
             </div>
           )}
@@ -284,7 +284,7 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
                 onChange={(e) => setForm({ ...form, deductions: Number(e.target.value) })}
               />
             </div>
-            <div className="sm:col-span-2 flex items-center justify-between rounded-xl bg-[var(--color-base)] dark:bg-white/5 px-4 py-2.5 text-sm">
+            <div className="sm:col-span-2 flex items-center justify-between rounded-lg bg-[var(--color-base)] dark:bg-white/5 px-4 py-2.5 text-sm">
               <span className="font-semibold text-[var(--color-muted)]">Net Pay (preview)</span>
               <span className="font-extrabold tabular-nums text-[var(--color-primary)]">₹{netPayPreview.toLocaleString('en-IN')}</span>
             </div>
@@ -295,7 +295,7 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
         </div>
 
         {/* Payslips table */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+        <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
           <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
             <h2 className="font-bold text-lg dark:text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-[var(--color-muted)]" aria-hidden="true" /> Payslips ({payslips.length})
@@ -318,12 +318,12 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
           </div>
 
           {markPaidMutation.isError && (
-            <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+            <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
               {(markPaidMutation.error as any)?.response?.data?.error || 'Failed to update payslip'}
             </div>
           )}
           {deleteMutation.isError && (
-            <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+            <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
               {(deleteMutation.error as any)?.response?.data?.error || 'Failed to delete payslip'}
             </div>
           )}
@@ -340,7 +340,7 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
                 <thead className="bg-gray-50 dark:bg-white/5">
                   <tr>
                     {['Employee', 'Period', 'Basic', 'Bonuses', 'Deductions', 'Net Pay', 'Status', 'Paid Date', 'Actions'].map((h) => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      <th scope="col" key={h} className="text-left px-4 py-3 text-xs font-bold text-[var(--color-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -391,8 +391,8 @@ export default function PayrollTab({ gymId }: { gymId: string }) {
 
       {/* Mark Paid modal */}
       {markPaidTarget && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setMarkPaidTarget(null)}>
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setMarkPaidTarget(null)}>
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-lg dark:text-white mb-1">Mark Payslip as Paid</h3>
             <p className="text-sm text-[var(--color-muted)] mb-4">
               {markPaidTarget.user?.username} · {MONTH_NAMES[markPaidTarget.month - 1]} {markPaidTarget.year} · ₹{markPaidTarget.netPay.toLocaleString('en-IN')}

@@ -25,6 +25,7 @@ const server = app.listen(PORT, () => {
       escalatedFees: r.paymentReconciliation.escalatedFees,
       dunningReminders: r.dunning.dunningReminders,
       dunningEscalated: r.dunning.escalatedToPastDue,
+      queuedJobsDone: r.jobQueue.done,
     }))
     .catch((err) => logger.errorWith('background jobs boot run failed', err));
   setInterval(() => {

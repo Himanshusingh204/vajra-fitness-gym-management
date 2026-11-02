@@ -23,3 +23,18 @@ export const getGymMembers = async (gymId: string) => {
   const response = await api.get(`/members/gym/${gymId}`);
   return response.data;
 };
+
+export interface MyGym {
+  memberId: string;
+  gymId: string;
+  status: string;
+  joiningDate: string;
+  gym: { id: string; name: string; city: string; logoUrl: string | null };
+  activeMembership: { id: string; status: string; startDate: string; endDate: string; planId: string } | null;
+}
+
+// Every gym the signed-in member belongs to, default gym first
+export const getMyGyms = async (): Promise<MyGym[]> => {
+  const response = await api.get('/members/my-gyms');
+  return response.data;
+};

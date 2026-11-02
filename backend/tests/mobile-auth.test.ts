@@ -105,6 +105,11 @@ describe('Mobile token flow', () => {
     expect((await agent.post('/api/auth/refresh').set('X-Client', 'mobile').send({ refreshToken: 42 })).status).toBe(401);
   });
 
+  it('rejects a web refresh without a cookie', async () => {
+    const res = await agent.post('/api/auth/refresh');
+    expect(res.status).toBe(401);
+  });
+
   it('revokes the body token on logout', async () => {
     const { user } = await seedAdmin();
     const refreshToken = (await mobileLogin(user.email)).body.refreshToken as string;

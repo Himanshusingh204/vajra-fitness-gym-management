@@ -40,3 +40,8 @@ export const getReferralStats = async (gymId: string) => {
   const response = await api.get<ReferralStats>(`/referrals/gym/${gymId}/stats`);
   return response.data;
 };
+
+export const getMyReferrals = async () => {
+  const response = await api.get<{ code: string; referrals: Referral[] }>('/referrals/me');
+  return response.data;
+};

@@ -9,6 +9,7 @@ import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { Reveal } from '../components/Reveal';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY, WORKING_HOURS } from '../utils/constants';
 
 type Faq = { id: string; question: string; answer: string };
 type Ticket = {
@@ -37,7 +38,7 @@ const PRIORITY_STYLES: Record<string, string> = {
 const HelpCenterPage = () => {
   usePageMeta(
     'Help Center & FAQ',
-    'Answers to common questions about Vajra Fitness — memberships, payments, bookings, and account help. Search the FAQ or raise a support ticket.',
+    'Answers to common questions about Kavach Fitness — memberships, payments, bookings, and account help. Search the FAQ or raise a support ticket.',
     '/help',
   );
   const user = useAuthStore((s) => s.user);
@@ -77,9 +78,9 @@ const HelpCenterPage = () => {
   };
 
   const contactDetails = [
-    { icon: Mail, label: 'Email', value: 'support@vajrafitness.in', href: 'mailto:support@vajrafitness.in' },
-    { icon: Phone, label: 'Phone', value: '+91 98765 43210', href: 'tel:+919876543210' },
-    { icon: Clock, label: 'Working Hours', value: 'Mon–Sat: 9 AM – 7 PM IST' },
+    { icon: Mail, label: 'Email', value: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` },
+    { icon: Phone, label: 'Phone', value: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE}` },
+    { icon: Clock, label: 'Working Hours', value: WORKING_HOURS },
   ];
 
   return (
@@ -315,7 +316,7 @@ const HelpCenterPage = () => {
                   <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />
                   <p className="text-sm text-[var(--color-muted)]">
                     Still stuck? Send an email to{' '}
-                    <a href="mailto:support@vajrafitness.in" className="text-[var(--color-primary)] font-semibold hover:underline">support@vajrafitness.in</a>
+                    <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[var(--color-primary)] font-semibold hover:underline">{SUPPORT_EMAIL}</a>
                   </p>
                 </div>
               </Reveal>

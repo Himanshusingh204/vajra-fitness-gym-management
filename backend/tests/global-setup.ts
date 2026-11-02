@@ -6,7 +6,9 @@ import { PrismaClient } from '@prisma/client';
 const TEST_DB = process.env.TEST_DATABASE_URL || 'postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public';
 const dbName = (TEST_DB.match(/\/([^/?#]+)\?/) || [])[1] ?? 'vajra_fitness_test';
 // Connect to the shared "postgres" maintenance DB with the same credentials.
-const maintenanceUrl = TEST_DB.replace(/\/[^/?#]+/, '/postgres');
+const maintenance = new URL(TEST_DB);
+maintenance.pathname = '/postgres';
+const maintenanceUrl = maintenance.toString();
 
 export default async function setup() {
   // Create the test database if it doesn't exist yet.

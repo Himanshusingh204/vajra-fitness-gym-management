@@ -12,6 +12,8 @@ type ClientOptions = {
   tokens: TokenStore;
   // Called when the refresh token is rejected, so the app can return to sign in.
   onSessionEnded?: () => void;
+  // The gym a member with several memberships is looking at, sent as X-Gym-Id.
+  getGymId?: () => string | null;
   fetchImpl?: typeof fetch;
 };
 
@@ -23,7 +25,7 @@ type RequestOptions = {
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-export function createApiClient({ baseUrl, tokens, onSessionEnded, fetchImpl }: ClientOptions) {
+export function createApiClient({ baseUrl, tokens, onSessionEnded, getGymId, fetchImpl }: ClientOptions) {
   const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   const root = baseUrl.replace(/\/+$/, '');
 
@@ -42,6 +44,8 @@ export function createApiClient({ baseUrl, tokens, onSessionEnded, fetchImpl }: 
     const headers: Record<string, string> = { Accept: 'application/json', 'X-Client': 'mobile' };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    const gymId = getGymId?.();
+    if (gymId) headers['X-Gym-Id'] = gymId;
     try {
       return await doFetch(buildUrl(path, opts.query), {
         method,

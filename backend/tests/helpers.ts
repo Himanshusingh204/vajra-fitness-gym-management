@@ -83,6 +83,7 @@ export const seedAdmin = async (opts: { approved?: boolean; subscription?: boole
       city: 'Mumbai',
       state: 'MH',
       isApproved: opts.approved ?? true,
+      status: (opts.approved ?? true) ? 'APPROVED' : 'PENDING_REVIEW',
     },
   });
   if (opts.subscription !== false) await seedUnlimitedSubscription(gym.id);

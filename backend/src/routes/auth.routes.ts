@@ -3,6 +3,7 @@ import {
   registerVendor,
   registerMember,
   registerTrainer,
+  acceptInvite,
   login,
   logout,
   refresh,
@@ -21,6 +22,7 @@ import {
   registerVendorSchema,
   registerMemberSchema,
   registerTrainerSchema,
+  acceptInviteSchema,
   loginSchema,
   changePasswordSchema,
   activateAccountSchema,
@@ -39,6 +41,7 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 router.post('/register/vendor', authLimiter, validate(registerVendorSchema), asyncHandler(registerVendor));
 router.post('/register/member', authLimiter, validate(registerMemberSchema), asyncHandler(registerMember));
 router.post('/register/trainer', authLimiter, validate(registerTrainerSchema), asyncHandler(registerTrainer));
+router.post('/accept-invite', authLimiter, validate(acceptInviteSchema), asyncHandler(acceptInvite));
 router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(login));
 router.post('/logout', logoutLimiter, asyncHandler(logout));
 router.post('/refresh', authLimiter, asyncHandler(refresh));

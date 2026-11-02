@@ -47,6 +47,7 @@ NEXTPLAN.md
 # Local-only scratch/log output
 *.tsbuildinfo
 backend/backups/
+backend/uploads/
 frontend/dist-ssr/
 
 # Root-level lockfile intentionally not committed — a workspace-hoisted
@@ -56,3 +57,8 @@ frontend/dist-ssr/
 # and frontend/package-lock.json (each a complete, standalone lockfile) are
 # what's actually used for installs/CI.
 /package-lock.json
+
+# Playwright output and QA screenshots
+frontend/test-results/
+frontend/playwright-report/
+/playwright/

@@ -1,35 +1,37 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type Theme = 'light' | 'dark' | 'blue' | 'emerald' | 'purple' | 'ocean' | 'corporate';
+export type Theme = 'light' | 'dark';
 
 interface ThemeStore {
   theme: Theme;
   setTheme: (theme: Theme) => void;
 }
 
+function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  root.classList.toggle('dark', theme === 'dark');
+  if (theme === 'dark') root.setAttribute('data-theme', 'dark');
+  else root.removeAttribute('data-theme');
+}
+
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set) => ({
       theme: 'light',
-      setTheme: (theme) => set(() => {
-        if (theme === 'light') {
-          document.documentElement.removeAttribute('data-theme');
-          document.documentElement.classList.remove('dark');
-        } else if (theme === 'dark') {
-          document.documentElement.setAttribute('data-theme', 'dark');
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.setAttribute('data-theme', theme);
-          document.documentElement.classList.remove('dark');
-        }
-        return { theme };
-      }),
+      setTheme: (theme) => {
+        applyTheme(theme);
+        set({ theme });
+      },
     }),
     {
       name: 'vf-theme',
-      version: 1,
-      migrate: (persistedState: unknown) => persistedState as ThemeStore,
+      version: 2,
+      // Older versions stored colour themes (blue, emerald...) that no longer exist
+      migrate: (persisted) => {
+        const theme = (persisted as { theme?: string } | undefined)?.theme;
+        return { theme: theme === 'dark' ? 'dark' : 'light' } as ThemeStore;
+      },
     }
   )
 );

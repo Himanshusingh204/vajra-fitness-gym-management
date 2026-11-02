@@ -1,6 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { sendPdf, buildWorkoutSlip } from '../utils/pdf';
 
 // Get workout slips for a member
@@ -8,23 +9,11 @@ export const getWorkoutSlips = async (req: AuthRequest, res: Response) => {
   try {
     const memberId = req.params.memberId as string;
     
-    const member = await prisma.memberDetails.findUnique({ where: { id: memberId }, include: { gym: true } });
+    const member = await prisma.memberDetails.findUnique({ where: { id: memberId } });
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
-    let isTrainerAtGym = false;
-    if (req.user?.role === 'TRAINER') {
-      const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: member.gymId, status: 'ACTIVE' },
-      });
-      isTrainerAtGym = !!trainer;
-    }
-
-    if (
-      req.user?.role !== 'SUPER_ADMIN' &&
-      !isTrainerAtGym &&
-      req.user?.userId !== member.userId &&
-      req.user?.userId !== member.gym.ownerId
-    ) {
+    const isSelf = req.user?.userId === member.userId;
+    if (!isSelf && !(await canAccessGym(req.user, member.gymId, ['TRAINER']))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -98,20 +87,9 @@ export const getGymWorkoutSlips = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-
-    let isTrainerAtGym = false;
-    if (req.user?.role === 'TRAINER') {
-      const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId, status: 'ACTIVE' },
-      });
-      isTrainerAtGym = !!trainer;
-    }
-
-    if (req.user?.role !== 'SUPER_ADMIN' && gym.ownerId !== req.user?.userId && !isTrainerAtGym) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId, ['TRAINER']))) return res.status(403).json({ error: 'Unauthorized' });
 
     const slips = await prisma.workoutSlip.findMany({
       where: { gymId },
@@ -136,27 +114,15 @@ export const getWorkoutSlipPDF = async (req: AuthRequest, res: Response) => {
       where: { id },
       include: {
         member: { include: { user: { select: { username: true } } } },
-        gym: { select: { ownerId: true, name: true } },
+        gym: { select: { name: true } },
         trainer: { include: { user: { select: { username: true } } } },
       },
     });
     if (!slip) return res.status(404).json({ error: 'Workout slip not found' });
 
-    let isTrainerAtGym = false;
-    if (req.user?.role === 'TRAINER') {
-      const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: slip.gymId, status: 'ACTIVE' },
-      });
-      isTrainerAtGym = !!trainer;
-    }
-
-    // IDOR protection: a GYM_ADMIN must own the gym that owns this slip.
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = req.user?.userId === slip.gym.ownerId;
-    const isTrainer = isTrainerAtGym;
+    // IDOR protection: only the member, or the owner or a trainer of the slip's gym.
     const isSelf = req.user?.userId === slip.member.userId;
-
-    if (!isSuperAdmin && !isGymOwner && !isTrainer && !isSelf) {
+    if (!isSelf && !(await canAccessGym(req.user, slip.gymId, ['TRAINER']))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

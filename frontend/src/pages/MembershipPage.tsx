@@ -1,5 +1,5 @@
-import React from 'react';
 import { Link } from 'react-router';
+import { ROUTES } from '../utils/routes';
 import { MapPin, CreditCard, ShieldCheck, CalendarCheck, ArrowRight, Dumbbell, CheckCircle2 } from 'lucide-react';
 import { GymDirectory } from '../components/GymDirectory';
 import { Reveal } from '../components/Reveal';
@@ -33,7 +33,7 @@ const PERKS = [
 const MembershipPage = () => {
   usePageMeta(
     'Gym Memberships & Plans',
-    'Explore verified gyms and flexible membership plans — monthly, quarterly or annual. Register, get approved, and start training with Vajra Fitness.',
+    'Explore verified gyms and flexible membership plans — monthly, quarterly or annual. Register, get approved, and start training with Kavach Fitness.',
     '/membership',
   );
   return (
@@ -47,8 +47,6 @@ const MembershipPage = () => {
             className="w-full h-full object-cover opacity-30"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/75 via-[var(--color-base)]/55 to-[var(--color-base)] dark:from-[#0d0d0d]/85 dark:via-[#0d0d0d]/70 dark:to-[#0d0d0d]" />
-          <div className="absolute -top-32 -right-32 w-[34rem] h-[34rem] bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
-          <div className="absolute top-1/2 -left-40 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
         </div>
 
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -73,7 +71,7 @@ const MembershipPage = () => {
             <a href="#gyms" className="btn-primary px-8! py-4! text-lg w-full sm:w-auto">
               Browse Gyms <ArrowRight className="w-5 h-5" />
             </a>
-            <Link to="/register/member" className="btn-ghost px-8! py-4! text-lg w-full sm:w-auto">
+            <Link to={ROUTES.memberRegister} className="btn-ghost px-8! py-4! text-lg w-full sm:w-auto">
               <ShieldCheck className="w-5 h-5" /> Create Member Account
             </Link>
           </Reveal>
@@ -136,7 +134,6 @@ const MembershipPage = () => {
       {/* CTA */}
       <section className="relative py-24 md:py-28 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-section-dark)] to-[var(--color-section-dark-alt)]" />
-        <div className="absolute top-0 left-0 -translate-y-1/2 -translate-x-1/3 w-[700px] h-[700px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-20 animate-blob" />
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
           <Reveal>
             <h2 className="display text-4xl md:text-6xl text-white leading-none mb-6">
@@ -146,7 +143,7 @@ const MembershipPage = () => {
               Create your free member account, browse gyms, and submit your membership request today.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link to="/register/member" className="btn-accent px-10! py-4! text-lg">
+              <Link to={ROUTES.memberRegister} className="btn-accent px-10! py-4! text-lg">
                 Create Member Account
               </Link>
               <Link to="/gyms" className="btn-outline border-white/20! text-white! hover:bg-white! hover:text-black! px-10! py-4! text-lg">

@@ -1,10 +1,10 @@
-# Brand Identity Proposals
+# Brand Proposals
 
-This directory contains three distinct, high-end branding concepts created for the gym management software platform. Each direction is non-AI generic, crafted with high-resolution vector assets, specific color palettes, and market positioning.
+Decision: the product is named **Kavach Fitness**. The other concepts below (Kratos OS, ApexForge, and the folder `01-korrum/`) are archived and not used. The domain `kavachfitness.in` is not registered yet.
 
 ---
 
-## 1. Kavach Fit (कवच)
+## 1. Kavach Fit (कवच): chosen
 > **Tagline:** The Indestructible Gym Operating System  
 > **Brand Persona:** Resilient, Indian Heritage + Modern Tech, Authoritative, Unbreakable.  
 > **Asset:** [`branding/kavach-logo.svg`](./kavach-logo.svg)
@@ -20,7 +20,7 @@ This directory contains three distinct, high-end branding concepts created for t
 
 ---
 
-## 2. Kratos OS
+## 2. Kratos OS (archived)
 > **Tagline:** Performance Gym Infrastructure  
 > **Brand Persona:** Raw power, Spartan discipline, high velocity, minimalist dark-mode software.  
 > **Asset:** [`branding/kratos-logo.svg`](./kratos-logo.svg)
@@ -36,7 +36,7 @@ This directory contains three distinct, high-end branding concepts created for t
 
 ---
 
-## 3. ApexForge
+## 3. ApexForge (archived)
 > **Tagline:** Intelligent Gym Suite  
 > **Brand Persona:** Precision engineering, modern enterprise SaaS, clean, data-driven.  
 > **Asset:** [`branding/apexforge-logo.svg`](./apexforge-logo.svg)
@@ -52,9 +52,6 @@ This directory contains three distinct, high-end branding concepts created for t
 
 ---
 
-## How to Apply a Brand Direction
+## Where the chosen brand is applied
 
-To activate any of these brands:
-1. Copy the selected SVG logo to `frontend/public/logo.svg`.
-2. Update the brand name in `frontend/src/components/Navbar.tsx` and `MainLayout.tsx`.
-3. Adjust root CSS color variables in `frontend/src/index.css` according to the palette above.
+The name and logo are already in the site (`frontend/public/logo.svg`, `favicon.svg`, the header, `index.html`, `robots.txt`). The in-app colors are defined in `frontend/src/index.css` and are described in [DESIGN.md](../DESIGN.md); they use burgundy `#800020`, not the crimson listed above. The type is Outfit with Bebas Neue for display headings.

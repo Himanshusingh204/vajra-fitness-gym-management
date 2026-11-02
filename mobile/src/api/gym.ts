@@ -11,6 +11,7 @@ import type {
   Membership,
   MemberProfile,
   MyAttendance,
+  MyGym,
   PublicGym,
   WorkoutSlip,
 } from './types';
@@ -19,6 +20,7 @@ export const listGyms = () => api.get<PublicGym[]>('/gym');
 
 // Member self-service
 export const getMyProfile = () => api.get<MemberProfile>('/members/my-profile');
+export const getMyGyms = () => api.get<MyGym[]>('/members/my-gyms');
 export const getMyMemberships = () => api.get<Membership[]>('/memberships/my');
 export const getMyAttendance = () => api.get<MyAttendance>('/attendance/my');
 export const getMemberFees = (memberId: string) => api.get<Fee[]>(`/fees/member/${memberId}`);

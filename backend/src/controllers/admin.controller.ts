@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
+import { decideRequest, ApprovalError } from '../services/approval.service';
 import { redis, isRedisAvailable } from '../utils/redis';
 
 const PLATFORM_ANALYTICS_CACHE_KEY = 'platform-analytics';
@@ -42,7 +43,7 @@ export const approveGym = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.update({
       where: { id: gymId },
-      data: { isApproved: true },
+      data: { isApproved: true, status: 'APPROVED' },
       include: { owner: { select: { id: true, username: true } } },
     });
 
@@ -53,7 +54,7 @@ export const approveGym = async (req: AuthRequest, res: Response) => {
       userId: gym.owner.id,
       type: 'SUCCESS',
       title: 'Your gym is approved',
-      message: `${gym.name} is now live on the Vajra Fitness platform.`,
+      message: `${gym.name} is now live on the Kavach Fitness platform.`,
       link: '/admin/gym',
     });
 
@@ -79,7 +80,7 @@ export const suspendGym = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.update({
       where: { id: gymId },
-      data: { isApproved: false },
+      data: { isApproved: false, status: 'SUSPENDED' },
       include: { owner: { select: { id: true, username: true } } },
     });
 
@@ -129,7 +130,6 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     
     // Basic counts + SaaS data — independent reads, run concurrently instead
     // of one round trip at a time (mirrors the gymAnalytics fix).
@@ -144,7 +144,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
       allSubscriptions,
     ] = await Promise.all([
       prisma.gym.count(),
-      prisma.gym.count({ where: { isApproved: true } }),
+      prisma.gym.count({ where: { status: 'APPROVED' } }),
       prisma.memberDetails.count(),
       prisma.staffDetails.count(),
       prisma.staffDetails.count({ where: { role: 'TRAINER' } }),
@@ -278,7 +278,7 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
 
       // Top performing gyms by member count
       prisma.gym.findMany({
-        where: { isApproved: true },
+        where: { status: 'APPROVED' },
         include: {
           _count: { select: { members: true } },
           subscriptions: {
@@ -361,6 +361,45 @@ export const getPlatformAnalytics = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Head counts for the admin home: total, joined in the last 30 days, and the
+// 30 days before that so the dashboard can show a change.
+export const getPlatformOverview = async (req: AuthRequest, res: Response) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const recent = { gte: new Date(now - 30 * DAY) };
+    const before = { gte: new Date(now - 60 * DAY), lt: new Date(now - 30 * DAY) };
+
+    const countUsers = (role: string) =>
+      Promise.all([
+        prisma.user.count({ where: { role } }),
+        prisma.user.count({ where: { role, createdAt: recent } }),
+        prisma.user.count({ where: { role, createdAt: before } }),
+      ]);
+    const [users, trainers, owners, gyms] = await Promise.all([
+      countUsers('MEMBER'),
+      countUsers('TRAINER'),
+      countUsers('GYM_ADMIN'),
+      Promise.all([
+        prisma.gym.count(),
+        prisma.gym.count({ where: { createdAt: recent } }),
+        prisma.gym.count({ where: { createdAt: before } }),
+      ]),
+    ]);
+
+    const shape = ([total, last30, prev30]: number[]) => ({ total, last30, prev30 });
+    res.json({
+      members: shape(users),
+      trainers: shape(trainers),
+      owners: shape(owners),
+      gyms: shape(gyms),
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to load overview' });
+  }
+};
+
 // List all platform users
 export const getUsers = async (req: AuthRequest, res: Response) => {
   if (!requireSuperAdmin(req, res)) return;
@@ -374,13 +413,14 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
         role: true,
         isActive: true,
         createdAt: true,
-        memberDetails: { select: { status: true, gym: { select: { name: true } } } },
+        memberProfiles: { select: { status: true, gym: { select: { name: true } } }, orderBy: { joiningDate: 'desc' } },
         ownedGyms: { select: { name: true, isApproved: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-    res.json(users);
+    // memberDetails keeps the old one-gym shape (newest gym) for the admin table.
+    res.json(users.map(({ memberProfiles, ...u }) => ({ ...u, memberDetails: memberProfiles[0] ?? null, memberProfiles })));
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
@@ -469,6 +509,9 @@ export const deleteUserAccount = async (req: AuthRequest, res: Response) => {
 };
 
 // ---------------- CMS: FAQs ----------------
+const auditAdmin = (req: AuthRequest, action: string, entity: string, entityId: string) =>
+  logAudit({ action, entity, entityId, userId: req.user?.userId ?? null });
+
 export const getFaqs = async (_req: Request, res: Response) => {
   try {
     const faqs = await prisma.fAQ.findMany({ orderBy: { order: 'asc' } });
@@ -478,7 +521,7 @@ export const getFaqs = async (_req: Request, res: Response) => {
   }
 };
 
-export const createFaq = async (req: Request, res: Response) => {
+export const createFaq = async (req: AuthRequest, res: Response) => {
   try {
     const { question, answer, category, isActive, order } = req.body;
     const faq = await prisma.fAQ.create({
@@ -490,13 +533,14 @@ export const createFaq = async (req: Request, res: Response) => {
         order: order ?? 0,
       },
     });
+    await auditAdmin(req, 'FAQ_CREATED', 'FAQ', faq.id);
     res.status(201).json(faq);
   } catch {
     res.status(500).json({ error: 'Failed to create FAQ' });
   }
 };
 
-export const updateFaq = async (req: Request, res: Response) => {
+export const updateFaq = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { question, answer, category, isActive, order } = req.body;
@@ -504,16 +548,18 @@ export const updateFaq = async (req: Request, res: Response) => {
       where: { id },
       data: { question, answer, category, isActive, order },
     });
+    await auditAdmin(req, 'FAQ_UPDATED', 'FAQ', id);
     res.json(faq);
   } catch {
     res.status(500).json({ error: 'Failed to update FAQ' });
   }
 };
 
-export const deleteFaq = async (req: Request, res: Response) => {
+export const deleteFaq = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     await prisma.fAQ.delete({ where: { id } });
+    await auditAdmin(req, 'FAQ_DELETED', 'FAQ', id);
     res.json({ message: 'FAQ deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete FAQ' });
@@ -530,7 +576,7 @@ export const getTestimonials = async (_req: Request, res: Response) => {
   }
 };
 
-export const createTestimonial = async (req: Request, res: Response) => {
+export const createTestimonial = async (req: AuthRequest, res: Response) => {
   try {
     const { name, role, content, imageUrl, gymName, rating, featured, isActive } = req.body;
     const testimonial = await prisma.testimonial.create({
@@ -545,13 +591,14 @@ export const createTestimonial = async (req: Request, res: Response) => {
         isActive: isActive ?? true,
       },
     });
+    await auditAdmin(req, 'TESTIMONIAL_CREATED', 'Testimonial', testimonial.id);
     res.status(201).json(testimonial);
   } catch {
     res.status(500).json({ error: 'Failed to create testimonial' });
   }
 };
 
-export const updateTestimonial = async (req: Request, res: Response) => {
+export const updateTestimonial = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { name, role, content, imageUrl, gymName, rating, featured, isActive } = req.body;
@@ -559,16 +606,18 @@ export const updateTestimonial = async (req: Request, res: Response) => {
       where: { id },
       data: { name, role, content, imageUrl, gymName, rating, featured, isActive },
     });
+    await auditAdmin(req, 'TESTIMONIAL_UPDATED', 'Testimonial', id);
     res.json(testimonial);
   } catch {
     res.status(500).json({ error: 'Failed to update testimonial' });
   }
 };
 
-export const deleteTestimonial = async (req: Request, res: Response) => {
+export const deleteTestimonial = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     await prisma.testimonial.delete({ where: { id } });
+    await auditAdmin(req, 'TESTIMONIAL_DELETED', 'Testimonial', id);
     res.json({ message: 'Testimonial deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete testimonial' });
@@ -599,6 +648,7 @@ export const createSiteContent = async (req: AuthRequest, res: Response) => {
         updatedBy: req.user?.userId ?? null,
       },
     });
+    await auditAdmin(req, 'SITE_CONTENT_CREATED', 'SiteContent', entry.id);
     res.status(201).json(entry);
   } catch {
     res.status(500).json({ error: 'Failed to create site content' });
@@ -614,6 +664,7 @@ export const updateSiteContent = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: { key, value, section, isActive, updatedBy: req.user?.userId ?? null },
     });
+    await auditAdmin(req, 'SITE_CONTENT_UPDATED', 'SiteContent', id);
     res.json(entry);
   } catch {
     res.status(500).json({ error: 'Failed to update site content' });
@@ -625,6 +676,7 @@ export const deleteSiteContent = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     await prisma.siteContent.delete({ where: { id } });
+    await auditAdmin(req, 'SITE_CONTENT_DELETED', 'SiteContent', id);
     res.json({ message: 'Site content deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete site content' });
@@ -637,6 +689,7 @@ export const getSupportTickets = async (_req: Request, res: Response) => {
     const tickets = await prisma.supportTicket.findMany({
       include: { user: { select: { username: true, email: true, role: true } } },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
     res.json(tickets);
   } catch {
@@ -644,7 +697,7 @@ export const getSupportTickets = async (_req: Request, res: Response) => {
   }
 };
 
-export const updateSupportTicket = async (req: Request, res: Response) => {
+export const updateSupportTicket = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { status, priority } = req.body;
@@ -652,6 +705,7 @@ export const updateSupportTicket = async (req: Request, res: Response) => {
       where: { id },
       data: { status, priority },
     });
+    await auditAdmin(req, 'SUPPORT_TICKET_UPDATED', 'SupportTicket', id);
     res.json(ticket);
   } catch {
     res.status(500).json({ error: 'Failed to update ticket' });
@@ -816,8 +870,41 @@ export const updatePlatformMessage = async (req: AuthRequest, res: Response) => 
     if (!message) return res.status(404).json({ error: 'Message not found' });
 
     const updated = await prisma.platformMessage.update({ where: { id }, data: { status } });
+    await auditAdmin(req, 'PLATFORM_MESSAGE_UPDATED', 'PlatformMessage', id);
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update message' });
+  }
+};
+
+export const getApprovals = async (req: AuthRequest, res: Response) => {
+  const status = typeof req.query.status === 'string' ? req.query.status : 'PENDING_REVIEW';
+  const requests = await prisma.approvalRequest.findMany({
+    where: { status },
+    orderBy: { submittedAt: 'asc' },
+    take: 100,
+    include: {
+      gym: { select: { name: true, city: true } },
+      requester: { select: { username: true, email: true } },
+    },
+  });
+  res.json(requests);
+};
+
+export const decideApproval = async (req: AuthRequest, res: Response) => {
+  try {
+    const request = await decideRequest(req.params.id as string, req.body.decision, req.user!.userId, req.body.note);
+    await logAudit({
+      action: `APPROVAL_${request.status}`,
+      entity: 'ApprovalRequest',
+      entityId: request.id,
+      details: JSON.stringify({ ref: request.ref, note: req.body.note ?? null }),
+      userId: req.user!.userId,
+      ipAddress: req.ip ?? null,
+    });
+    res.json(request);
+  } catch (err) {
+    if (err instanceof ApprovalError) return res.status(err.status).json({ error: err.message, code: err.code });
+    throw err;
   }
 };

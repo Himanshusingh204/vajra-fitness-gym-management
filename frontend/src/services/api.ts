@@ -1,8 +1,12 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationStore } from '../store/useNotificationStore';
+import { useGymStore } from '../store/useGymStore';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+const DB_DOWN_MESSAGE = "Can't reach the database right now. Try again in a minute.";
+const isDbDown = (err: any) => err?.response?.status === 503 && err.response.data?.code === 'DB_UNREACHABLE';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -13,6 +17,8 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const gymId = useGymStore.getState().gymId;
+  if (gymId && useAuthStore.getState().user?.role === 'MEMBER') config.headers['X-Gym-Id'] = gymId;
   return config;
 });
 
@@ -23,7 +29,13 @@ const performRefresh = async (): Promise<string | null> => {
     const token = res.data?.token;
     if (token) useAuthStore.getState().setToken(token);
     return token ?? null;
-  } catch {
+  } catch (err) {
+    // The session is still fine when only the database is down, so callers
+    // must not treat this like a rejected refresh token and log the user out.
+    if (isDbDown(err)) {
+      useNotificationStore.getState().addNotification('error', DB_DOWN_MESSAGE);
+      throw err;
+    }
     return null;
   }
 };
@@ -50,7 +62,12 @@ api.interceptors.response.use(
 
     if (err.response?.status === 401 && original && !original._retry && !isAuthCall) {
       original._retry = true;
-      const token = await refreshAccessToken();
+      let token: string | null;
+      try {
+        token = await refreshAccessToken();
+      } catch {
+        return Promise.reject(err);
+      }
       if (token) return api(original);
 
       useAuthStore.getState().logout();
@@ -60,7 +77,9 @@ api.interceptors.response.use(
       // Do not pop up error notifications for expected 401s during background session checks
       if (!(err.response?.status === 401 && isSilentAuthCheck)) {
         // No HTTP response means a network-level failure (backend down, CORS, offline).
-        const message = err.response
+        const message = isDbDown(err)
+          ? DB_DOWN_MESSAGE
+          : err.response
           ? (err.response.data?.error || 'Something went wrong. Please try again.')
           : 'Unable to reach the server. Check that the backend is running and try again.';
         useNotificationStore.getState().addNotification('error', message);

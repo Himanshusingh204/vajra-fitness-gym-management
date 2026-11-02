@@ -5,12 +5,14 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../utils/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { JWT_SECRET, FRONTEND_URL } from '../utils/env';
-import { generateSecureToken, TOKEN_TTL } from '../utils/tokens';
+import { generateSecureToken, hashToken, TOKEN_TTL } from '../utils/tokens';
+import { findMemberProfile, requestedGymId } from '../utils/tenant';
+import { findDuplicateGym } from '../utils/duplicateGym';
 import { isLocked, registerFailure, clearFailures } from '../utils/bruteForce';
 import { createNotification } from '../services/notification.service';
 import { generateRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllUserTokens } from '../services/refreshToken.service';
 import { startAutomaticTrial } from '../services/subscription.service';
-import { sendPasswordResetEmail, sendActivationEmail } from '../utils/email';
+import { sendPasswordResetEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 
 // Brute-force lockout (Redis-backed when available, in-memory fallback).
@@ -28,13 +30,13 @@ const issueAccessToken = (user: { id: string; role: string; tokenVersion: number
     expiresIn: '15m',
   });
 
-const setRefreshCookie = (res: Response, refreshToken: string) => {
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+// Without "remember me" the refresh cookie has no maxAge, so the browser drops
+// it on close. The sessionOnly marker tells /refresh to keep it that way.
+const setRefreshCookie = (res: Response, refreshToken: string, persistent: boolean) => {
+  const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' as const };
+  res.cookie('refreshToken', refreshToken, persistent ? { ...options, maxAge: 7 * 24 * 60 * 60 * 1000 } : options);
+  if (persistent) res.clearCookie('sessionOnly');
+  else res.cookie('sessionOnly', '1', options);
 };
 
 // The mobile app has no cookie jar, so it identifies itself with this header
@@ -43,9 +45,9 @@ const isMobileClient = (req: Request) => req.get('x-client')?.toLowerCase() === 
 
 // Web gets the refresh token as an httpOnly cookie, mobile gets it in the body.
 // Spread the result into the JSON response.
-const handOverRefreshToken = (req: Request, res: Response, refreshToken: string) => {
+const handOverRefreshToken = (req: Request, res: Response, refreshToken: string, persistent = true) => {
   if (isMobileClient(req)) return { refreshToken };
-  setRefreshCookie(res, refreshToken);
+  setRefreshCookie(res, refreshToken, persistent);
   return {};
 };
 
@@ -99,6 +101,9 @@ export const registerVendor = async (req: Request, res: Response) => {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(409).json({ error: 'An account with this email already exists' });
 
+    const duplicate = await findDuplicateGym({ name: gymName, city, phone, gstNumber });
+    if (duplicate) return res.status(409).json({ error: duplicate.message });
+
     const hashedPassword = await argon2.hash(password);
 
     const vendor = await prisma.user.create({
@@ -117,6 +122,7 @@ export const registerVendor = async (req: Request, res: Response) => {
             location,
             gstNumber,
             isApproved: false,
+            status: 'PENDING_REVIEW',
           },
         },
       },
@@ -141,7 +147,7 @@ export const registerVendor = async (req: Request, res: Response) => {
 
 export const registerMember = async (req: Request, res: Response) => {
   try {
-    const { username, email, password, phone, gymId, planId, preferredPaymentMethod } = req.body;
+    const { username, email, password, phone, gymId, planId, preferredPaymentMethod, referralCode } = req.body;
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(409).json({ error: 'An account with this email already exists' });
@@ -152,7 +158,7 @@ export const registerMember = async (req: Request, res: Response) => {
     if (gymId) {
       gym = await prisma.gym.findUnique({ where: { id: gymId } });
       if (!gym) return res.status(404).json({ error: 'Gym not found' });
-      if (!gym.isApproved) return res.status(403).json({ error: 'Membership registration is closed at this gym' });
+      if (gym.status !== 'APPROVED') return res.status(403).json({ error: 'Membership registration is closed at this gym' });
 
       if (planId) {
         const plan = await prisma.membershipPlan.findUnique({ where: { id: planId } });
@@ -172,7 +178,7 @@ export const registerMember = async (req: Request, res: Response) => {
         phone,
         ...(gym
           ? {
-              memberDetails: {
+              memberProfiles: {
                 create: {
                   gymId: gym.id,
                   planId: planId || undefined,
@@ -186,6 +192,24 @@ export const registerMember = async (req: Request, res: Response) => {
     });
 
     const refreshRaw = await generateRefreshToken(member.id);
+
+    if (gym && referralCode) {
+      // The account already exists, so a failed referral credit must not turn into a failed signup.
+      try {
+        // Only credit a code that belongs to a member of the same gym.
+        const referrer = await prisma.memberDetails.findFirst({
+          where: { referralCode, gymId: gym.id },
+          select: { userId: true },
+        });
+        if (referrer && referrer.userId !== member.id) {
+          await prisma.referral.create({
+            data: { gymId: gym.id, referrerUserId: referrer.userId, referredUserId: member.id, referralCode },
+          });
+        }
+      } catch (err) {
+        logger.errorWith('referral credit failed', err);
+      }
+    }
 
     if (gym) {
       await createNotification({
@@ -219,9 +243,9 @@ export const registerTrainer = async (req: Request, res: Response) => {
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(409).json({ error: 'An account with this email already exists' });
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, name: true, ownerId: true, isApproved: true } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true, name: true, ownerId: true, status: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (!gym.isApproved) return res.status(403).json({ error: 'This gym is not accepting trainer applications yet' });
+    if (gym.status !== 'APPROVED') return res.status(403).json({ error: 'This gym is not accepting trainer applications yet' });
 
     const hashedPassword = await argon2.hash(password);
 
@@ -267,9 +291,48 @@ export const registerTrainer = async (req: Request, res: Response) => {
   }
 };
 
+// A trainer invited by the gym owner sets a password and is active straight away.
+export const acceptInvite = async (req: Request, res: Response) => {
+  try {
+    const { token, name, password } = req.body as { token: string; name: string; password: string };
+    const invite = await prisma.trainerInvite.findUnique({ where: { tokenHash: hashToken(token) } });
+    if (!invite || invite.status !== 'PENDING' || invite.expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ error: 'This invitation is invalid or has expired' });
+    }
+    if (await prisma.user.findUnique({ where: { email: invite.email } })) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const trainer = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          username: name,
+          email: invite.email,
+          password: await argon2.hash(password),
+          role: 'TRAINER',
+          trainerDetails: { create: { gymId: invite.gymId, status: 'ACTIVE' } },
+        },
+      });
+      await tx.trainerInvite.update({ where: { id: invite.id }, data: { status: 'ACCEPTED', acceptedAt: new Date() } });
+      return user;
+    });
+
+    const refreshRaw = await generateRefreshToken(trainer.id);
+    res.status(201).json({
+      message: 'Welcome to the team.',
+      token: issueAccessToken(trainer),
+      ...handOverRefreshToken(req, res, refreshRaw),
+      user: { id: trainer.id, username: trainer.username, email: trainer.email, role: trainer.role },
+      trainerStatus: 'ACTIVE',
+    });
+  } catch {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body as { email: string; password: string };
+    const { email, password, rememberMe } = req.body as { email: string; password: string; rememberMe?: boolean };
     const lockKey = email.toLowerCase();
 
     const remainingLock = await isLocked(lockKey);
@@ -302,7 +365,7 @@ export const login = async (req: Request, res: Response) => {
     res.json({
       message: 'Logged in successfully',
       token: issueAccessToken(user),
-      ...handOverRefreshToken(req, res, refreshRaw),
+      ...handOverRefreshToken(req, res, refreshRaw, rememberMe !== false),
       user:{ id: user.id, username: user.username, email: user.email, role: user.role },
     });
   } catch (error) {
@@ -320,6 +383,7 @@ export const logout = async (req: Request, res: Response) => {
     /* logout must never fail the request */
   }
   res.clearCookie('refreshToken');
+  res.clearCookie('sessionOnly');
   res.json({ message: 'Logged out successfully' });
 };
 
@@ -343,7 +407,7 @@ export const refresh = async (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Invalid user' });
     if (user.isActive === false) return res.status(403).json({ error: 'Account suspended. Contact support.' });
 
-    res.json({ token: issueAccessToken(user), ...handOverRefreshToken(req, res, result.raw) });
+    res.json({ token: issueAccessToken(user), ...handOverRefreshToken(req, res, result.raw, !req.cookies?.sessionOnly) });
   } catch (error) {
     res.status(401).json({ error: 'Invalid refresh token' });
   }
@@ -394,6 +458,8 @@ export const me = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    // memberDetails is the member's row at one gym (see findMemberProfile); /members/my-gyms lists them all.
+    const member = await findMemberProfile(userId, requestedGymId(req));
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -404,7 +470,8 @@ export const me = async (req: AuthRequest, res: Response) => {
         role: true,
         isActive: true,
         createdAt: true,
-        memberDetails: {
+        memberProfiles: {
+          where: { id: member?.id ?? '' },
           include: {
             gym: { select: { id: true, name: true, city: true, state: true, location: true } },
             membershipPlan: true,
@@ -417,7 +484,9 @@ export const me = async (req: AuthRequest, res: Response) => {
       },
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user.role === 'TRAINER' ? { ...user, trainerStatus: user.trainerDetails?.status ?? 'ACTIVE' } : user);
+    const { memberProfiles, ...rest } = user;
+    const body = { ...rest, memberDetails: memberProfiles[0] ?? null };
+    res.json(user.role === 'TRAINER' ? { ...body, trainerStatus: user.trainerDetails?.status ?? 'ACTIVE' } : body);
   } catch {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
@@ -431,19 +500,24 @@ const profileSelect = {
   role: true,
   isActive: true,
   createdAt: true,
-  memberDetails: { select: { gym: { select: { id: true, name: true } } } },
   trainerDetails: { select: { status: true, gym: { select: { id: true, name: true } } } },
   staffDetails: { select: { gym: { select: { id: true, name: true } } } },
   ownedGyms: { select: { id: true, name: true }, take: 1 },
 } as const;
 
-const findProfile = (userId: string) => prisma.user.findUnique({ where: { id: userId }, select: profileSelect });
+const findProfile = async (userId: string, gymId?: string) => {
+  const member = await findMemberProfile(userId, gymId);
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { ...profileSelect, memberProfiles: { where: { id: member?.id ?? '' }, select: { gym: { select: { id: true, name: true } } } } },
+  });
+};
 
 type ProfileRow = NonNullable<Awaited<ReturnType<typeof findProfile>>>;
 
 const toProfile = (user: ProfileRow) => {
-  const { memberDetails, trainerDetails, staffDetails, ownedGyms, ...base } = user;
-  const gym = ownedGyms[0] ?? memberDetails?.gym ?? trainerDetails?.gym ?? staffDetails?.gym ?? null;
+  const { memberProfiles, trainerDetails, staffDetails, ownedGyms, ...base } = user;
+  const gym = ownedGyms[0] ?? memberProfiles[0]?.gym ?? trainerDetails?.gym ?? staffDetails?.gym ?? null;
   return {
     ...base,
     gym,
@@ -456,7 +530,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
-    const user = await findProfile(userId);
+    const user = await findProfile(userId, requestedGymId(req));
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(toProfile(user));
   } catch {
@@ -477,7 +551,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
         ...(phone !== undefined ? { phone } : {}),
       },
     });
-    const user = await findProfile(userId);
+    const user = await findProfile(userId, requestedGymId(req));
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(toProfile(user));
   } catch {
@@ -491,7 +565,7 @@ export const activateAccount = async (req: Request, res: Response) => {
     const { token, password } = req.body as { token?: string; password?: string };
 
     const record = await prisma.activationToken.findUnique({
-      where: { token: token || '' },
+      where: { tokenHash: hashToken(token || '') },
       include: { user: { select: { id: true, username: true, email: true, role: true, tokenVersion: true } } },
     });
     if (!record) return res.status(400).json({ error: 'Invalid or expired activation link' });
@@ -501,15 +575,18 @@ export const activateAccount = async (req: Request, res: Response) => {
     }
     if (!password) return res.status(400).json({ error: 'Password is required' });
 
+    // Claim the token before using it so two concurrent requests can't both pass.
+    const claimed = await prisma.activationToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (claimed.count === 0) return res.status(400).json({ error: 'This activation link has already been used' });
+
     const hashed = await argon2.hash(password);
     await prisma.user.update({
       where: { id: record.userId },
       data: { password: hashed, isActive: true, tokenVersion: { increment: 1 } },
     });
-    await prisma.activationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } });
 
     const refreshRaw = await generateRefreshToken(record.userId);
-    setRefreshCookie(res, refreshRaw);
+    setRefreshCookie(res, refreshRaw, true);
 
     await createNotification({
       userId: record.userId,
@@ -546,7 +623,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const token = generateSecureToken();
     await prisma.passwordResetToken.create({
       data: {
-        token,
+        tokenHash: hashToken(token),
         userId: user.id,
         expiresAt: new Date(Date.now() + TOKEN_TTL.passwordReset),
       },
@@ -573,7 +650,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { token, newPassword } = req.body as { token?: string; newPassword?: string };
 
     const record = await prisma.passwordResetToken.findUnique({
-      where: { token: token || '' },
+      where: { tokenHash: hashToken(token || '') },
     });
     if (!record || record.usedAt) {
       return res.status(400).json({ error: 'Invalid or already used reset token' });
@@ -583,12 +660,15 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
     if (!newPassword) return res.status(400).json({ error: 'New password is required' });
 
+    // Claim the token before using it so two concurrent requests can't both pass.
+    const claimed = await prisma.passwordResetToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (claimed.count === 0) return res.status(400).json({ error: 'Invalid or already used reset token' });
+
     const hashed = await argon2.hash(newPassword);
     await prisma.user.update({
       where: { id: record.userId },
       data: { password: hashed, tokenVersion: { increment: 1 } },
     });
-    await prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } });
     // Any pending activation tokens become invalid once the password is set.
     await prisma.activationToken.deleteMany({ where: { userId: record.userId } });
     // Revoke all outstanding refresh sessions so old sessions can't linger.

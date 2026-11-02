@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
+import { startOfDayIn } from '../utils/time';
+import { canAccessGym, requestedGymId } from '../utils/tenant';
 
 // Public: list active trainers at a specific approved gym so a member can pick one.
 // The gymId is required — an anonymous caller must never see trainers from every
@@ -11,11 +13,11 @@ export const listTrainers = async (req: AuthRequest, res: Response) => {
     const { gymId } = req.query as { gymId?: string };
     if (!gymId) return res.status(400).json({ error: 'gymId query parameter is required' });
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { isApproved: true } });
-    if (!gym || !gym.isApproved) return res.status(404).json({ error: 'Gym not found' });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { status: true } });
+    if (!gym || gym.status !== 'APPROVED') return res.status(404).json({ error: 'Gym not found' });
 
     const trainers = await prisma.trainerDetails.findMany({
-      where: { gymId, status: 'ACTIVE', gym: { isApproved: true } },
+      where: { gymId, status: 'ACTIVE', gym: { status: 'APPROVED' } },
       include: {
         user: { select: { id: true, username: true } },
         gym: { select: { id: true, name: true, city: true } },
@@ -25,6 +27,80 @@ export const listTrainers = async (req: AuthRequest, res: Response) => {
     res.json(trainers);
   } catch {
     res.status(500).json({ error: 'Failed to fetch trainers' });
+  }
+};
+
+// Sessions run on the hour, 6am to 8pm.
+// shortcut: no per-trainer availability model yet, upgrade when trainers set their own hours.
+const SLOT_TIMES = Array.from({ length: 15 }, (_, i) => `${String(i + 6).padStart(2, '0')}:00`);
+
+// Start of a gym-local date + HH:mm as a real instant.
+const slotInstant = (date: string, time: string) => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(startOfDayIn(new Date(`${date}T12:00:00Z`)).getTime() + (hours! * 60 + minutes!) * 60_000);
+};
+
+// Member: which hourly slots a trainer at their gym still has free on a date
+export const getAvailableSlots = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { trainerId, date } = req.query as { trainerId: string; date: string };
+
+    const trainer = await prisma.trainerDetails.findFirst({ where: { userId: trainerId, status: 'ACTIVE' }, select: { gymId: true } });
+    const member = trainer
+      ? await prisma.memberDetails.findFirst({ where: { userId, gymId: trainer.gymId, status: 'ACTIVE' }, select: { id: true } })
+      : null;
+    if (!member) {
+      return res.status(403).json({ error: 'You can only view trainers at your own gym' });
+    }
+
+    const taken = await prisma.booking.findMany({
+      where: { date, status: { not: 'CANCELLED' }, OR: [{ trainerId }, { userId }] },
+      select: { time: true },
+    });
+    const busy = new Set(taken.map((b) => b.time));
+    const now = new Date();
+    res.json(SLOT_TIMES.map((time) => ({ time, available: !busy.has(time) && slotInstant(date, time) > now })));
+  } catch {
+    res.status(500).json({ error: 'Failed to load slots' });
+  }
+};
+
+// Member: move one of their own upcoming sessions to a new slot
+export const rescheduleBooking = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const id = req.params.id as string;
+    const { date, time } = req.body as { date: string; time: string };
+
+    const booking = await prisma.booking.findUnique({ where: { id }, include: { trainer: { select: { username: true } } } });
+    if (!booking || booking.userId !== userId) return res.status(404).json({ error: 'Booking not found' });
+    if (!['PENDING', 'CONFIRMED'].includes(booking.status)) {
+      return res.status(400).json({ error: 'Only upcoming sessions can be rescheduled' });
+    }
+    if (Number.isNaN(slotInstant(date, time).getTime()) || slotInstant(date, time) < new Date()) {
+      return res.status(400).json({ error: 'Booking must be in the future' });
+    }
+
+    const clash = await prisma.booking.findFirst({
+      where: { id: { not: id }, date, time, status: { not: 'CANCELLED' }, OR: [{ trainerId: booking.trainerId }, { userId }] },
+    });
+    if (clash) return res.status(409).json({ error: 'That time slot is not available' });
+
+    // The trainer has to agree to the new time again.
+    const updated = await prisma.booking.update({ where: { id }, data: { date, time, status: 'PENDING' } });
+    await createNotification({
+      userId: booking.trainerId,
+      type: 'INFO',
+      title: 'Session rescheduled',
+      message: `A member moved their PT session to ${date} at ${time}. Please confirm it.`,
+      link: '/dashboard',
+    });
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Failed to reschedule booking' });
   }
 };
 
@@ -39,22 +115,25 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
     // Validate trainer exists and is a real trainer
     const trainer = await prisma.user.findUnique({
       where: { id: trainerId },
-      select: { id: true, role: true, trainerDetails: { select: { id: true, gymId: true } } },
+      select: { id: true, role: true, trainerDetails: { select: { id: true, gymId: true, status: true } } },
     });
-    if (!trainer || trainer.role !== 'TRAINER' || !trainer.trainerDetails) {
+    if (!trainer || trainer.role !== 'TRAINER' || trainer.trainerDetails?.status !== 'ACTIVE') {
       return res.status(400).json({ error: 'Selected trainer is not valid' });
     }
 
-    const member = await prisma.memberDetails.findFirst({
-      where: { userId },
-      select: { gymId: true, status: true },
+    // The member's row at the trainer's gym; they may belong to other gyms too.
+    const member = await prisma.memberDetails.findUnique({
+      where: { userId_gymId: { userId, gymId: trainer.trainerDetails.gymId } },
+      select: { status: true },
     });
-    if (!member || member.status !== 'ACTIVE' || member.gymId !== trainer.trainerDetails.gymId) {
+    if (!member || member.status !== 'ACTIVE') {
       return res.status(403).json({ error: 'You can only book trainers at your own gym' });
     }
 
     // A member can only book a trainer in the past is not allowed
-    const bookingDateTime = new Date(`${date}T${time}:00`);
+    // date/time are the gym's wall clock, not the server's.
+    const [hours, minutes] = time.split(':').map(Number);
+    const bookingDateTime = new Date(startOfDayIn(new Date(`${date}T12:00:00Z`)).getTime() + (hours * 60 + minutes) * 60_000);
     if (Number.isNaN(bookingDateTime.getTime()) || bookingDateTime < new Date()) {
       return res.status(400).json({ error: 'Booking must be in the future' });
     }
@@ -124,8 +203,9 @@ export const getMyBookings = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+    const gymId = requestedGymId(req);
     const bookings = await prisma.booking.findMany({
-      where: { userId },
+      where: { userId, ...(gymId ? { gymId } : {}) },
       include: {
         trainer: { select: { username: true, email: true } },
         gym: { select: { name: true, city: true } },
@@ -178,11 +258,9 @@ export const getGymBookings = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const { from, to, status } = req.query as { from?: string; to?: string; status?: string };
 
-    const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+    const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { id: true } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     let dateFilter: any = {};
     if (from || to) {
@@ -223,7 +301,6 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response) => {
     const booking = await prisma.booking.findUnique({
       where: { id },
       include: {
-        gym: { select: { ownerId: true } },
         user: { select: { id: true, username: true } },
         trainer: { select: { id: true, username: true } },
       },
@@ -241,7 +318,7 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ error: 'Invalid status transition' });
       }
     } else if (role === 'GYM_ADMIN' || role === 'SUPER_ADMIN') {
-      if (role === 'GYM_ADMIN' && booking.gym.ownerId !== userId) {
+      if (!(await canAccessGym(req.user, booking.gymId))) {
         return res.status(403).json({ error: 'Unauthorized' });
       }
       if (!['CONFIRMED', 'CANCELLED', 'COMPLETED'].includes(status)) {

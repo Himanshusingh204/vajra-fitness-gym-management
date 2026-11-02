@@ -13,7 +13,7 @@ export interface Equipment {
   maintenanceLogs: MaintenanceLog[];
 }
 
-export interface MaintenanceLog {
+interface MaintenanceLog {
   id: string;
   type: string;
   description: string;
@@ -29,21 +29,6 @@ export const getEquipment = async (gymId: string, params?: { condition?: string 
 
 export const addEquipment = async (gymId: string, data: Partial<Equipment>) => {
   const response = await api.post<Equipment>(`/equipment/gym/${gymId}`, data);
-  return response.data;
-};
-
-export const updateEquipment = async (id: string, data: Partial<Equipment>) => {
-  const response = await api.put<Equipment>(`/equipment/${id}`, data);
-  return response.data;
-};
-
-export const recordMaintenance = async (id: string, data: {
-  type: string;
-  description: string;
-  cost?: number;
-  nextDue?: string;
-}) => {
-  const response = await api.post<MaintenanceLog>(`/equipment/${id}/maintenance`, data);
   return response.data;
 };
 

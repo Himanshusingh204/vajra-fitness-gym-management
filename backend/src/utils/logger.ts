@@ -21,6 +21,19 @@ export const requestContext = new AsyncLocalStorage<LogContext>();
 
 export const getCorrelationId = (): string | undefined => requestContext.getStore()?.requestId;
 
+// Values under these keys never reach the logs, at any depth.
+const SECRET_KEY = /password|token|authorization|signature|secret|cookie/i;
+
+const redact = (value: unknown, depth = 0): unknown => {
+  if (Array.isArray(value)) return depth > 8 ? '[TRUNCATED]' : value.map((v) => redact(v, depth + 1));
+  // Only plain objects: Dates, Buffers and the like keep their own JSON form.
+  if (value === null || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return value;
+  if (depth > 8) return '[TRUNCATED]';
+  return Object.fromEntries(
+    Object.entries(value).map(([key, v]) => [key, SECRET_KEY.test(key) ? '[REDACTED]' : redact(v, depth + 1)]),
+  );
+};
+
 const write = (level: Level, msg: string, meta?: Record<string, unknown>) => {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
   const ctx = requestContext.getStore() ?? {};
@@ -31,7 +44,7 @@ const write = (level: Level, msg: string, meta?: Record<string, unknown>) => {
     requestId: ctx.requestId,
     ...(ctx.userId ? { userId: ctx.userId } : {}),
     ...(ctx.role ? { role: ctx.role } : {}),
-    ...(meta ?? {}),
+    ...(meta ? (redact(meta) as Record<string, unknown>) : {}),
   };
   const output = JSON.stringify(line);
   if (level === 'error' || level === 'warn') {

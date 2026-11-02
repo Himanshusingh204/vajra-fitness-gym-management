@@ -58,6 +58,14 @@ export type PublicGym = {
   membershipPlans?: MembershipPlan[];
 };
 
+// One row of /members/my-gyms: a gym the member belongs to, default gym first.
+export type MyGym = {
+  memberId: string;
+  gymId: string;
+  status: string;
+  gym: { id: string; name: string; city: string };
+};
+
 export type MemberProfile = {
   id: string;
   status: string;

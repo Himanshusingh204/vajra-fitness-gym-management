@@ -1,6 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { redis, isRedisAvailable } from '../utils/redis';
 
 // Analytics is heavy (a dozen+ queries) and polled every 60s by the
@@ -49,7 +50,7 @@ export const revenueReport = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -137,7 +138,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -483,7 +484,7 @@ export const trainerPerformance = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -571,7 +572,7 @@ export const gymStats = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

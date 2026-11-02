@@ -134,7 +134,7 @@ export default function ProfileScreen() {
       <Button label="Sign out" variant="danger" icon="log-out-outline" onPress={confirmSignOut} />
 
       <Text variant="small" muted style={styles.center}>
-        Vajra Fitness {Constants.expoConfig?.version ?? ''}
+        Kavach Fitness {Constants.expoConfig?.version ?? ''}
       </Text>
     </Screen>
   );

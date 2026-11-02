@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router';
+import { useState, useMemo } from 'react';
+import { Link, Navigate, useNavigate, useOutletContext } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Users, CreditCard, Dumbbell, ClipboardList, Settings, BarChart3, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Shield, Download, FileDown, Calendar, CalendarDays, Bell, Megaphone, Wrench, Gift, TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, PieChart, Menu, X, Sparkles, Award, RotateCcw, Package, Wallet, Banknote } from 'lucide-react';
-import { useAuthStore } from '../store/useAuthStore';
+import { Users, CreditCard, Dumbbell, ClipboardList, Diamond, Plus, Pencil, Trash2, CheckCircle, XCircle, ClipboardCheck, Download, FileDown, Calendar, CalendarDays, Gift, TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight, PieChart, Award, RotateCcw } from 'lucide-react';
 import api, { downloadFile } from '../services/api';
 import { getGymBookings, updateBookingStatus, getGymMemberships, createMembership, renewMembership } from '../api/booking.api';
 import { getMyNotifications, markAllNotificationsRead, markNotificationRead } from '../api/notification.api';
@@ -10,57 +9,23 @@ import { getGymNotices, createNotice, updateNotice, deleteNotice } from '../api/
 import { getEquipment, addEquipment, deleteEquipment } from '../api/equipment.api';
 import { getBranches, createBranch, deleteBranch, type GymBranch } from '../api/branch.api';
 import { getReferrals, createReferral, updateReferralStatus, getReferralStats } from '../api/referral.api';
+import TrainerInvites from '../components/gym-admin/TrainerInvites';
 import { getGymAnalytics, getTrainerPerformance, type TrainerPerformance } from '../api/reports.api';
 import { getMyGymSubscription, getInvoices } from '../api/saas.api';
 import { localDateString } from '../utils/format';
 import { LineChart, BarChart, AreaChart, DonutChart, HeatmapChart } from '../components/charts';
-import { ExercisePlanEditor, ExercisePlanView, serializeExercisePlan, type ExerciseItem } from '../components/ExercisePlan';
+import { ExercisePlanEditor, ExercisePlanView } from '../components/ExercisePlan';
+import { serializeExercisePlan, type ExerciseItem } from '../utils/exercisePlan';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import InventoryTab from './gymadmin/InventoryTab';
 import ExpensesTab from './gymadmin/ExpensesTab';
 import ClassesTab from './gymadmin/ClassesTab';
 import PayrollTab from './gymadmin/PayrollTab';
-
-type NavGroup = { label: string; items: { id: string; label: string; icon: any }[] };
-
-const navGroups: NavGroup[] = [
-  { label: 'Overview', items: [
-    { id: 'overview', label: 'Overview', icon: Building2 },
-    { id: 'analytics', label: 'Analytics', icon: PieChart },
-  ] },
-  { label: 'People', items: [
-    { id: 'members', label: 'Members', icon: Users },
-    { id: 'staff', label: 'Staff & Trainers', icon: Shield },
-    { id: 'enquiries', label: 'Enquiries', icon: ClipboardList },
-  ] },
-  { label: 'Memberships & Billing', items: [
-    { id: 'plans', label: 'Membership Plans', icon: Diamond },
-    { id: 'memberships', label: 'Memberships', icon: ClipboardCheck },
-    { id: 'fees', label: 'Fees', icon: CreditCard },
-    { id: 'subscription', label: 'My Subscription', icon: Sparkles },
-  ] },
-  { label: 'Training', items: [
-    { id: 'bookings', label: 'PT Bookings', icon: Calendar },
-    { id: 'workouts', label: 'Workouts', icon: Dumbbell },
-    { id: 'attendance', label: 'Attendance', icon: ClipboardList },
-  ] },
-  { label: 'Engagement', items: [
-    { id: 'notices', label: 'Notices', icon: Megaphone },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'referrals', label: 'Referrals', icon: Gift },
-  ] },
-  { label: 'Facility', items: [
-    { id: 'equipment', label: 'Equipment', icon: Wrench },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
-    { id: 'branch', label: 'Branch', icon: Settings },
-  ] },
-  { label: 'Business Ops', items: [
-    { id: 'inventory', label: 'Inventory & POS', icon: Package },
-    { id: 'expenses', label: 'Expenses', icon: Wallet },
-    { id: 'classes', label: 'Group Classes', icon: CalendarDays },
-    { id: 'payroll', label: 'Payroll', icon: Banknote },
-  ] },
-];
+import EmptyState from '../components/ui/EmptyState';
+import WebsiteRequestCard from './gymadmin/WebsiteRequestCard';
+import GymProfileEditor from '../components/gym-admin/GymProfileEditor';
+import SupportTab from './gymadmin/SupportTab';
+import EarningsTab from './gymadmin/EarningsTab';
 
 type Plan = { id: string; name: string; description: string | null; duration: number; price: number; isActive: boolean };
 type Member = { id: string; status: string; joiningDate: string; user: { id: string; username: string; email: string; phone: string | null }; membershipPlan: Plan | null; branch?: { id: string; name: string } | null };
@@ -81,14 +46,15 @@ const statusBadge = (status: string) => {
 };
 
 const GymAdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const activeTab = useOutletContext<string | undefined>() ?? '';
+  const navigate = useNavigate();
+  // Trainers and staff share one form and one endpoint; the page decides the role.
+  const teamRole = activeTab === 'trainers' ? 'TRAINER' : 'STAFF';
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; confirmLabel?: string; onConfirm: () => void } | null>(null);
-  const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const today = localDateString();
 
-  const { data: branch, isLoading: branchLoading } = useQuery({
+  const { data: branch } = useQuery({
     queryKey: ['my-branch'],
     queryFn: () => api.get('/gym/my-branch').then((r) => r.data),
     refetchInterval: 60000,
@@ -116,7 +82,7 @@ const GymAdminDashboard = () => {
   const { data: members = [], isLoading: membersLoading } = useQuery<Member[]>({
     queryKey: ['members', branch?.id, branchFilter],
     queryFn: () => api.get(`/members/gym/${branch?.id}`, { params: branchFilter ? { branchId: branchFilter } : undefined }).then((r) => r.data),
-    enabled: !!branch?.id && ['members', 'memberships', 'fees', 'workouts', 'attendance'].includes(activeTab),
+    enabled: !!branch?.id && ['members', 'memberships', 'fees', 'workouts', 'attendance', 'referrals'].includes(activeTab),
     refetchInterval: 30000,
   });
 
@@ -144,7 +110,7 @@ const GymAdminDashboard = () => {
   const { data: staffData, isLoading: staffLoading } = useQuery<{ trainers: StaffEntry[]; staff: StaffEntry[] }>({
     queryKey: ['staff', branch?.id, branchFilter],
     queryFn: () => api.get(`/staff/gym/${branch?.id}`, { params: branchFilter ? { branchId: branchFilter } : undefined }).then((r) => r.data),
-    enabled: !!branch?.id && ['staff', 'workouts', 'attendance'].includes(activeTab),
+    enabled: !!branch?.id && ['staff', 'trainers', 'workouts', 'attendance'].includes(activeTab),
     refetchInterval: 30000,
   });
 
@@ -165,7 +131,7 @@ const GymAdminDashboard = () => {
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['gymBookings', branch?.id],
     queryFn: () => getGymBookings(branch?.id),
-    enabled: !!branch?.id && activeTab === 'bookings',
+    enabled: !!branch?.id && ['bookings', 'overview'].includes(activeTab),
     refetchInterval: 30000,
   });
 
@@ -242,7 +208,10 @@ const GymAdminDashboard = () => {
 
   const updateBookingStatusMut = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateBookingStatus(id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['gymBookings', branch?.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gymBookings', branch?.id] });
+      qc.invalidateQueries({ queryKey: ['gym-stats', branch?.id] });
+    },
   });
 
   const markAllRead = useMutation({
@@ -283,9 +252,18 @@ const GymAdminDashboard = () => {
   const [renewPlanId, setRenewPlanId] = useState('');
   const [renewDiscount, setRenewDiscount] = useState(0);
 
-  const [branchForm, setBranchForm] = useState({ name: '', address: '', city: '', state: '', gstNumber: '', imageUrl: '', facilities: '' });
+  // Form shows the saved branch until the user edits a field.
+  type BranchForm = { imageUrl: string; facilities: string };
+  const [branchEdits, setBranchEdits] = useState<BranchForm | null>(null);
+  const branchForm: BranchForm = branchEdits ?? {
+    imageUrl: branch?.imageUrl || '',
+    facilities: String(branch?.facilities ?? ''),
+  };
+  const setBranchForm = (update: (p: BranchForm) => BranchForm) => setBranchEdits(update(branchForm));
+  const [nowMs] = useState(() => Date.now());
   const branchUpdate = useMutation({
-    mutationFn: (data: typeof branchForm) => api.put('/gym/my-branch', data),
+    mutationFn: (data: typeof branchForm) =>
+      api.put('/gym/my-branch', { ...data, facilities: data.facilities.split(',').map((f) => f.trim()).filter(Boolean) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-branch'] }),
   });
 
@@ -301,20 +279,6 @@ const GymAdminDashboard = () => {
     mutationFn: (id: string) => deleteBranch(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['branches', branch?.id] }),
   });
-
-  React.useEffect(() => {
-    if (branch) {
-      setBranchForm({
-        name: branch.name || '',
-        address: branch.address || '',
-        city: branch.city || '',
-        state: branch.state || '',
-        gstNumber: branch.gstNumber || '',
-        imageUrl: branch.imageUrl || '',
-        facilities: branch.facilities || '',
-      });
-    }
-  }, [branch]);
 
   // ---------- Membership plans ----------
   const [planForm, setPlanForm] = useState({ name: '', description: '', duration: 30, price: 999 });
@@ -621,105 +585,17 @@ const GymAdminDashboard = () => {
     </select>
   );
 
+  if (!activeTab) return <Navigate to="/owner" replace />;
+
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] lg:flex">
-      {/* Mobile top bar */}
-      <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-30">
-        <div className="min-w-0">
-          <h1 className="text-lg font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">
-            {branchLoading ? 'Loading…' : branch?.name || 'Gym Dashboard'}
-          </h1>
-        </div>
-        <button
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open navigation menu"
-          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </div>
-
-      <div className="lg:hidden sticky top-[68px] z-20 border-b border-[var(--color-border)] bg-[var(--color-base)]/95 px-4 py-3 backdrop-blur">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--color-muted)]">Quick actions</p>
-        <div className="grid grid-cols-3 gap-2">
-          {navGroups.flatMap((group) => group.items).filter(({ id }) => ['overview', 'members', 'fees'].includes(id)).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-bold transition-colors ${activeTab === id ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-charcoal)] dark:text-white border border-[var(--color-border)]'}`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="p-6 border-b border-[var(--color-border)] flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">
-              {branchLoading ? 'Loading…' : branch?.name || 'Gym Dashboard'}
-            </h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{user?.email}</p>
-          </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close navigation menu"
-            className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-6">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{group.label}</p>
-              <div className="space-y-0.5">
-                {group.items.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-150 ${
-                      activeTab === id
-                        ? 'bg-[var(--color-primary)] text-white'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{label}</span>
-                    {id === 'members' && pendingMembers > 0 && (
-                      <span className="ml-auto bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0">{pendingMembers}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="flex-1 min-w-0">
+    <>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         {/* Overview */}
         {activeTab === 'overview' && (
           <div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 stagger">
               {statsLoading ? (
-                [...Array(8)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)
+                [...Array(8)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />)
               ) : (
                 <>
                   {[
@@ -732,7 +608,7 @@ const GymAdminDashboard = () => {
                     { label: 'Pending Fees', value: stats?.pendingFees ?? 0, color: 'text-red-500' },
                     { label: 'Open Enquiries', value: enquiries.filter((e: any) => e.status === 'PENDING').length, color: 'text-purple-500' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)]">
+                    <div key={label} className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)]">
                       <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
                       <p className={`text-3xl font-extrabold tabular-nums ${color}`}>{value}</p>
                     </div>
@@ -740,7 +616,40 @@ const GymAdminDashboard = () => {
                 </>
               )}
             </div>
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] mb-4 overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+                <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white">Recent bookings</h3>
+                <button onClick={() => navigate('/owner/bookings')} className="text-sm font-semibold text-[var(--color-primary)] hover:underline">All bookings</button>
+              </div>
+              {(() => {
+                const recent = [...bookings].sort((a: any, b: any) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)).slice(0, 5);
+                if (bookingsLoading) return <div className="h-24 animate-pulse bg-gray-100 dark:bg-white/5" />;
+                if (recent.length === 0) {
+                  return <EmptyState icon={<CalendarDays className="h-8 w-8" />} title="No PT bookings yet" hint="Sessions members book with your trainers will appear here as they come in." />;
+                }
+                return (
+                  <ul className="divide-y divide-[var(--color-border)]">
+                    {recent.map((b: any) => (
+                      <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-semibold dark:text-white truncate">{b.user?.username} with {b.trainer?.username}</p>
+                          <p className="text-xs text-gray-500">{b.date} at {b.time}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                            b.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-700' : b.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : b.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                          }`}>{b.status}</span>
+                          {b.status === 'PENDING' && (
+                            <button onClick={() => updateBookingStatusMut.mutate({ id: b.id, status: 'CONFIRMED' })} className="btn-primary text-xs px-3 py-1">Confirm</button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+            </div>
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
               <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-3">At a glance</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Trainers</p><p className="font-bold dark:text-white">{stats?.trainers ?? 0}</p></div>
@@ -757,7 +666,7 @@ const GymAdminDashboard = () => {
           <div className="space-y-8">
             {analyticsLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+                {[...Array(8)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />)}
               </div>
             ) : analytics ? (
               <>
@@ -780,7 +689,7 @@ const GymAdminDashboard = () => {
                       color: 'text-[var(--color-primary)]',
                     },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)]">
+                    <div key={label} className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)]">
                       <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
                       <p className={`text-3xl font-extrabold tabular-nums ${color}`}>{value}</p>
                     </div>
@@ -788,7 +697,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Churn Trend */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <TrendingDown className="w-5 h-5 text-red-500" />
                     Churn Trend (Last 6 Months)
@@ -804,7 +713,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Cohort Retention */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-purple-600" />
                     Cohort Retention
@@ -813,10 +722,10 @@ const GymAdminDashboard = () => {
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 dark:bg-white/5">
                         <tr>
-                          <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cohort</th>
-                          <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Size</th>
+                          <th scope="col" className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cohort</th>
+                          <th scope="col" className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Size</th>
                           {[0, 1, 2, 3, 4, 5].map((m) => (
-                            <th key={m} className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">M{m}</th>
+                            <th scope="col" key={m} className="text-left px-4 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">M{m}</th>
                           ))}
                         </tr>
                       </thead>
@@ -836,7 +745,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Revenue Trend */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-[var(--color-primary)]" />
                     Revenue Trend (Last 6 Months)
@@ -852,7 +761,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Member Growth */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-green-600" />
                     Member Growth (Last 6 Months)
@@ -868,7 +777,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Membership Plan Distribution */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <PieChart className="w-5 h-5 text-purple-600" />
                     Membership Plan Distribution
@@ -882,7 +791,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Attendance Trend */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-blue-600" />
                     Daily Attendance (Last 30 Days)
@@ -898,7 +807,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Peak Hours Heatmap */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Activity className="w-5 h-5 text-amber-600" />
                     Peak Hours Heatmap (Last 30 Days)
@@ -913,7 +822,7 @@ const GymAdminDashboard = () => {
 
                 {/* Payment Status & Methods */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                  <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <CreditCard className="w-5 h-5 text-emerald-600" />
                       Payment Status (Last 30 Days)
@@ -926,7 +835,7 @@ const GymAdminDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                  <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <CreditCard className="w-5 h-5 text-orange-600" />
                       Payment Methods (Last 30 Days)
@@ -941,14 +850,14 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Member Status */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                     <Users className="w-5 h-5 text-cyan-600" />
                     Member Status Breakdown
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {analytics.memberStatus.map(m => (
-                      <div key={m.status} className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 text-center">
+                      <div key={m.status} className="bg-gray-50 dark:bg-white/5 rounded-lg p-4 text-center">
                         <p className="text-2xl font-extrabold text-[var(--color-primary)]">{m.count}</p>
                         <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mt-1">{m.status}</p>
                       </div>
@@ -958,7 +867,7 @@ const GymAdminDashboard = () => {
 
                 {/* Top Members & Expiring/Overdue */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                  <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <ArrowUpRight className="w-5 h-5 text-green-600" />
                       Top Members by Attendance
@@ -966,7 +875,7 @@ const GymAdminDashboard = () => {
                     {analytics.topMembers.length > 0 ? (
                       <div className="space-y-3">
                         {analytics.topMembers.map((m, i) => (
-                          <div key={m.name} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
+                          <div key={m.name} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg">
                             <div className="flex items-center gap-3">
                               <span className="w-8 h-8 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center font-bold text-sm">
                                 {i + 1}
@@ -985,7 +894,7 @@ const GymAdminDashboard = () => {
                     )}
                   </div>
 
-                  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                  <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4 flex items-center gap-2">
                       <ArrowDownRight className="w-5 h-5 text-amber-600" />
                       Expiring Memberships & Overdue Fees
@@ -995,7 +904,7 @@ const GymAdminDashboard = () => {
                         <>
                           <h4 className="text-sm font-bold text-amber-600 mb-2">Expiring Soon</h4>
                           {analytics.expiringSoon.slice(0, 5).map(e => (
-                            <div key={e.member} className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                            <div key={e.member} className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
                               <p className="font-semibold dark:text-white">{e.member}</p>
                               <p className="text-xs text-gray-500">{e.plan} · {e.daysLeft} days left</p>
                             </div>
@@ -1008,7 +917,7 @@ const GymAdminDashboard = () => {
                         <>
                           <h4 className="text-sm font-bold text-red-600 mb-2 mt-4">Overdue Fees</h4>
                           {analytics.overdueFees.slice(0, 5).map(f => (
-                            <div key={f.member} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                            <div key={f.member} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
                               <p className="font-semibold dark:text-white">{f.member}</p>
                               <p className="text-xs text-gray-500 tabular-nums">₹{f.amount.toLocaleString('en-IN')} · Due {f.dueDate}</p>
                             </div>
@@ -1022,7 +931,7 @@ const GymAdminDashboard = () => {
                 </div>
 
                 {/* Trainer Performance */}
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                   <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
                     <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white flex items-center gap-2">
                       <Award className="w-5 h-5 text-amber-500" />
@@ -1032,14 +941,14 @@ const GymAdminDashboard = () => {
                   {trainerPerformanceLoading ? (
                     <div className="p-8 text-center text-gray-400">Loading…</div>
                   ) : trainerPerformance.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400">No trainers yet.</div>
+                    <EmptyState icon={<Dumbbell className="h-8 w-8" />} title="No trainers yet" hint="Add a trainer with the form on this page and they get an activation email." />
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50 dark:bg-white/5">
                           <tr>
                             {['Trainer', 'Bookings', 'Completion', 'Cancellation', 'Members Served', 'Slips Assigned', 'Classes Taught'].map((h) => (
-                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                              <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1078,7 +987,7 @@ const GymAdminDashboard = () => {
         {/* Members */}
         {activeTab === 'members' && (
           <div className="space-y-6">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
               <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                 <h2 className="font-bold text-lg dark:text-white">Members ({members.length})</h2>
                 <div className="flex items-center gap-3">
@@ -1098,13 +1007,13 @@ const GymAdminDashboard = () => {
                     <thead className="bg-gray-50 dark:bg-white/5">
                       <tr>
                         {['Name', 'Email', 'Plan', 'Branch', 'Joined', 'Status', 'Action'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                          <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                       {filteredMembers.length === 0 ? (
-                        <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400">{memberSearch ? 'No members match your search.' : 'No members yet.'}</td></tr>
+                        <tr><td colSpan={7}>{memberSearch ? <EmptyState title="No members match your search" hint="Check the spelling or clear the search box." actionLabel="Clear search" onAction={() => setMemberSearch('')} /> : <EmptyState icon={<Users className="h-8 w-8" />} title="No members yet" hint="Add your first member with the form below, or share your gym page so people can join." />}</td></tr>
                       ) : filteredMembers.map((m) => (
                         <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                           <td className="px-6 py-4 font-semibold dark:text-white">{m.user?.username}</td>
@@ -1193,7 +1102,7 @@ const GymAdminDashboard = () => {
               )}
             </div>
 
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 max-w-3xl">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 max-w-3xl">
               <h3 className="font-bold text-lg dark:text-white mb-4">Add Member Manually</h3>
               <form
                 className="grid sm:grid-cols-2 gap-4"
@@ -1237,7 +1146,7 @@ const GymAdminDashboard = () => {
         {/* Membership Plans */}
         {activeTab === 'plans' && (
           <div className="grid lg:grid-cols-2 gap-6 items-start">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
               <h3 className="font-bold text-lg dark:text-white mb-4">{editingPlan ? 'Edit Plan' : 'Create Membership Plan'}</h3>
               <form
                 className="space-y-4"
@@ -1258,7 +1167,7 @@ const GymAdminDashboard = () => {
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
                   <input className="input-field" value={planForm.description} onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })} placeholder="What's included" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Duration (days)</label>
                     <input className="input-field" type="number" min={1} value={planForm.duration} onChange={(e) => setPlanForm({ ...planForm, duration: Number(e.target.value) })} required />
@@ -1280,12 +1189,12 @@ const GymAdminDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
               <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center">
                 <h2 className="font-bold text-lg dark:text-white">Current Plans ({plans.length})</h2>
               </div>
               {plansLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : plans.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">No plans yet. Create your first one.</div>
+                <EmptyState icon={<Diamond className="h-8 w-8" />} title="No plans yet" hint="Members join through a plan. Fill in the form on this page to create your first one." />
               ) : (
                 <div className="divide-y divide-gray-100 dark:divide-white/5">
                   {plans.map((p) => (
@@ -1331,7 +1240,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'memberships' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Create Membership</h3>
                 <form
                   className="space-y-4"
@@ -1346,7 +1255,7 @@ const GymAdminDashboard = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Plan</label>
                       <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={membershipForm.planId} onChange={(e) => setMembershipForm({ ...membershipForm, planId: e.target.value })}>
@@ -1361,7 +1270,7 @@ const GymAdminDashboard = () => {
                       <input className="input-field" type="date" value={membershipForm.startDate} onChange={(e) => setMembershipForm({ ...membershipForm, startDate: e.target.value })} />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Discount (₹)</label>
                       <input className="input-field" type="number" min={0} value={membershipForm.discount} onChange={(e) => setMembershipForm({ ...membershipForm, discount: Number(e.target.value) })} />
@@ -1375,7 +1284,7 @@ const GymAdminDashboard = () => {
                       </select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Payment Method</label>
                       <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={membershipForm.paymentMethod} onChange={(e) => setMembershipForm({ ...membershipForm, paymentMethod: e.target.value })}>
@@ -1407,12 +1316,12 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div className="px-6 py-4 border-b border-[var(--color-border)]">
                   <h2 className="font-bold text-lg dark:text-white">Memberships ({memberships.length})</h2>
                 </div>
                 {membershipsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : memberships.length === 0 ? (
-                  <div className="p-8 text-center text-gray-400">No memberships yet.</div>
+                  <EmptyState icon={<ClipboardList className="h-8 w-8" />} title="No memberships yet" hint="Memberships link a member to a plan. Add a member first, then start their membership here." actionLabel="Add a member" onAction={() => navigate('/owner/members')} />
                 ) : (
                   <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[600px] overflow-y-auto">
                     {memberships.map((m: any) => (
@@ -1452,8 +1361,8 @@ const GymAdminDashboard = () => {
             </div>
 
             {renewTarget && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRenewTarget(null)}>
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setRenewTarget(null)}>
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                   <h3 className="font-bold text-lg dark:text-white mb-1">Renew Membership</h3>
                   <p className="text-sm text-gray-500 mb-4">{renewTarget.member?.user?.username} — {renewTarget.plan?.name || 'Custom'}</p>
                   <div className="space-y-4">
@@ -1492,12 +1401,12 @@ const GymAdminDashboard = () => {
 
         {/* PT Bookings */}
         {activeTab === 'bookings' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">PT Bookings ({bookings.length})</h2>
             </div>
             {bookingsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : bookings.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">No bookings yet.</div>
+              <EmptyState icon={<CalendarDays className="h-8 w-8" />} title="No PT bookings yet" hint="Sessions booked by members with your trainers will show up here." />
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-white/5">
                 {bookings.map((b: any) => (
@@ -1541,7 +1450,7 @@ const GymAdminDashboard = () => {
 
         {/* Notifications */}
         {activeTab === 'notifications' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center">
               <h2 className="font-bold text-lg dark:text-white">Notifications ({notifs?.unreadCount ?? 0} unread)</h2>
               <button onClick={() => markAllRead.mutate()} className="text-sm font-semibold text-[var(--color-primary)] hover:underline">
@@ -1574,26 +1483,26 @@ const GymAdminDashboard = () => {
         {activeTab === 'fees' && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+              <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Collected This Month</p>
                 <p className="text-2xl font-extrabold tabular-nums text-green-600">₹{feeStats.collectedThisMonth.toLocaleString('en-IN')}</p>
               </div>
-              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+              <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Collected</p>
                 <p className="text-2xl font-extrabold tabular-nums text-emerald-600">₹{feeStats.collected.toLocaleString('en-IN')}</p>
               </div>
-              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+              <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
                 <p className="text-2xl font-extrabold tabular-nums text-amber-500">₹{feeStats.pending.toLocaleString('en-IN')}</p>
               </div>
-              <div className="bg-[var(--color-surface)] rounded-2xl p-5 border border-[var(--color-border)]">
+              <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Overdue</p>
                 <p className="text-2xl font-extrabold tabular-nums text-red-500">₹{feeStats.overdue.toLocaleString('en-IN')}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{feeStats.overdueCount} record{feeStats.overdueCount === 1 ? '' : 's'}</p>
               </div>
             </div>
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Record a Fee</h3>
                 <form
                   className="grid sm:grid-cols-2 gap-4"
@@ -1628,10 +1537,10 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center gap-3">
                   <h2 className="font-bold text-lg dark:text-white">Fee Records ({filteredFees.length})</h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
                       {['ALL', 'PENDING', 'PAID', 'OVERDUE'].map((s) => (
                         <button
@@ -1651,7 +1560,7 @@ const GymAdminDashboard = () => {
                   </div>
                 </div>
                 {refundFee.isError && (
-                  <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-xl text-sm border border-red-200 dark:border-red-500/20">
+                  <div className="mx-6 mt-4 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm border border-red-200 dark:border-red-500/20">
                     {(refundFee.error as any)?.response?.data?.error || 'Failed to process refund'}
                   </div>
                 )}
@@ -1663,7 +1572,7 @@ const GymAdminDashboard = () => {
                       <thead className="bg-gray-50 dark:bg-white/5">
                         <tr>
                           {['Member', 'Amount', 'Due Date', 'Status', 'Notes', 'Actions'].map((h) => (
-                            <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                            <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1728,8 +1637,8 @@ const GymAdminDashboard = () => {
             </div>
 
             {markPaidTarget && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setMarkPaidTarget(null)}>
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setMarkPaidTarget(null)}>
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                   <h3 className="font-bold text-lg dark:text-white mb-1">Mark Fee as Paid</h3>
                   <p className="text-sm text-gray-500 mb-4">{markPaidTarget.member?.user?.username} · ₹{markPaidTarget.amount.toLocaleString('en-IN')}</p>
                   <div className="space-y-4">
@@ -1779,14 +1688,14 @@ const GymAdminDashboard = () => {
           <div className="space-y-6">
             {subscriptionLoading ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+                {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />)}
               </div>
             ) : !subscription?.hasSubscription ? (
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-dashed border-[var(--color-border)] p-10 text-center">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)] p-10 text-center">
                 <Diamond className="w-10 h-10 text-[var(--color-primary)] mx-auto mb-4" />
                 <h3 className="font-bold text-lg dark:text-white mb-2">No active platform subscription</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                  Subscribe to a Vajra Fitness plan to unlock member limits, trainer seats and platform features for your gym.
+                  Subscribe to a Kavach Fitness plan to unlock member limits, trainer seats and platform features for your gym.
                 </p>
                 <Link to="/subscription" className="btn-primary inline-flex px-6">View Plans</Link>
               </div>
@@ -1804,10 +1713,10 @@ const GymAdminDashboard = () => {
                     CANCELLED: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400',
                   };
                   const daysLeft = subscription.endDate
-                    ? Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+                    ? Math.ceil((new Date(subscription.endDate).getTime() - nowMs) / (24 * 60 * 60 * 1000))
                     : null;
                   return (
-                    <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                    <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                       <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <div className="flex items-center gap-2">
@@ -1822,14 +1731,14 @@ const GymAdminDashboard = () => {
                         <Link to="/subscription" className="btn-outline px-5">Change Plan</Link>
                       </div>
                       {subscription.isReadonly && (
-                        <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-400">
+                        <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-400">
                           Your subscription has lapsed — the dashboard is in read-only mode. Renew your plan to resume full access.
                         </div>
                       )}
                       {subscription.features.length > 0 && (
                         <div className="mt-5 flex flex-wrap gap-2">
                           {subscription.features.map((f) => (
-                            <span key={f} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">{f}</span>
+                            <span key={f} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400">{f.replace(/-/g, ' ')}</span>
                           ))}
                         </div>
                       )}
@@ -1837,7 +1746,7 @@ const GymAdminDashboard = () => {
                   );
                 })()}
 
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                   <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-4">Plan Usage & Limits</h3>
                   <div className="grid sm:grid-cols-2 gap-4">
                     {([
@@ -1868,7 +1777,7 @@ const GymAdminDashboard = () => {
                   </div>
                 </div>
 
-                <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+                <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                   <div className="px-6 py-4 border-b border-[var(--color-border)]">
                     <h2 className="font-bold text-lg dark:text-white">Billing History ({subscriptionInvoices.length})</h2>
                   </div>
@@ -1880,7 +1789,7 @@ const GymAdminDashboard = () => {
                         <thead className="bg-gray-50 dark:bg-white/5">
                           <tr>
                             {['Invoice #', 'Plan', 'Period', 'Total', 'Status', 'Issued'].map((h) => (
-                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                              <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1911,7 +1820,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'workouts' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Assign a Workout Slip</h3>
                 <form
                   className="space-y-4"
@@ -1930,7 +1839,7 @@ const GymAdminDashboard = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
                       <input className="input-field" value={slipForm.title} onChange={(e) => setSlipForm({ ...slipForm, title: e.target.value })} placeholder="e.g. Push Day" />
@@ -1959,12 +1868,12 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div className="px-6 py-4 border-b border-[var(--color-border)]">
                   <h2 className="font-bold text-lg dark:text-white">Workout Slips ({workouts.length})</h2>
                 </div>
                 {workoutsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : workouts.length === 0 ? (
-                  <div className="p-8 text-center text-gray-400">No workout slips assigned yet.</div>
+                  <EmptyState icon={<Dumbbell className="h-8 w-8" />} title="No workout slips yet" hint="Use the form on this page to assign a workout plan to a member." />
                 ) : (
                   <div className="divide-y divide-gray-100 dark:divide-white/5 max-h-[560px] overflow-y-auto">
                     {workouts.map((slip) => (
@@ -1998,7 +1907,7 @@ const GymAdminDashboard = () => {
         {activeTab === 'attendance' && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                 <h3 className="font-bold text-lg dark:text-white mb-4">Check-in</h3>
                 <form
                   className="space-y-4"
@@ -2031,7 +1940,7 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
                 <div className="px-6 py-4 border-b border-[var(--color-border)] flex justify-between items-center gap-3">
                   <h2 className="font-bold text-lg dark:text-white">Today's Attendance ({attendance.length})</h2>
                   <div className="flex items-center gap-3">
@@ -2062,33 +1971,24 @@ const GymAdminDashboard = () => {
         )}
 
         {/* Staff */}
-        {activeTab === 'staff' && (
+        {(activeTab === 'staff' || activeTab === 'trainers') && (
           <div className="space-y-6">
             <div className="grid lg:grid-cols-2 gap-6 items-start">
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
-                <h3 className="font-bold text-lg dark:text-white mb-4">Add Staff / Trainer</h3>
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
+                <h3 className="font-bold text-lg dark:text-white mb-4">{teamRole === 'TRAINER' ? 'Add a trainer' : 'Add staff'}</h3>
                 <form
                   className="space-y-4"
-                  onSubmit={(e) => { e.preventDefault(); addStaff.mutate(staffForm); }}
+                  onSubmit={(e) => { e.preventDefault(); addStaff.mutate({ ...staffForm, roleType: teamRole }); }}
                 >
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Role</label>
-                      <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={staffForm.roleType} onChange={(e) => setStaffForm({ ...staffForm, roleType: e.target.value })}>
-                        <option value="STAFF">Staff</option>
-                        <option value="TRAINER">Trainer</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{staffForm.roleType === 'TRAINER' ? 'Specialization' : 'Position'}</label>
-                      <input className="input-field" value={staffForm.roleSpecifics} onChange={(e) => setStaffForm({ ...staffForm, roleSpecifics: e.target.value })} placeholder={staffForm.roleType === 'TRAINER' ? 'e.g. Strength & Conditioning' : 'e.g. Receptionist'} required />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{teamRole === 'TRAINER' ? 'Specialization' : 'Position'}</label>
+                    <input className="input-field" value={staffForm.roleSpecifics} onChange={(e) => setStaffForm({ ...staffForm, roleSpecifics: e.target.value })} placeholder={teamRole === 'TRAINER' ? 'e.g. Strength & Conditioning' : 'e.g. Receptionist'} required />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label>
                     <input className="input-field" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} required />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
                       <input className="input-field" type="email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} required />
@@ -2110,7 +2010,7 @@ const GymAdminDashboard = () => {
                     </div>
                   )}
                   <button type="submit" className="btn-primary justify-center" disabled={addStaff.isPending || !branch?.id}>
-                    <Plus className="w-4 h-4" /> Add {staffForm.roleType === 'TRAINER' ? 'Trainer' : 'Staff'}
+                    <Plus className="w-4 h-4" /> Add {teamRole === 'TRAINER' ? 'Trainer' : 'Staff'}
                   </button>
                   {addStaff.isSuccess && (
                     <div className="text-sm space-y-1.5">
@@ -2125,26 +2025,27 @@ const GymAdminDashboard = () => {
                 </form>
               </div>
 
-              <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+              <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
                 <div className="flex items-center justify-between gap-3 mb-4">
-                  <h2 className="font-bold text-lg dark:text-white">Team ({staffData?.trainers.length || 0} trainers · {staffData?.staff.length || 0} staff)</h2>
+                  <h2 className="font-bold text-lg dark:text-white">
+                    {teamRole === 'TRAINER' ? `Trainers (${staffData?.trainers.length || 0})` : `Staff (${staffData?.staff.length || 0})`}
+                  </h2>
                   {branches.length > 0 && branchFilterSelect}
                 </div>
                 {staffLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : (
-                  <div className="space-y-6">
-                    {renderStaffTable(staffData?.trainers || [], 'trainers')}
-                    <div className="border-t border-gray-100 dark:border-white/5" />
-                    {renderStaffTable(staffData?.staff || [], 'staff')}
-                  </div>
+                  teamRole === 'TRAINER'
+                    ? renderStaffTable(staffData?.trainers || [], 'trainers')
+                    : renderStaffTable(staffData?.staff || [], 'staff')
                 )}
               </div>
             </div>
+            {activeTab === 'trainers' && <TrainerInvites />}
           </div>
         )}
 
         {/* Enquiries */}
         {activeTab === 'enquiries' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="font-bold text-lg dark:text-white">Enquiries / Leads</h2>
             </div>
@@ -2154,13 +2055,13 @@ const GymAdminDashboard = () => {
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       {['Name', 'Phone', 'Email', 'Date', 'Status', 'Actions'].map((h) => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                        <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                     {enquiries.length === 0 ? (
-                      <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400">No enquiries yet.</td></tr>
+                      <tr><td colSpan={6}><EmptyState icon={<Users className="h-8 w-8" />} title="No enquiries yet" hint="Leads from your public gym page and the contact form will land here." /></td></tr>
                     ) : enquiries.map((e: any) => (
                       <tr key={e.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                         <td className="px-6 py-4 font-semibold dark:text-white">{e.name}</td>
@@ -2206,7 +2107,7 @@ const GymAdminDashboard = () => {
         {/* Notices / Announcements */}
         {activeTab === 'notices' && (
           <div className="grid lg:grid-cols-2 gap-6 items-start">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6">
               <h3 className="font-bold text-lg dark:text-white mb-4">{editingNotice ? 'Edit Notice' : 'Post Announcement'}</h3>
               <form
                 className="space-y-4"
@@ -2238,7 +2139,7 @@ const GymAdminDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
               <div className="px-6 py-4 border-b border-[var(--color-border)]">
                 <h2 className="font-bold text-lg dark:text-white">Announcements ({notices.length})</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Shown to members, trainers and staff on their dashboards.</p>
@@ -2287,7 +2188,7 @@ const GymAdminDashboard = () => {
         {/* Branch Settings */}
         {activeTab === 'branch' && (
           <div className="space-y-6">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-8">
               <div className="flex items-center justify-between gap-3 mb-6">
                 <div>
                   <h2 className="font-bold text-lg dark:text-white">Branches</h2>
@@ -2297,13 +2198,13 @@ const GymAdminDashboard = () => {
               </div>
 
               {branchesLoading ? (
-                <div className="h-24 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
+                <div className="h-24 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />
               ) : branches.length === 0 ? (
                 <p className="text-sm text-gray-400 py-4">No branches yet. Add your first branch below.</p>
               ) : (
                 <div className="grid sm:grid-cols-2 gap-4 mb-6">
                   {branches.map((b) => (
-                    <div key={b.id} className={`rounded-2xl border p-4 ${b.isActive ? 'border-[var(--color-border)]' : 'border-[var(--color-border)] opacity-80'}`}>
+                    <div key={b.id} className={`rounded-lg border p-4 ${b.isActive ? 'border-[var(--color-border)]' : 'border-[var(--color-border)] opacity-80'}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-bold text-[var(--color-deepgray)] dark:text-white flex items-center gap-2 flex-wrap">
@@ -2352,7 +2253,7 @@ const GymAdminDashboard = () => {
               )}
 
               <h3 className="font-bold text-lg dark:text-white mb-4">Request a New Branch</h3>
-              <p className="text-xs text-gray-400 -mt-2 mb-4">New branches are reviewed by the Vajra Fitness team before they go live.</p>
+              <p className="text-xs text-gray-400 -mt-2 mb-4">New branches are reviewed by the Kavach Fitness team before they go live.</p>
               <form
                 className="grid sm:grid-cols-2 gap-4"
                 onSubmit={(e) => { e.preventDefault(); createBranchMut.mutate(newBranchForm); }}
@@ -2376,7 +2277,7 @@ const GymAdminDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8 max-w-2xl">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-8 max-w-2xl">
               <h2 className="font-bold text-lg dark:text-white mb-6">Gym Settings</h2>
               <form
                 onSubmit={(e) => {
@@ -2385,28 +2286,17 @@ const GymAdminDashboard = () => {
                 }}
                 className="space-y-5"
               >
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Gym Name</label>
-                <input className="input-field" value={branchForm.name} onChange={(e) => setBranchForm((p) => ({ ...p, name: e.target.value }))} required />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Address</label>
-                <input className="input-field" value={branchForm.address} onChange={(e) => setBranchForm((p) => ({ ...p, address: e.target.value }))} required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">City</label>
-                  <input className="input-field" value={branchForm.city} onChange={(e) => setBranchForm((p) => ({ ...p, city: e.target.value }))} required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">State</label>
-                  <input className="input-field" value={branchForm.state} onChange={(e) => setBranchForm((p) => ({ ...p, state: e.target.value }))} required />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">GST Number</label>
-                <input className="input-field" value={branchForm.gstNumber} onChange={(e) => setBranchForm((p) => ({ ...p, gstNumber: e.target.value }))} placeholder="Optional" />
-              </div>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                {([['Gym Name', branch?.name], ['Address', branch?.address], ['City', branch?.city], ['State', branch?.state], ['Phone', branch?.phone], ['Email', branch?.email], ['GST Number', branch?.gstNumber]] as const).map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="font-semibold text-gray-700 dark:text-gray-300">{label}</dt>
+                    <dd className="mt-0.5 text-gray-600 dark:text-gray-400">{value || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Changes to these details go to the Kavach admin for approval — edit them on the <Link to="/owner/profile" className="text-[var(--color-primary)] hover:underline">Gym profile</Link> page.
+              </p>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Cover Image URL</label>
                 <input className="input-field" value={branchForm.imageUrl} onChange={(e) => setBranchForm((p) => ({ ...p, imageUrl: e.target.value }))} placeholder="https://… (shows on the public gym directory)" />
@@ -2431,27 +2321,27 @@ const GymAdminDashboard = () => {
         {/* Equipment Tab */}
         {activeTab === 'equipment' && (
           <div className="space-y-6">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-8">
               <h2 className="font-bold text-lg dark:text-white mb-4">Equipment</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Equipment</p>
                   <p className="text-2xl font-extrabold text-[var(--color-primary)]">{equipment.length}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Good Condition</p>
                   <p className="text-2xl font-extrabold text-green-600">{equipment.filter((e: any) => e.condition === 'EXCELLENT' || e.condition === 'GOOD').length}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Needs Repair</p>
                   <p className="text-2xl font-extrabold text-amber-500">{equipment.filter((e: any) => e.condition === 'FAIR' || e.condition === 'POOR').length}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Value</p>
                   <p className="text-2xl font-extrabold text-blue-500">₹{equipment.reduce((s: number, e: any) => s + (e.purchaseCost || 0), 0).toLocaleString('en-IN')}</p>
                 </div>
               </div>
-              <form onSubmit={(e) => { e.preventDefault(); addEquipMut.mutate(equipForm); }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <form onSubmit={(e) => { e.preventDefault(); addEquipMut.mutate(equipForm); }} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <input className="input-field" placeholder="Equipment Name" value={equipForm.name} onChange={(e) => setEquipForm((p) => ({ ...p, name: e.target.value }))} required />
                 <input className="input-field" placeholder="Serial Number" value={equipForm.serialNumber} onChange={(e) => setEquipForm((p) => ({ ...p, serialNumber: e.target.value }))} />
                 <input className="input-field" type="number" placeholder="Purchase Cost" value={equipForm.purchaseCost || ''} onChange={(e) => setEquipForm((p) => ({ ...p, purchaseCost: Number(e.target.value) }))} />
@@ -2463,14 +2353,14 @@ const GymAdminDashboard = () => {
                 <button type="submit" disabled={addEquipMut.isPending} className="btn-primary py-2">{addEquipMut.isPending ? 'Adding…' : 'Add Equipment'}</button>
               </form>
               {equipmentLoading ? (
-                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
+                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 dark:bg-white/5">
                       <tr>
                         {['Name', 'Serial', 'Condition', 'Location', 'Value', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                          <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -2498,29 +2388,39 @@ const GymAdminDashboard = () => {
         {/* Referrals Tab */}
         {activeTab === 'referrals' && (
           <div className="space-y-6">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-8">
               <h2 className="font-bold text-lg dark:text-white mb-4">Referral Program</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Referrals</p>
                   <p className="text-2xl font-extrabold text-[var(--color-primary)]">{referralStats?.totalReferrals || 0}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Pending</p>
                   <p className="text-2xl font-extrabold text-amber-500">{referralStats?.pendingReferrals || 0}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Completed</p>
                   <p className="text-2xl font-extrabold text-green-600">{referralStats?.completedReferrals || 0}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Total Rewards</p>
                   <p className="text-2xl font-extrabold text-blue-500">₹{(referralStats?.totalRewardValue || 0).toLocaleString('en-IN')}</p>
                 </div>
               </div>
-              <form onSubmit={(e) => { e.preventDefault(); createReferralMut.mutate(referralForm); }} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <input className="input-field" placeholder="Referrer User ID" value={referralForm.userId} onChange={(e) => setReferralForm((p) => ({ ...p, userId: e.target.value }))} required />
-                <input className="input-field" placeholder="Referred User ID" value={referralForm.referredUserId} onChange={(e) => setReferralForm((p) => ({ ...p, referredUserId: e.target.value }))} required />
+              <form onSubmit={(e) => { e.preventDefault(); createReferralMut.mutate(referralForm); }} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <select className="input-field" aria-label="Referrer" value={referralForm.userId} onChange={(e) => setReferralForm((p) => ({ ...p, userId: e.target.value }))} required>
+                  <option value="">Who referred?</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.user.id}>{m.user.username} ({m.user.phone || m.user.email})</option>
+                  ))}
+                </select>
+                <select className="input-field" aria-label="Referred member" value={referralForm.referredUserId} onChange={(e) => setReferralForm((p) => ({ ...p, referredUserId: e.target.value }))} required>
+                  <option value="">Who joined?</option>
+                  {members.filter((m) => m.user.id !== referralForm.userId).map((m) => (
+                    <option key={m.id} value={m.user.id}>{m.user.username} ({m.user.phone || m.user.email})</option>
+                  ))}
+                </select>
                 <select className="input-field" value={referralForm.rewardType} onChange={(e) => setReferralForm((p) => ({ ...p, rewardType: e.target.value }))}>
                   <option value="CREDIT">Credit</option>
                   <option value="DISCOUNT">Discount</option>
@@ -2530,14 +2430,16 @@ const GymAdminDashboard = () => {
                 <button type="submit" disabled={createReferralMut.isPending} className="btn-primary py-2">{createReferralMut.isPending ? 'Creating…' : 'Create Referral'}</button>
               </form>
               {referralsLoading ? (
-                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-xl animate-pulse" />
+                <div className="h-32 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />
+              ) : referrals.length === 0 ? (
+                <EmptyState icon={<Gift className="h-8 w-8" />} title="No referrals yet" hint="Pick the member who brought a friend and the friend who joined above, set a reward, and create the first one." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 dark:bg-white/5">
                       <tr>
                         {['Code', 'Reward Type', 'Value', 'Status', 'Created', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                          <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -2567,7 +2469,7 @@ const GymAdminDashboard = () => {
         {/* Reports Tab */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-8">
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-8">
               <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
                 <h2 className="font-bold text-lg dark:text-white">Revenue & Growth Reports</h2>
                 <div className="flex gap-2">
@@ -2576,19 +2478,19 @@ const GymAdminDashboard = () => {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Collected</p>
                   <p className="text-2xl font-extrabold text-green-600">₹{fees.filter((f: any) => f.status === 'PAID').reduce((s: number, f: any) => s + f.amount, 0).toLocaleString('en-IN')}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Outstanding</p>
                   <p className="text-2xl font-extrabold text-amber-500">₹{fees.filter((f: any) => f.status !== 'PAID').reduce((s: number, f: any) => s + f.amount, 0).toLocaleString('en-IN')}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Members</p>
                   <p className="text-2xl font-extrabold text-[var(--color-primary)]">{members.length}</p>
                 </div>
-                <div className="rounded-2xl border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
+                <div className="rounded-lg border border-[var(--color-border)] p-5 bg-gray-50/50 dark:bg-white/[0.03]">
                   <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Active Plans</p>
                   <p className="text-2xl font-extrabold text-blue-500">{plans.filter((p) => p.isActive).length}</p>
                 </div>
@@ -2596,7 +2498,7 @@ const GymAdminDashboard = () => {
 
               <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white mb-3">Monthly Fee Summary</h3>
               {monthlyRows.length === 0 ? (
-                <div className="h-32 bg-gray-50 dark:bg-white/5 rounded-xl border border-dashed border-[var(--color-border)] flex items-center justify-center text-gray-400">
+                <div className="h-32 bg-gray-50 dark:bg-white/5 rounded-lg border border-dashed border-[var(--color-border)] flex items-center justify-center text-gray-400">
                   No fee records to chart yet.
                 </div>
               ) : (
@@ -2605,7 +2507,7 @@ const GymAdminDashboard = () => {
                     <thead className="bg-gray-50 dark:bg-white/5">
                       <tr>
                         {['Month', 'Records', 'Collected', 'Outstanding'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                          <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -2631,7 +2533,10 @@ const GymAdminDashboard = () => {
         {activeTab === 'expenses' && branch?.id && <ExpensesTab gymId={branch.id} />}
         {activeTab === 'classes' && branch?.id && <ClassesTab gymId={branch.id} />}
         {activeTab === 'payroll' && branch?.id && <PayrollTab gymId={branch.id} />}
-      </div>
+        {activeTab === 'branch' && <WebsiteRequestCard />}
+        {activeTab === 'profile' && <GymProfileEditor />}
+        {activeTab === 'support' && <SupportTab />}
+        {activeTab === 'earnings' && <EarningsTab />}
       </div>
 
       <ConfirmDialog
@@ -2642,7 +2547,7 @@ const GymAdminDashboard = () => {
         onConfirm={() => confirmAction?.onConfirm()}
         onCancel={() => setConfirmAction(null)}
       />
-    </div>
+    </>
   );
 };
 

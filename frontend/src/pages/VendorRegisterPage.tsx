@@ -1,344 +1,127 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Building2, User, Mail, Phone, Lock, MapPin, FileText, ArrowRight, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Building2 } from 'lucide-react';
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
+import { useNotificationStore } from '../store/useNotificationStore';
+import { usePageMeta } from '../hooks/usePageMeta';
 import AuthSplitLayout from '../components/AuthSplitLayout';
+import AuthRoleTabs from './auth/AuthRoleTabs';
+import RegistrationProgress from './auth/RegistrationProgress';
+import { AccountFields, TermsField } from './auth/AccountFields';
+import { Banner, Field, FormFooter, SubmitButton } from './auth/formParts';
+import { a11y, accountFields, errorInput, focusFirstError, footerLink, mismatch, passwordsMatch } from './auth/authForm';
+import { ROUTES } from '../utils/routes';
+
+const stripUnsafeText = (value: string) => value.replace(/<[^>]*>/g, '').split('').filter((char) => {
+  const code = char.charCodeAt(0);
+  return (code >= 32 || code === 9 || code === 10 || code === 13) && code !== 127;
+}).join('').trim();
+
+const text = (min: number, max: number, message: string) => z.string().trim()
+  .transform(stripUnsafeText)
+  .pipe(z.string().min(min, message).max(max, `Keep it under ${max} characters`));
+
+const schema = accountFields
+  .extend({
+    gymName: text(2, 120, 'Enter your gym name'),
+    city: text(2, 80, 'Enter the city'),
+    state: text(2, 80, 'Enter the state'),
+    address: text(3, 300, 'Enter the street address'),
+  })
+  .refine(passwordsMatch, mismatch);
+type FormValues = z.input<typeof schema>;
 
 const VendorRegisterPage = () => {
-  const setAuth = useAuthStore((s) => s.setAuth);
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    phone: '',
-    gymName: '',
-    address: '',
-    state: '',
-    city: '',
-    pincode: '',
-    gstNumber: ''
-  });
-  
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  usePageMeta('Register your gym', 'List your gym on Kavach Fitness.', ROUTES.partnerRegister);
   const navigate = useNavigate();
+  const setAuth = useAuthStore((s) => s.setAuth);
+  const addNotification = useNotificationStore((s) => s.addNotification);
+  const [formError, setFormError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const {
+    register,
+    handleSubmit,
+    setError: setFieldError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues, unknown, z.output<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { terms: false }, shouldFocusError: false });
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    const normalizedPhone = formData.phone.replace(/[\s-]/g, '');
-    const phoneValid = /^(\+?91[\s-]?)?([6-9]\d{9})$/.test(normalizedPhone);
-    if (!phoneValid) {
-      setError('Please enter a valid 10-digit Indian mobile number (starting with 6-9).');
-      setIsLoading(false);
-      return;
-    }
-    if (formData.pincode && !/^[1-9][0-9]{5}$/.test(formData.pincode)) {
-      setError('Pincode must be exactly 6 digits.');
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-
+  const onSubmit = async ({ username, email, phone, password, gymName, city, state, address }: z.output<typeof schema>) => {
+    setFormError('');
     try {
-      const response = await api.post('/auth/register/vendor', formData);
-      const { token, user: newUser } = response.data;
-      setAuth(newUser, token);
-      setSuccess('Registration successful! Redirecting to your gym dashboard...');
-      setTimeout(() => navigate('/admin/gym'), 1200);
+      const { token, user, message } = (await api.post('/auth/register/vendor', { username, email, phone, password, gymName, city, state, address })).data;
+      setAuth(user, token);
+      addNotification('success', message || 'Gym registered. We will review it shortly.');
+      navigate('/owner', { replace: true });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed.');
-    } finally {
-      setIsLoading(false);
+      const issues: Array<{ path?: string; message?: string }> = err.response?.data?.issues ?? [];
+      let focusedField: string | undefined;
+      for (const issue of issues) {
+        const field = issue.path?.split('.')[0];
+        if (field && ['username', 'email', 'phone', 'password', 'gymName', 'city', 'state', 'address'].includes(field)) {
+          setFieldError(field as keyof FormValues, { type: 'server', message: issue.message || 'Please check this field' });
+          focusedField ??= ({ username: 'reg-name', email: 'reg-email', phone: 'reg-phone', password: 'reg-password', gymName: 'owner-gym', city: 'owner-city', state: 'owner-state', address: 'owner-address' } as Record<string, string>)[field];
+        } else if (issue.message) {
+          setFormError(issue.message);
+        }
+      }
+      if (focusedField) requestAnimationFrame(() => document.getElementById(focusedField!)?.focus());
+      if (!focusedField && issues.length === 0) setFormError(err.response?.data?.error || 'Registration failed. Please try again.');
     }
   };
+
+  const input = (name: 'gymName' | 'city' | 'state' | 'address', id: string, autoComplete: string, placeholder: string) => (
+    <input {...a11y(id, errors[name])} autoComplete={autoComplete} {...register(name)} className={`input-field ${errors[name] ? errorInput : ''}`} placeholder={placeholder} />
+  );
 
   return (
     <AuthSplitLayout
-      badge="Gym Business Partner"
-      title="Partner with Vajra"
-      subtitle="Supercharge your gym with automated billing, instant QR check-ins, trainer schedules, and member analytics."
-      imageSrc="/images/auth-register.jpg"
-      imageAlt="Vajra Luxury Gym Interior"
-      quote="Elevate your gym from a local training hall to an elite, modern fitness facility."
-      quoteAuthor="Vajra Enterprise Cloud"
-      features={[
-        { title: 'Auto Subscriptions', description: 'Zero payment leakage' },
-        { title: 'Staff Delegation', description: 'Trainer & receptionist logins' },
-        { title: 'GST Ready Billing', description: 'Automated tax receipts' },
-      ]}
-      maxWidth="max-w-2xl"
+      role="owner"
+      title="Register your gym"
+      subtitle="Your gym goes live once our team approves it."
+      top={<><RegistrationProgress current={2} /><AuthRoleTabs active="owner" mode="register" /></>}
+      wide
     >
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+      {formError && <Banner>{formError}</Banner>}
+      {Object.keys(errors).length > 0 && <Banner>Some details need attention. Review the highlighted fields and try again.</Banner>}
 
-      {success && (
-        <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm font-medium flex items-start gap-3">
-          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-          <span>{success}</span>
-        </div>
-      )}
+      <form onSubmit={handleSubmit(onSubmit, focusFirstError)} className="space-y-5" noValidate>
+        <section aria-labelledby="owner-account-heading">
+          <h2 id="owner-account-heading" className="mb-4 text-sm font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]">Your account</h2>
+          <AccountFields register={register} errors={errors} />
+        </section>
+        <section aria-labelledby="owner-gym-heading" className="space-y-5">
+          <h2 id="owner-gym-heading" className="mb-4 text-sm font-bold uppercase tracking-[0.12em] text-[var(--color-muted)]">Tell us about your gym</h2>
 
-      <form onSubmit={handleRegister} className="space-y-6">
-        {/* Section 1: Owner Details */}
-        <div>
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[var(--color-border)]">
-            <User className="w-4 h-4 text-[var(--color-primary)]" />
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-[var(--color-charcoal)] dark:text-white">
-              1. Owner Information
-            </h2>
+        <Field id="owner-gym" label="Gym name" error={errors.gymName}>
+          <div className="relative">
+            <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+            <input {...a11y('owner-gym', errors.gymName)} autoComplete="organization" {...register('gymName')} className={`input-field pl-10 ${errors.gymName ? errorInput : ''}`} placeholder="Iron House Fitness" />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Owner Full Name *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                  <User className="w-4 h-4" />
-                </div>
-                <input
-                  name="username"
-                  type="text"
-                  className="input-field pl-10"
-                  placeholder="e.g. Vikramaditya Singh"
-                  value={formData.username}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Email Address *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  name="email"
-                  type="email"
-                  className="input-field pl-10"
-                  placeholder="owner@yourgym.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Mobile Number *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <input
-                  name="phone"
-                  type="tel"
-                  className="input-field pl-10"
-                  placeholder="+91 9876543210"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Account Password *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  name="password"
-                  type="password"
-                  className="input-field pl-10"
-                  placeholder="Min 8 chars with letter & number"
-                  value={formData.password}
-                  onChange={handleChange}
-                  minLength={8}
-                  required
-                />
-              </div>
-            </div>
-          </div>
+        </Field>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field id="owner-city" label="City" error={errors.city}>
+            {input('city', 'owner-city', 'address-level2', 'Jaipur')}
+          </Field>
+          <Field id="owner-state" label="State" error={errors.state}>
+            {input('state', 'owner-state', 'address-level1', 'Rajasthan')}
+          </Field>
         </div>
+        <Field id="owner-address" label="Street address" error={errors.address}>
+          {input('address', 'owner-address', 'street-address', 'Building, street, landmark')}
+        </Field>
+        </section>
 
-        {/* Section 2: Gym Facility Details */}
-        <div>
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[var(--color-border)]">
-            <Building2 className="w-4 h-4 text-[var(--color-accent)]" />
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-[var(--color-charcoal)] dark:text-white">
-              2. Facility & Location Details
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Gym Brand / Facility Name *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <input
-                  name="gymName"
-                  type="text"
-                  className="input-field pl-10"
-                  placeholder="e.g. Iron Fortress Fitness Club"
-                  value={formData.gymName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Complete Street Address *
-              </label>
-              <div className="relative">
-                <div className="absolute top-3 left-3.5 pointer-events-none text-[var(--color-muted)]">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <textarea
-                  name="address"
-                  rows={2}
-                  className="input-field pl-10"
-                  placeholder="Building No, Floor, Street, Landmark"
-                  value={formData.address}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                City *
-              </label>
-              <input
-                name="city"
-                type="text"
-                className="input-field"
-                placeholder="e.g. Jaipur"
-                value={formData.city}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                State *
-              </label>
-              <input
-                name="state"
-                type="text"
-                className="input-field"
-                placeholder="e.g. Rajasthan"
-                value={formData.state}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                Pincode (6 Digits)
-              </label>
-              <input
-                name="pincode"
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                pattern="[0-9]{6}"
-                className="input-field"
-                placeholder="302001"
-                value={formData.pincode}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-charcoal)] dark:text-gray-200 mb-1.5">
-                GSTIN (Optional)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-muted)]">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <input
-                  name="gstNumber"
-                  type="text"
-                  className="input-field pl-10 uppercase"
-                  placeholder="22AAAAA0000A1Z5"
-                  value={formData.gstNumber}
-                  onChange={handleChange}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Security badge note */}
-        <div className="p-3 rounded-xl bg-[var(--color-base)] dark:bg-white/5 border border-[var(--color-border)] flex items-center gap-3 text-xs text-[var(--color-muted)]">
-          <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span>By submitting, you agree to Vajra Terms of Service and Gym Partner Code of Conduct.</span>
-        </div>
-
-        {/* Action Button */}
-        <div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full btn-primary py-3.5 text-base shadow-lg cursor-pointer"
-          >
-            {isLoading ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Submitting Facility Registration...
-              </span>
-            ) : (
-              <>
-                <span>Submit Gym Registration Request</span>
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </>
-            )}
-          </button>
-        </div>
+        <TermsField register={register} errors={errors} />
+        <SubmitButton busy={isSubmitting} busyLabel="Registering...">Register gym</SubmitButton>
       </form>
 
-      {/* Switcher back to login */}
-      <div className="mt-6 pt-6 border-t border-[var(--color-border)] text-center text-sm text-[var(--color-muted)]">
-        Already registered your gym?{' '}
-        <Link to="/login" className="text-[var(--color-primary)] font-bold hover:underline">
-          Sign In Here
-        </Link>
-      </div>
+      <FormFooter>
+        Already have an account? <Link to={ROUTES.partnerLogin} className={footerLink}>Log in</Link>
+      </FormFooter>
     </AuthSplitLayout>
   );
 };

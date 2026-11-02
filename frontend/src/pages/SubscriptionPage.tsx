@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { ROUTES } from '../utils/routes';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Check, CreditCard, Banknote, Smartphone, ShieldCheck, Sparkles, Loader2, Building2,
@@ -43,7 +44,7 @@ const PAYMENT_METHODS = [
 const SubscriptionPage = () => {
   usePageMeta(
     'Subscription Plans',
-    'Choose a Vajra Fitness platform plan for your gym — Starter, Professional or Enterprise. Pay by cash, UPI or card.',
+    'Choose a Kavach Fitness platform plan for your gym — Starter, Professional or Enterprise. Pay by cash, UPI or card.',
     '/subscription',
   );
   const navigate = useNavigate();
@@ -109,7 +110,7 @@ const SubscriptionPage = () => {
       return;
     }
     if (!user) {
-      navigate(`/login?redirect=/subscription`);
+      navigate(`${ROUTES.login}?redirect=/subscription`);
       return;
     }
     if (user.role !== 'GYM_ADMIN' && user.role !== 'SUPER_ADMIN') {
@@ -151,7 +152,7 @@ const SubscriptionPage = () => {
         key: checkout.keyId,
         amount: checkout.amount,
         currency: checkout.currency,
-        name: 'Vajra Fitness',
+        name: 'Kavach Fitness',
         description: `SaaS subscription · ${formatPrice(checkout.subscription.amount)}`,
         order_id: checkout.orderId,
         handler: async (response: any) => {
@@ -184,8 +185,6 @@ const SubscriptionPage = () => {
       {/* HERO */}
       <section className="relative pt-32 pb-16 md:pt-40 md:pb-20 overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <div className="absolute -top-32 -right-32 w-[34rem] h-[34rem] bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
-          <div className="absolute top-1/2 -left-40 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
         </div>
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Reveal>
@@ -218,7 +217,7 @@ const SubscriptionPage = () => {
             <p className="text-[var(--color-muted)] mb-6">
               {mySub?.plan?.name} · {mySub?.status} · valid till {mySub?.endDate ? new Date(mySub.endDate).toLocaleDateString('en-IN') : '—'}
             </p>
-            <Link to="/admin/gym" className="btn-primary justify-center">Go to your Dashboard</Link>
+            <Link to="/owner" className="btn-primary justify-center">Go to your Dashboard</Link>
           </div>
         ) : (
           <div className="grid lg:grid-cols-5 gap-10 items-start">
@@ -359,7 +358,7 @@ const SubscriptionPage = () => {
 
                 <p className="text-xs text-[var(--color-muted)] leading-relaxed">
                   {!user ? (
-                    <>You'll need a gym owner account to subscribe. <Link to="/register" className="text-[var(--color-primary)] font-semibold">Register your gym</Link> or <Link to="/login" className="text-[var(--color-primary)] font-semibold">log in</Link>.</>
+                    <>You'll need a gym owner account to subscribe. <Link to={ROUTES.partnerRegister} className="text-[var(--color-primary)] font-semibold">Register your gym</Link> or <Link to={ROUTES.login} className="text-[var(--color-primary)] font-semibold">log in</Link>.</>
                   ) : payConfig?.enabled ? (
                     <>UPI and Card payments are secured by Razorpay. For Cash/Bank, the platform activates your plan once payment is confirmed. <ShieldCheck className="inline w-3.5 h-3.5 text-green-500" /> 100% secure.</>
                   ) : (

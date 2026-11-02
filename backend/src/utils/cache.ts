@@ -35,3 +35,13 @@ export async function getOrSetJSON<T>(key: string, ttlSeconds: number, fetchFn: 
 
   return value;
 }
+
+// For the few cached reads that an owner edits and expects to see right away.
+export async function dropCached(...keys: string[]) {
+  if (!isRedisAvailable() || !redis || keys.length === 0) return;
+  try {
+    await redis.del(...keys);
+  } catch {
+    // Worst case the old copy lives until its TTL runs out.
+  }
+}

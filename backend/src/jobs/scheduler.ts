@@ -5,6 +5,7 @@ import { processExpiredSubscriptions } from '../services/subscription.service';
 import { backgroundJobsRun, backgroundJobsErrors } from '../utils/metrics';
 import { sendMembershipExpiryEmail } from '../utils/email';
 import { logger } from '../utils/logger';
+import { runJobs } from './queue';
 
 export const JOB_INTERVAL_MS = 60 * 60 * 1000; // run hourly
 
@@ -215,15 +216,16 @@ const runTracked = async <T>(job: string, fn: () => Promise<T>): Promise<T> => {
 
 // Runs every background job. Safe to call repeatedly (idempotent).
 export const runScheduledJobs = async () => {
-  const [expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning] = await Promise.all([
+  const [expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning, jobQueue] = await Promise.all([
     runTracked('expirySync', runExpirySync),
     runTracked('expiryReminders', runExpiryReminders),
     runTracked('feeReminders', runFeeReminders),
     runTracked('subscriptionLifecycle', runSubscriptionLifecycle),
     runTracked('paymentReconciliation', runPaymentReconciliation),
     runTracked('subscriptionDunning', runSubscriptionDunning),
+    runTracked('jobQueue', runJobs),
   ]);
-  return { expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning };
+  return { expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning, jobQueue };
 };
 
 // Old name, still used by tests/membership.test.ts.

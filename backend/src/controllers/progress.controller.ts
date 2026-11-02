@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 
 const computeBmi = (weight: number, heightCm: number): number | null => {
   if (!heightCm || heightCm <= 0) return null;
@@ -58,25 +59,9 @@ export const getMemberProgress = async (req: AuthRequest, res: Response) => {
   try {
     const memberId = req.params.memberId as string;
 
-    const member = await prisma.memberDetails.findUnique({
-      where: { id: memberId },
-      include: { gym: { select: { ownerId: true } } },
-    });
+    const member = await prisma.memberDetails.findUnique({ where: { id: memberId } });
     if (!member) return res.status(404).json({ error: 'Member not found' });
-
-    let isTrainerAtGym = false;
-    if (req.user?.role === 'TRAINER') {
-      const trainer = await prisma.trainerDetails.findFirst({
-        where: { userId: req.user.userId, gymId: member.gymId, status: 'ACTIVE' },
-      });
-      isTrainerAtGym = !!trainer;
-    }
-
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = req.user?.userId === member.gym.ownerId;
-    if (!isSuperAdmin && !isGymOwner && !isTrainerAtGym) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, member.gymId, ['TRAINER']))) return res.status(403).json({ error: 'Unauthorized' });
 
     const logs = await prisma.progressLog.findMany({
       where: { userId: member.userId },

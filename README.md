@@ -1,8 +1,8 @@
-# VajraFitness
+# KavachFitness
 
 A multi-tenant web and mobile platform for running gyms. Each gym is an isolated tenant with its own members, trainers, staff, plans, fees and attendance. The platform layer handles gym approval, SaaS subscriptions, plan limits and content.
 
-Live site: <https://vajra-fitness-gym-management.vercel.app>
+The product is called Kavach Fitness. The domain kavachfitness.in is not registered yet, so the live site is still on the Vercel address: <https://vajra-fitness-gym-management.vercel.app>
 
 ## Screenshots
 
@@ -18,10 +18,22 @@ Live site: <https://vajra-fitness-gym-management.vercel.app>
 | Role | What they do |
 | --- | --- |
 | `SUPER_ADMIN` | Approves and suspends gyms, manages SaaS plans and subscriptions, edits public content, reads the audit log |
-| `GYM_ADMIN` | Owns one or more gyms: branches, membership plans, members, trainers, staff, fees, reports |
+| `GYM_ADMIN` | Owns one or more gyms (called partners in the UI): branches, membership plans, members, trainers, staff, fees, reports, website request |
 | `TRAINER` | Works inside one gym: assigns workouts, handles personal training bookings, tracks member progress. Self-registered trainers wait for the gym owner to approve them |
 | `STAFF` | Front desk work inside one gym: members, check-in, fees |
 | `MEMBER` | Sees their own membership, fees, attendance, workouts and bookings |
+
+## Sign-in pages and dashboards
+
+| Role | Sign in | Sign up | Dashboard |
+| --- | --- | --- | --- |
+| Member | `/login` | `/register/member` (`?ref=CODE` applies a referral code) | `/dashboard` |
+| Trainer | `/trainer/login` | `/trainer/register` | `/trainer` |
+| Staff | `/login` | created by the gym owner | `/staff` |
+| Gym owner (partner) | `/partner/login` | `/partner/register` | `/owner` |
+| Super admin | `/admin/login` (`/admin-login` redirects, noindex) | none | `/admin` |
+
+`/register` and `/register/vendor` redirect to `/partner/register`. Public gym pages are at `/gyms/:id` and `/g/:slug`, each with `plans`, `trainers`, `gallery` and `contact` sub-pages. The slug is a gym's `subdomain` value. A trainer invite link opens `/accept-invite?token=`.
 
 ## Features
 
@@ -29,12 +41,17 @@ Live site: <https://vajra-fitness-gym-management.vercel.app>
 - SaaS subscriptions with trial, grace period and read-only mode once a subscription expires.
 - Membership plans, renewals and automatic expiry.
 - Fees with offline payment recording, PDF receipts, and online payment through Razorpay when keys are configured.
+- Marketplace orders: members buy gym plans online ("Buy online"), with a commission split and a ledger for owners and admins. Needs Razorpay keys.
 - Attendance check-in, workout slips (PDF), personal training bookings, group classes, progress logs and nutrition plans.
 - Enquiry (lead) tracking, notices, in-app notifications, support tickets.
 - Inventory, equipment, expenses, payslips and referrals.
 - Revenue, churn, retention and trainer performance reports, with CSV export for revenue.
 - Public pages: gym directory and gym detail pages, pricing, FAQ, legal pages, and calculators (BMI, calorie, one rep max, protein).
-- Light, dark and system themes.
+- Light and dark themes (no system option).
+- Member self check-in (`POST /api/attendance/my/check-in`) and member referrals.
+- Trainer invites: the gym owner sends an invite link, and the trainer sets up their own account.
+- Find gyms: search by name, city, category, facility, price and distance, with filters kept in the URL.
+- Partner website request: a gym owner asks for a slug, the super admin approves it, and the slug becomes `Gym.subdomain`, which serves `/g/:slug`.
 - An Expo mobile app for members, trainers, gym owners and staff (see [docs/DOCUMENTATION.md#5-mobile-application-mobile](docs/DOCUMENTATION.md#5-mobile-application-mobile)).
 
 ## Tech stack
@@ -49,7 +66,7 @@ Live site: <https://vajra-fitness-gym-management.vercel.app>
 | Payments and mail | Razorpay, SMTP through Nodemailer |
 | Mobile | Expo, Expo Router, React Native |
 | Hosting | Vercel (frontend and API in one project), Neon |
-| Tests | Vitest and Supertest (backend, mobile) |
+| Tests | Vitest and Supertest (backend, mobile), Playwright (frontend e2e) |
 
 ## Repository layout
 
@@ -59,7 +76,8 @@ backend/             Express API, Prisma schema and migrations, jobs, seed scrip
 frontend/            React single page app, Dockerfile and nginx config for the local stack
 mobile/              Expo app (separate install, not an npm workspace)
 scripts/dev-db.mjs   Creates and seeds a local development database
-docs/                Architecture, API changes, mobile notes, overview
+docs/                Main reference (DOCUMENTATION.md) and old notes in archive/
+branding/            Brand concept files; Kavach Fitness was chosen
 .github/             CI workflows, Dependabot, CODEOWNERS, PR template
 docker-compose.yml   Full local stack (Postgres, Redis, Mailpit, API, web)
 vercel.json          Rewrites for the single Vercel project
@@ -91,6 +109,7 @@ Create `backend/.env` from `backend/.env.example` and point it at that database,
 
 ```bash
 cd backend && npm run dev     # http://localhost:5000
+cd backend && npm run dev:local   # same API against the local Postgres QA db (never Neon)
 cd frontend && npm run dev    # http://localhost:5173, proxies /api to port 5000
 ```
 
@@ -135,6 +154,7 @@ Only `VITE_` and `EXPO_PUBLIC_` values reach the client bundle. Never put a secr
 
 | Location | Command | What it does |
 | --- | --- | --- |
+| root | `npm run dev` / `lint` / `typecheck` / `test` / `test:e2e` | Run both dev servers, frontend lint, tsc on both, backend tests, Playwright |
 | `backend` | `npm run dev` | API with file watching (`tsx watch`) |
 | `backend` | `npm run build` / `npm start` | Compile to `dist/`, run `dist/server.js` |
 | `backend` | `npm test` | Vitest suite against a separate test database |
@@ -154,20 +174,17 @@ cd backend && npm test
 cd frontend && npx tsc -b && npm run lint
 ```
 
-Backend tests need a running PostgreSQL. They create and use `vajra_fitness_test` (override with `TEST_DATABASE_URL`) and never touch the development database. The suites cover authentication and token rotation, authorization and tenant isolation, memberships, subscription lifecycle and plan limits, notices, payments, trainer signup, the public gym page, and the mobile token flow.
+The backend suite has 133 tests and takes about 12 minutes. Backend tests need a running PostgreSQL. They create and use `vajra_fitness_test` (override with `TEST_DATABASE_URL`) and never touch the development database. The suites cover authentication and token rotation, authorization and tenant isolation, memberships, subscription lifecycle and plan limits, notices, payments, trainer signup, the public gym page, and the mobile token flow.
 
-## Accessibility, SEO and performance audits
+## End-to-end tests
 
-The `E2E and audits` workflow (`.github/workflows/e2e-audit.yml`) builds the stack, seeds a test database and then runs these frontend npm scripts if they exist:
+The `E2E` workflow (`.github/workflows/e2e-audit.yml`) builds the stack, seeds a test database and runs the Playwright smoke specs in `frontend/e2e/`:
 
-| Script | Purpose |
-| --- | --- |
-| `npm run test:e2e --workspace=frontend` | Playwright end-to-end tests |
-| `npm run audit:seo --workspace=frontend` | SEO checks on built pages |
-| `npm run audit:a11y --workspace=frontend` | Accessibility checks |
-| `npm run lighthouse --workspace=frontend` | Lighthouse reports |
+```bash
+npm run test:e2e --workspace=frontend
+```
 
-The workflow serves the site at `http://localhost:4173` and the API at `http://localhost:5000/api`, and uploads reports as build artifacts. Check `frontend/package.json` to see which of these scripts are defined in your checkout; steps for missing scripts are skipped.
+The specs expect the site at `http://localhost:4173` (`BASE_URL` overrides it). `npm run audit:a11y --workspace=frontend` runs the accessibility spec (`e2e/a11y.spec.ts`). There is no Lighthouse script and no automated SEO check.
 
 ## Branches and CI/CD
 
@@ -176,6 +193,7 @@ The workflow serves the site at `http://localhost:4173` and the API at `http://l
 - CI (`deploy.yml`, job `quality`) runs on pushes to `main`, `staging` and `develop` and on pull requests to `main` and `staging`: `prisma validate`, `prisma generate`, `tsc --noEmit`, backend build, backend tests against a Postgres 16 service, frontend lint and frontend build.
 - `security.yml` runs CodeQL, dependency review (pull requests), `npm audit` (report only) and a gitleaks secret scan. CodeQL also runs weekly.
 - `backup.yml` takes a daily database dump when backups are enabled (see [docs/DOCUMENTATION.md#automated-backups--disaster-recovery](docs/DOCUMENTATION.md#automated-backups--disaster-recovery)).
+- Seven migrations are not on the production database yet: `trainer_signup`, `fee_expense_date_indexes`, `gym_website_request`, `gym_public_profile`, `foundations_multi_gym`, `approvals_onboarding` and `marketplace_orders`. See [HANDOFF.md](HANDOFF.md).
 - Schema changes must be applied to the production database with `prisma migrate deploy` before the change is merged to `main`. See [docs/DOCUMENTATION.md#database-migrations-workflow](docs/DOCUMENTATION.md#database-migrations-workflow).
 
 Full deployment steps for Vercel and Neon are in [docs/DOCUMENTATION.md#7-deployment-infrastructure--devops](docs/DOCUMENTATION.md#7-deployment-infrastructure--devops).

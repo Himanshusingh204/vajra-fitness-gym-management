@@ -1,6 +1,6 @@
 # Load testing (k6)
 
-Baseline load tests for the VajraFitness backend using [Grafana k6](https://k6.io).
+Baseline load tests for the Kavach Fitness backend (run from `backend/`) using [Grafana k6](https://k6.io).
 
 ## Install k6
 
@@ -18,17 +18,17 @@ k6 run load/smoke.js
 k6 run load/load.js
 
 # Against a deployed environment
-k6 run -e BASE_URL=https://api.vajrafitness.in load/load.js
+k6 run -e BASE_URL=https://<your-deployed-host> load/load.js
 
 # Bigger soak
-k6 run --vus 100 --duration 5m -e BASE_URL=https://api.vajrafitness.in load/load.js
+k6 run --vus 100 --duration 5m -e BASE_URL=https://<your-deployed-host> load/load.js
 ```
 
 ## What is exercised
 
 - `GET /api/health`, `GET /api/ready` — liveness/readiness probes.
 - `GET /metrics` — Prometheus endpoint (expect 200, or 401 when `METRICS_TOKEN` is set).
-- `POST /api/auth/register` — vendor registration (creates a gym per VU).
+- `POST /api/auth/register` — gym owner (partner) registration (creates a gym per VU).
 - `POST /api/auth/login` — login (exercises argon2 + refresh-token issuance).
 - `GET /api/gym` — public gym listing (read path through subscription middleware).
 
@@ -46,7 +46,7 @@ capture the bearer token, and add authed requests to a fork of `load.js`.
 
 - Every VU registers a unique vendor, so the DB grows during a run — use a
   disposable staging DB for meaningful soak runs.
-- The backend rate-limiter caps auth at 30 req/15 min per IP behind one proxy
+- The backend rate-limiter caps login at 30 req/15 min per IP (other auth routes 60 in production) behind one proxy
   IP. When load testing auth endpoints, raise `max` in
   `src/middlewares/rateLimit.middleware.ts` (or run VUs across distinct IPs).
 - Watch `vajra_http_request_duration_seconds` and

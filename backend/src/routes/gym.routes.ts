@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { getMyGym, updateGym, listPublicGyms, getGymStats, checkSubdomain } from '../controllers/gym.controller';
+import { getMyGym, updateGym, getMyChangeRequests, listPublicGyms, listGymCities, getGymStats, checkSubdomain } from '../controllers/gym.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { gymUpdateSchema, gymIdParams } from '../utils/validators';
@@ -22,6 +22,7 @@ const subdomainQuery = z.object({
 
 // Public: list approved gyms for browsing/membership registration
 router.get('/', asyncHandler(listPublicGyms));
+router.get('/cities', asyncHandler(listGymCities));
 
 // Dashboard stats for a gym (owner or Super Admin)
 router.get('/:gymId/stats', authenticate, validate(gymIdParams, ['params']), asyncHandler(getGymStats));
@@ -31,6 +32,7 @@ router.use(authenticate, authorize(['GYM_ADMIN']));
 
 router.get('/my-branch', asyncHandler(getMyGym));
 router.put('/my-branch', validate(gymUpdateSchema), asyncHandler(updateGym));
+router.get('/my-branch/change-requests', asyncHandler(getMyChangeRequests));
 
 // Subdomain availability for white-label branding (owner or Super Admin)
 router.get('/subdomain-availability', validate(subdomainQuery, ['query']), asyncHandler(checkSubdomain));

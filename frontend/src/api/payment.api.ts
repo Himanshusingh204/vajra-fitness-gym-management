@@ -23,6 +23,35 @@ export const createCheckout = async (feeId: string) => {
   return response.data;
 };
 
+export interface PlanOrder {
+  id: string;
+  status: 'CREATED' | 'PAID' | 'FAILED' | 'REFUNDED';
+  razorpayOrderId: string;
+  amount: number; // paise
+  currency: string;
+  keyId: string;
+}
+
+// One key per click: a retry of the same request returns the same order.
+export const createPlanOrder = async (gymId: string, planId: string, idempotencyKey: string) => {
+  const response = await api.post<PlanOrder>('/orders', { gymId, planId }, { headers: { 'Idempotency-Key': idempotencyKey } });
+  return response.data;
+};
+
+export interface Earnings {
+  grossPaise: number;
+  commissionPaise: number;
+  commissionGstPaise: number;
+  payablePaise: number;
+  paidOrders: number;
+  recentOrders: { id: string; status: string; totalPaise: number; gymNetPaise: number; paidAt: string | null; planSnapshot: { name: string } }[];
+}
+
+export const getOwnerEarnings = async () => {
+  const response = await api.get<Earnings>('/owner/earnings');
+  return response.data;
+};
+
 export const verifyPayment = async (params: { orderId: string; paymentId: string; signature: string }) => {
   const response = await api.post('/payments/verify', params);
   return response.data;

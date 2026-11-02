@@ -63,3 +63,8 @@ export const getPayslipSummary = async (gymId: string, year?: number) => {
   const response = await api.get<PayslipSummary>(`/payslips/gym/${gymId}/summary`, { params: { year } });
   return response.data;
 };
+
+export const getMyPayslips = async (): Promise<Array<Payslip & { gym: { id: string; name: string } }>> => {
+  const res = await api.get('/payslips/my');
+  return res.data;
+};

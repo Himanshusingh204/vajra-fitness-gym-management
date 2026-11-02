@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { ROUTES } from '../utils/routes';
 import {
-  ArrowRight, Users, Dumbbell, TrendingUp, Activity,
+  ArrowRight, Users, Dumbbell, Activity,
   CreditCard, BarChart3, CalendarCheck, PlayCircle, Star,
   Check, Zap, Globe2, Headset,
 } from 'lucide-react';
@@ -30,8 +31,8 @@ const STAT_ORDER: (keyof PublicStats)[] = ['members', 'gyms', 'trainers', 'citie
 
 const FEATURES = [
   {
-    title: 'Advanced Member Management',
-    description: 'Track attendance, active plans, and renewals automatically with zero paperwork.',
+    title: 'Member management',
+    description: 'Track attendance, active plans, and renewals automatically without paperwork.',
     icon: Users,
   },
   {
@@ -40,7 +41,7 @@ const FEATURES = [
     icon: Dumbbell,
   },
   {
-    title: 'Smart Payment Tracking',
+    title: 'Payment tracking',
     description: 'Automated invoices, GST handling, and overdue reminders that collect dues for you.',
     icon: CreditCard,
   },
@@ -55,8 +56,8 @@ const FEATURES = [
     icon: CalendarCheck,
   },
   {
-    title: 'Analytics & Reports',
-    description: 'Revenue, retention, and branch performance dashboards that scale with you.',
+    title: 'Reports',
+    description: 'Revenue, retention, and branch performance dashboards for every branch.',
     icon: BarChart3,
   },
 ];
@@ -72,7 +73,7 @@ const STEPS = [
   },
   {
     title: 'Automate & Relax',
-    desc: 'The system handles fee reminders, attendance, and analytics automatically — you grow.',
+    desc: 'Fee reminders, attendance and reports run on their own, so you can spend your time on the floor.',
   },
 ];
 
@@ -86,6 +87,10 @@ type HomeTestimonial = {
 };
 
 const HomePage = () => {
+  const scrollToSteps = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+  };
   usePageMeta(undefined, undefined, '/');
   const [testimonials, setTestimonials] = useState<HomeTestimonial[]>([]);
   const [stats, setStats] = useState<PublicStats | null>(null);
@@ -133,76 +138,60 @@ const HomePage = () => {
     ?? plans[Math.floor(plans.length / 2)]?.id;
 
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
-      {/* ============================================================
-          1. HERO
-          ============================================================ */}
+    <div className="min-h-screen bg-[var(--color-base)] overflow-x-hidden">
+      <div className="scroll-progress" aria-hidden="true" />
+      {/* 1. HERO */}
       <section className="relative pt-36 pb-24 md:pt-44 md:pb-32 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img
-            src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop"
+            src="/gym/hero.webp"
             alt="Gym interior"
             fetchPriority="high"
             className="w-full h-full object-cover opacity-30"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/75 via-[var(--color-base)]/55 to-[var(--color-base)] dark:from-[#0d0d0d]/85 dark:via-[#0d0d0d]/70 dark:to-[#0d0d0d]" />
-          <div className="absolute -top-32 -left-32 w-[34rem] h-[34rem] bg-[var(--color-primary)]/15 rounded-full blur-3xl animate-blob" />
-          <div className="absolute top-1/3 -right-40 w-[30rem] h-[30rem] bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
         </div>
 
-        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <Reveal delay={100}>
-            <h1 className="display mt-8 text-5xl sm:text-6xl md:text-8xl leading-[0.95]">
-              Run Your Gym.<br />
-              <span className="text-gradient animate-gradient-x">Skip the Spreadsheets.</span>
-            </h1>
-          </Reveal>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ">
+          <div className="text-center max-w-4xl mx-auto">
+            <Reveal>
+              <span className="eyebrow">Gym management for India</span>
+            </Reveal>
+            <Reveal delay={100}>
+              <h1 className="display mt-6 text-4xl sm:text-6xl md:text-7xl leading-[1.02]">
+                Run Your Gym.<br />
+                <span className="text-[var(--color-primary)]">Skip the Spreadsheets.</span>
+              </h1>
+            </Reveal>
 
-          <Reveal delay={220}>
-            <p className="mt-7 text-lg md:text-2xl text-[var(--color-muted)] max-w-3xl mx-auto leading-relaxed">
-              Manage members, automate fee reminders, assign workout slips, and track attendance
-              from one dashboard — built for gyms in India.
-            </p>
-          </Reveal>
+            <Reveal delay={220}>
+              <p className="mt-7 text-lg md:text-xl text-[var(--color-muted)] max-w-xl mx-auto leading-relaxed">
+                Manage members, automate fee reminders, assign workout slips, and track attendance
+                from one dashboard.
+              </p>
+            </Reveal>
 
-          <Reveal delay={320} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/register" className="btn-primary px-8! py-4! text-lg w-full sm:w-auto">
-              Get Started for Free <ArrowRight className="w-5 h-5" />
-            </Link>
-            <a href="#features" className="btn-ghost px-8! py-4! text-lg w-full sm:w-auto">
-              <PlayCircle className="w-5 h-5" /> See How it Works
-            </a>
-          </Reveal>
+            <Reveal delay={320} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link to={ROUTES.partnerRegister} className="btn-primary px-8! py-4! text-lg w-full sm:w-auto">
+                Get started <ArrowRight className="w-5 h-5" />
+              </Link>
+              <a href="#how-it-works" onClick={scrollToSteps} className="btn-ghost px-8! py-4! text-lg w-full sm:w-auto">
+                <PlayCircle className="w-5 h-5" /> See how it works
+              </a>
+            </Reveal>
 
-          <Reveal delay={420}>
-            <p className="mt-8 text-sm text-[var(--color-muted)] flex items-center justify-center gap-2">
-              <Zap className="w-4 h-4 text-[var(--color-accent)]" />
-              14-day free trial · No credit card required · Cancel anytime
-            </p>
-          </Reveal>
-        </div>
-      </section>
+            <Reveal delay={420}>
+              <p className="mt-8 text-sm text-[var(--color-muted)] flex items-center justify-center gap-2">
+                <Zap className="w-4 h-4 text-[var(--color-accent)]" />
+                14-day free trial · No credit card required · Cancel anytime
+              </p>
+            </Reveal>
+          </div>
 
-      {/* ============================================================
-          2. MARQUEE STRIP
-          ============================================================ */}
-      <section className="relative z-10 -mt-8 md:-mt-10 py-5 border-y border-[var(--color-border)] bg-[var(--color-surface)]/60 dark:bg-white/[0.03] backdrop-blur overflow-hidden">
-        <div className="flex w-max animate-marquee gap-12 whitespace-nowrap px-6">
-          {[0, 1].map((dup) => (
-            <React.Fragment key={dup}>
-              {['Payments Automated', 'Attendance Tracked', 'Workout Slips', 'Multi-Branch', 'GST Ready', 'Lead CRM', 'Live Analytics', 'Member App'].map((item) => (
-                <span key={`${dup}-${item}`} className="flex items-center gap-3 text-sm font-bold uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                  <Zap className="w-4 h-4 text-[var(--color-primary)]" /> {item}
-                </span>
-              ))}
-            </React.Fragment>
-          ))}
         </div>
       </section>
 
-      {/* ============================================================
-          3. STATS
-          ============================================================ */}
+      {/* 3. STATS */}
       <section className="section-pad !pb-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -231,17 +220,14 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ============================================================
-          4. FEATURES
-          ============================================================ */}
+      {/* 4. FEATURES */}
       <section id="features" className="section-pad scroll-mt-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="max-w-3xl mx-auto text-center mb-16">
             <span className="eyebrow">Platform</span>
-            <h2 className="section-title mt-4">Everything you need to scale</h2>
+            <h2 className="section-title mt-4">What the platform covers</h2>
             <p className="section-lead">
-              Stop using WhatsApp and Excel. Vajra Fitness provides a unified dashboard to control
-              every aspect of your gym facility.
+              Members, fees, attendance and workout plans in one place instead of WhatsApp groups and Excel sheets.
             </p>
           </Reveal>
 
@@ -249,7 +235,7 @@ const HomePage = () => {
             {FEATURES.map((feature, i) => (
               <Reveal key={feature.title} delay={(i % 3) * 100}>
                 <div className="card-hover group h-full">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white flex items-center justify-center mb-6 shadow-lg shadow-[var(--color-primary)]/20 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-300">
+                  <div className="w-14 h-14 rounded-2xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center mb-6">
                     <feature.icon className="w-7 h-7" />
                   </div>
                   <h3 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-3 group-hover:text-[var(--color-primary)] transition-colors">
@@ -263,15 +249,13 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ============================================================
-          5. WORKFLOW / HOW IT WORKS
-          ============================================================ */}
-      <section className="section-pad bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
+      {/* 5. WORKFLOW / HOW IT WORKS */}
+      <section id="how-it-works" className="section-pad scroll-mt-24 bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row items-center gap-16">
             <Reveal variant="left" className="flex-1 w-full">
               <span className="eyebrow">How it works</span>
-              <h2 className="section-title mt-4">How Gyms Get Started</h2>
+              <h2 className="section-title mt-4">Up and running in three steps</h2>
 
               <div className="mt-10 space-y-0">
                 {STEPS.map((step, i) => (
@@ -280,9 +264,9 @@ const HomePage = () => {
                       {i < STEPS.length - 1 && (
                         <span className="absolute left-6 top-14 bottom-0 w-px bg-gradient-to-b from-[var(--color-primary)]/40 to-transparent" />
                       )}
-                      <div className="relative flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-white flex items-center justify-center font-extrabold text-lg shadow-lg shadow-[var(--color-primary)]/25">
+                      <div className="relative flex-shrink-0 w-12 h-12 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center font-extrabold text-lg">
                         {i + 1}
-                        <span className="absolute inset-0 rounded-full bg-[var(--color-primary)] opacity-20 animate-ping [animation-duration:2.5s]" />
+                        
                       </div>
                       <div className="pt-1">
                         <h4 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-1.5">{step.title}</h4>
@@ -294,37 +278,25 @@ const HomePage = () => {
               </div>
             </Reveal>
 
-            <Reveal variant="right" className="flex-1 relative w-full">
-              <div className="absolute inset-0 bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-accent)] blur-3xl opacity-20 rounded-full" />
+            <Reveal variant="right" className="flex-1 w-full">
               <img
                 src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=2070&auto=format&fit=crop"
                 alt="Personal trainer assisting a member"
                 loading="lazy"
-                className="relative z-10 rounded-3xl shadow-2xl border border-[var(--color-border)] aspect-[4/3] object-cover"
+                className="rounded-3xl border border-[var(--color-border)] aspect-[4/3] object-cover"
               />
-              <div className="glass-strong absolute -bottom-6 left-6 right-6 sm:left-auto sm:right-6 sm:w-72 rounded-2xl p-5 flex items-center gap-4 animate-float">
-                <div className="w-11 h-11 rounded-xl bg-green-500/15 text-green-500 flex items-center justify-center shrink-0">
-                  <TrendingUp className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="font-extrabold text-lg text-[var(--color-deepgray)] dark:text-white leading-tight">Automated fee reminders</p>
-                  <p className="text-xs font-semibold text-[var(--color-muted)]">Fewer overdue payments to chase</p>
-                </div>
-              </div>
             </Reveal>
           </div>
         </div>
       </section>
 
-      {/* ============================================================
-          6. PRICING
-          ============================================================ */}
+      {/* 6. PRICING */}
       <section className="section-pad">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="max-w-3xl mx-auto text-center mb-16">
             <span className="eyebrow">Pricing</span>
-            <h2 className="section-title mt-4">Simple pricing that scales with you</h2>
-            <p className="section-lead">Start free for 14 days. No hidden fees, no credit card required.</p>
+            <h2 className="section-title mt-4">Pricing</h2>
+            <p className="section-lead">Start with a 14-day free trial. No credit card required.</p>
           </Reveal>
 
           {plansLoading ? (
@@ -397,9 +369,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* ============================================================
-          7. TESTIMONIALS
-          ============================================================ */}
+      {/* 7. TESTIMONIALS */}
       {testimonials.length > 0 && (
       <section className="section-pad bg-[var(--color-base-dark)]/50 dark:bg-white/[0.03]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -408,7 +378,7 @@ const HomePage = () => {
             <h2 className="section-title mt-4">
               {!statsLoading && stats && stats.gyms > 0 ? `Trusted by ${stats.gyms}+ Gyms` : 'What Gym Owners Say'}
             </h2>
-            <p className="section-lead">See what fitness business owners are saying about Vajra Fitness.</p>
+            <p className="section-lead">See what fitness business owners are saying about Kavach Fitness.</p>
           </Reveal>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -444,25 +414,21 @@ const HomePage = () => {
       </section>
       )}
 
-      {/* ============================================================
-          8. CALL TO ACTION
-          ============================================================ */}
+      {/* 8. CALL TO ACTION */}
       <section className="relative py-24 md:py-32 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-section-dark)] to-[var(--color-section-dark-alt)]" />
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-[800px] h-[800px] bg-[var(--color-primary)] rounded-full blur-3xl opacity-20 animate-blob" />
-        <div className="absolute bottom-0 left-0 -translate-x-1/3 translate-y-1/2 w-[600px] h-[600px] bg-[var(--color-accent)] rounded-full blur-3xl opacity-15 animate-blob [animation-delay:-9s]" />
+        <div className="absolute inset-0 bg-[var(--color-section-dark)]" />
 
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
           <Reveal>
-            <h2 className="display text-5xl md:text-7xl text-white leading-none mb-6">
-              Ready to upgrade your Gym?
+            <h2 className="display text-4xl sm:text-5xl md:text-6xl text-white leading-tight mb-6">
+              Ready to try it?
             </h2>
             <p className="text-xl text-gray-300 mb-10 max-w-2xl mx-auto">
-              Start your 14-day free trial today — no credit card required.
+              Start your 14-day free trial. No credit card required.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link to="/register" className="btn-accent px-10! py-4! text-lg">
-                Create Free Account
+              <Link to={ROUTES.partnerRegister} className="btn-accent px-10! py-4! text-lg">
+                Get started
               </Link>
               <Link to="/contact" className="btn-outline border-white/20! text-white! hover:bg-white! hover:text-black! px-10! py-4! text-lg">
                 Talk to Sales

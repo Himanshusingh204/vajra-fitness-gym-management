@@ -41,7 +41,8 @@ export function errorFromResponse(status: number, body: unknown): ApiError {
 export function friendlyMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Something went wrong. Please try again.';
 
-  if (error.code === 'NETWORK') return "Can't reach Vajra Fitness right now. Check your connection and try again.";
+  if (error.code === 'NETWORK') return "Can't reach Kavach Fitness right now. Check your connection and try again.";
+  if (error.code === 'DB_UNREACHABLE') return "Can't reach the database right now. Try again in a minute.";
   if (error.code === 'SUBSCRIPTION_READONLY') {
     return "This gym's subscription has expired, so changes are paused. You can still view everything.";
   }

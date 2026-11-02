@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
-import { assertGymCapacity } from '../services/entitlements.service';
 
 // List expenses for a gym
 export const getExpenses = async (req: AuthRequest, res: Response) => {
@@ -12,7 +12,7 @@ export const getExpenses = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -44,7 +44,7 @@ export const recordExpense = async (req: AuthRequest, res: Response) => {
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -81,10 +81,9 @@ export const deleteExpense = async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
     const expense = await prisma.expense.findUnique({
       where: { id },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
-    if (expense.gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, expense.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -101,7 +100,7 @@ export const getExpenseSummary = async (req: AuthRequest, res: Response) => {
     const gymId = req.params.gymId as string;
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
-    if (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN') {
+    if (!(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

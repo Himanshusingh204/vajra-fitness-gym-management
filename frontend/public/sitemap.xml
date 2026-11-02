@@ -1,73 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://vajrafitness.in/</loc>
+    <loc>https://kavachfitness.in/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/gyms</loc>
+    <loc>https://kavachfitness.in/gyms</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/membership</loc>
+    <loc>https://kavachfitness.in/membership</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/about</loc>
+    <loc>https://kavachfitness.in/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/contact</loc>
+    <loc>https://kavachfitness.in/subscription</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kavachfitness.in/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/faq</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://vajrafitness.in/help</loc>
+    <loc>https://kavachfitness.in/help</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/terms</loc>
+    <loc>https://kavachfitness.in/terms</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/privacy</loc>
+    <loc>https://kavachfitness.in/privacy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/refund</loc>
+    <loc>https://kavachfitness.in/refund</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://vajrafitness.in/cookies</loc>
+    <loc>https://kavachfitness.in/cookies</loc>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
-  </url>
-  <url>
-    <loc>https://vajrafitness.in/login</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://vajrafitness.in/register</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://vajrafitness.in/register/member</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
   </url>
 </urlset>

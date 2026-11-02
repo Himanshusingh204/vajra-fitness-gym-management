@@ -1,9 +1,10 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { canAccessGym } from '../utils/tenant';
 import { getOrSetJSON } from '../utils/cache';
 import { sendPdf, buildFeeReceipt } from '../utils/pdf';
-import { createNotification, notifyGymOwner } from '../services/notification.service';
+import { createNotification } from '../services/notification.service';
 
 // Get all fees for a gym
 export const getFees = async (req: AuthRequest, res: Response) => {
@@ -12,7 +13,7 @@ export const getFees = async (req: AuthRequest, res: Response) => {
     
     // Gym Admin validation
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -43,7 +44,7 @@ export const recordFee = async (req: AuthRequest, res: Response) => {
       req.body;
 
     const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-    if (!gym || (gym.ownerId !== req.user?.userId && req.user?.role !== 'SUPER_ADMIN')) {
+    if (!gym || !(await canAccessGym(req.user, gym.id))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -108,17 +109,11 @@ export const updateFeeStatus = async (req: AuthRequest, res: Response) => {
     const fee = await prisma.fee.findUnique({
       where: { id },
       include: {
-        gym: { select: { ownerId: true } },
         member: { include: { user: { select: { id: true } } } },
       },
     });
     if (!fee) return res.status(404).json({ error: 'Fee not found' });
-
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = fee.gym.ownerId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, fee.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     const updatedFee = await prisma.fee.update({
       where: { id },
@@ -154,15 +149,9 @@ export const deleteFee = async (req: AuthRequest, res: Response) => {
 
     const fee = await prisma.fee.findUnique({
       where: { id },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!fee) return res.status(404).json({ error: 'Fee not found' });
-
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = fee.gym.ownerId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (!(await canAccessGym(req.user, fee.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
     if (fee.transactionId && fee.paymentMethod === 'ONLINE') {
       return res.status(400).json({ error: 'Cannot delete a fee settled by an online payment. Use a refund or status change instead.' });
@@ -182,20 +171,18 @@ export const getMemberFees = async (req: AuthRequest, res: Response) => {
 
     const member = await prisma.memberDetails.findUnique({
       where: { id: memberId },
-      include: { gym: { select: { ownerId: true } } },
     });
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = member.gym.ownerId === req.user?.userId;
     const isSelf = member.userId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner && !isSelf) {
+    if (!isSelf && !(await canAccessGym(req.user, member.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
     const fees = await prisma.fee.findMany({
       where: { memberId, gymId: member.gymId },
       orderBy: { dueDate: 'desc' },
+      take: 500,
     });
     res.json(fees);
   } catch (error) {
@@ -219,10 +206,8 @@ export const getFeeReceiptPDF = async (req: AuthRequest, res: Response) => {
     });
     if (!fee) return res.status(404).json({ error: 'Fee not found' });
 
-    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
-    const isGymOwner = fee.gym.ownerId === req.user?.userId;
     const isSelf = fee.member.userId === req.user?.userId;
-    if (!isSuperAdmin && !isGymOwner && !isSelf) {
+    if (!isSelf && !(await canAccessGym(req.user, fee.gymId))) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

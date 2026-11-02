@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { gymIdParams, idParams } from '../utils/validators';
-import { getReferrals, createReferral, updateReferralStatus, getReferralStats } from '../controllers/referral.controller';
+import { gymIdParams, idParams, referralCreateSchema, referralStatusSchema } from '../utils/validators';
+import { getReferrals, createReferral, updateReferralStatus, getReferralStats, getMyReferrals } from '../controllers/referral.controller';
 
 // =====================================================================
 // REFERRAL ROUTES (Referral Program)
@@ -13,9 +13,10 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get('/me', authorize(['MEMBER']), getMyReferrals);
 router.get('/gym/:gymId', authorize(['GYM_ADMIN']), validate(gymIdParams, ['params']), getReferrals);
 router.get('/gym/:gymId/stats', authorize(['GYM_ADMIN']), validate(gymIdParams, ['params']), getReferralStats);
-router.post('/gym/:gymId', authorize(['GYM_ADMIN']), validate(gymIdParams, ['params']), createReferral);
-router.put('/:id', authorize(['GYM_ADMIN']), validate(idParams, ['params']), updateReferralStatus);
+router.post('/gym/:gymId', authorize(['GYM_ADMIN']), validate(gymIdParams, ['params']), validate(referralCreateSchema), createReferral);
+router.put('/:id', authorize(['GYM_ADMIN']), validate(idParams, ['params']), validate(referralStatusSchema), updateReferralStatus);
 
 export default router;

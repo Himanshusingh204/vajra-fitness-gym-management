@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
+import { Navigate, useNavigate, useOutletContext } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  LayoutDashboard, Building2, Users, Settings, BarChart3, CheckCircle, Clock,
-  Plus, Pencil, Trash2, Search, Mail, FileText, Star, XCircle, Diamond, CreditCard,
-  DollarSign, AlertTriangle, MessageSquare, Archive, MapPinned, Pin, Tag, FileCode,
-  Menu, X
+  Building2, CheckCircle, Clock, Plus, Pencil, Trash2, Mail, FileText, Star, XCircle,
+  Diamond, CreditCard, DollarSign, AlertTriangle, Archive, Pin, Tag, FileCode, CalendarDays,
 } from 'lucide-react';
-import { useAuthStore } from '../store/useAuthStore';
 import api, { downloadFile } from '../services/api';
 import { getPendingBranches, approveBranch, rejectBranch, type PendingBranch } from '../api/branch.api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LineChart } from '../components/charts';
+import WebsiteRequestsPanel from './superadmin/WebsiteRequestsPanel';
+import ChangeRequestsPanel from './superadmin/ChangeRequestsPanel';
+import SystemStatus from './superadmin/SystemStatus';
+import PanelEmpty from '../components/ui/EmptyState';
+import DataTable, { type Column } from '../components/ui/DataTable';
+import StatusBadge from '../components/ui/StatusBadge';
+import { useTableQuery } from '../components/ui/useTableQuery';
 
 type AnalyticsData = {
   // Basic metrics
@@ -94,6 +99,17 @@ type AuditLog = {
   user?: { username: string; email: string } | null;
 };
 
+type OverviewCount = { total: number; last30: number; prev30: number };
+type PlatformOverview = { members: OverviewCount; trainers: OverviewCount; owners: OverviewCount; gyms: OverviewCount };
+
+// "+4 this month, up 33%" style note under a head count.
+const deltaNote = ({ last30, prev30 }: OverviewCount) => {
+  if (last30 === 0 && prev30 === 0) return 'No sign-ups in 60 days';
+  if (prev30 === 0) return `+${last30} this month`;
+  const pct = Math.round(((last30 - prev30) / prev30) * 100);
+  return `+${last30} this month, ${pct >= 0 ? 'up' : 'down'} ${Math.abs(pct)}%`;
+};
+
 type SaaSPlan = {
   id: string;
   name: string;
@@ -153,7 +169,7 @@ const PRIORITY_STYLES: Record<string, string> = {
 };
 
 const StatCard = ({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) => (
-  <div className="bg-[var(--color-surface)] rounded-2xl p-6 border border-[var(--color-border)] shadow-sm">
+  <div className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)] shadow-sm">
     <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{label}</p>
     <p className={`text-3xl font-extrabold ${color}`}>{value}</p>
     {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
@@ -161,7 +177,7 @@ const StatCard = ({ label, value, sub, color }: { label: string; value: string |
 );
 
 const Panel = ({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) => (
-  <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+  <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
     <div className="px-6 py-4 border-b border-[var(--color-border)] flex flex-wrap items-center justify-between gap-3">
       <h2 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white">{title}</h2>
       {action}
@@ -175,11 +191,9 @@ const EmptyState = ({ text }: { text: string }) => (
 );
 
 const SuperAdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('analytics');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [roleFilter, setRoleFilter] = useState('ALL');
-  const [userSearch, setUserSearch] = useState('');
-  const user = useAuthStore((s) => s.user);
+  const activeTab = useOutletContext<string | undefined>();
+  const navigate = useNavigate();
+  const usersTable = useTableQuery({ pageSize: 25, filterKeys: ['role'] });
   const qc = useQueryClient();
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
@@ -194,7 +208,7 @@ const SuperAdminDashboard = () => {
     refetchInterval: 30000,
   });
 
-  const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
+  const { data: usersData, isLoading: usersLoading, isError: usersError, refetch: refetchUsers } = useQuery<User[]>({
     queryKey: ['admin-users'],
     queryFn: () => api.get('/admin/users').then((r) => r.data),
     refetchInterval: 30000,
@@ -239,6 +253,13 @@ const SuperAdminDashboard = () => {
   const { data: logs = [], isLoading: logsLoading } = useQuery<AuditLog[]>({
     queryKey: ['admin-audit'],
     queryFn: () => api.get('/admin/audit-logs').then((r) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const { data: overview } = useQuery<PlatformOverview>({
+    queryKey: ['admin-overview'],
+    queryFn: () => api.get('/admin/overview').then((r) => r.data),
+    enabled: activeTab === 'analytics',
     refetchInterval: 60000,
   });
 
@@ -430,9 +451,11 @@ const SuperAdminDashboard = () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['saas-subscriptions'] }); qc.invalidateQueries({ queryKey: ['analytics'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); },
   });
 
+  const users = usersData ?? [];
+  const roleFilter = usersTable.state.filters.role ?? 'ALL';
   const filteredUsers = users.filter((u) => {
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-    const q = userSearch.trim().toLowerCase();
+    const q = usersTable.state.search.trim().toLowerCase();
     const matchesSearch = !q || u.email.toLowerCase().includes(q) || u.username.toLowerCase().includes(q);
     return matchesRole && matchesSearch;
   });
@@ -448,122 +471,151 @@ const SuperAdminDashboard = () => {
     return <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${styles[role] || styles.MEMBER}`}>{role.replace('_', ' ')}</span>;
   };
 
-  const navGroups: { label: string; items: { id: string; label: string; icon: any }[] }[] = [
-    { label: 'Overview', items: [
-      { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    ] },
-    { label: 'Platform', items: [
-      { id: 'gyms', label: 'Gyms', icon: Building2 },
-      { id: 'branches', label: 'Branch Approvals', icon: MapPinned },
-      { id: 'users', label: 'Users', icon: Users },
-    ] },
-    { label: 'Billing', items: [
-      { id: 'payments', label: 'Payments', icon: CreditCard },
-      { id: 'saas', label: 'SaaS & Subscriptions', icon: Diamond },
-    ] },
-    { label: 'Content & Support', items: [
-      { id: 'cms', label: 'Content (CMS)', icon: LayoutDashboard },
-      { id: 'support', label: 'Support', icon: Clock },
-      { id: 'messages', label: 'Contact Messages', icon: MessageSquare },
-      { id: 'audit', label: 'Audit Logs', icon: Settings },
-    ] },
+  const userColumns: Column<User>[] = [
+    {
+      key: 'username',
+      header: 'User',
+      sortValue: (u) => u.username.toLowerCase(),
+      cell: (u) => (
+        <>
+          <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{u.username}</p>
+          <p className="text-xs text-gray-500 flex items-center gap-1"><Mail className="w-3 h-3 shrink-0" /> {u.email}</p>
+        </>
+      ),
+    },
+    { key: 'role', header: 'Role', sortValue: (u) => u.role, cell: (u) => roleBadge(u.role) },
+    {
+      key: 'gym',
+      header: 'Gym / Membership',
+      cell: (u) => (
+        <span className="text-gray-500 dark:text-gray-400">
+          {u.memberDetails ? (
+            <span className="inline-flex flex-wrap items-center gap-1.5">{u.memberDetails.gym?.name} <StatusBadge status={u.memberDetails.status} /></span>
+          ) : u.ownedGyms?.length ? (
+            u.ownedGyms.map((g) => g.name).join(', ')
+          ) : '—'}
+        </span>
+      ),
+    },
+    { key: 'phone', header: 'Phone', cell: (u) => <span className="text-gray-500 dark:text-gray-400">{u.phone || '—'}</span> },
+    {
+      key: 'createdAt',
+      header: 'Joined',
+      sortValue: (u) => u.createdAt,
+      cell: (u) => <span className="text-gray-500 dark:text-gray-400">{new Date(u.createdAt).toLocaleDateString('en-IN')}</span>,
+    },
+    {
+      key: 'account',
+      header: 'Account',
+      cell: (u) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {u.role !== 'SUPER_ADMIN' && <StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} />}
+          {u.role === 'SUPER_ADMIN' ? (
+            <span className="text-xs font-semibold text-gray-400">—</span>
+          ) : u.isActive ? (
+            <button
+              onClick={() => setConfirmAction({
+                title: `Suspend ${u.username}?`,
+                message: 'They will be logged out and blocked from signing in.',
+                confirmLabel: 'Suspend',
+                destructive: true,
+                onConfirm: () => { setUserActive.mutate({ id: u.id, isActive: false }); setConfirmAction(null); },
+              })}
+              disabled={setUserActive.isPending}
+              className="inline-flex min-h-11 items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
+            >
+              <XCircle className="w-3.5 h-3.5" /> Suspend
+            </button>
+          ) : (
+            <button
+              onClick={() => setUserActive.mutate({ id: u.id, isActive: true })}
+              disabled={setUserActive.isPending}
+              className="inline-flex min-h-11 items-center gap-1 text-green-600 hover:text-green-700 font-semibold text-xs hover:underline disabled:opacity-50"
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> Activate
+            </button>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'delete',
+      header: 'Delete',
+      cell: (u) => u.role !== 'SUPER_ADMIN' && (
+        u.ownedGyms?.length ? (
+          <span className="text-xs text-gray-400" title="This user owns a gym — delete the gym instead, which handles the owner account correctly.">
+            Delete via gym
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirmAction({
+              title: `Delete ${u.username}?`,
+              message: "This permanently removes the account and all their data. This can't be undone.",
+              confirmLabel: 'Delete',
+              destructive: true,
+              onConfirm: () => { deleteUser.mutate(u.id); setConfirmAction(null); },
+            })}
+            disabled={deleteUser.isPending}
+            aria-label={`Delete ${u.username}`}
+            className="inline-flex min-h-11 items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete
+          </button>
+        )
+      ),
+    },
   ];
 
+  if (!activeTab) return <Navigate to="/admin" replace />;
+
   return (
-    <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] lg:flex">
-      {/* Mobile top bar */}
-      <div className="lg:hidden flex items-center justify-between px-4 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-30">
-        <div className="min-w-0">
-          <h1 className="text-lg font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">Platform Control</h1>
-        </div>
-        <button
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open navigation menu"
-          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-      </div>
-
-      <div className="lg:hidden sticky top-[68px] z-20 border-b border-[var(--color-border)] bg-[var(--color-base)]/95 px-4 py-3 backdrop-blur">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--color-muted)]">Quick actions</p>
-        <div className="grid grid-cols-3 gap-2">
-          {navGroups.flatMap((group) => group.items).filter(({ id }) => ['analytics', 'gyms', 'branches'].includes(id)).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-xs font-bold transition-colors ${activeTab === id ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-charcoal)] dark:text-white border border-[var(--color-border)]'}`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="p-6 border-b border-[var(--color-border)] flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="text-xl font-extrabold text-[var(--color-deepgray)] dark:text-white truncate">Platform Control</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">Signed in as <strong>{user?.email}</strong></p>
-          </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close navigation menu"
-            className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-6">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">{group.label}</p>
-              <div className="space-y-0.5">
-                {group.items.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-150 ${
-                      activeTab === id
-                        ? 'bg-[var(--color-primary)] text-white'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{label}</span>
-                    {id === 'branches' && pendingBranches.length > 0 && (
-                      <span className="ml-auto bg-amber-400 text-amber-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0">{pendingBranches.length}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="flex-1 min-w-0">
+    <>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        {/* ============ ANALYTICS ============ */}
+        {/* ANALYTICS */}
         {activeTab === 'analytics' && (
           <div className="space-y-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {([
+                ['Members', overview?.members],
+                ['Trainers', overview?.trainers],
+                ['Gym owners', overview?.owners],
+                ['Gyms', overview?.gyms],
+              ] as const).map(([label, count]) => (
+                <div key={label} className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)]">
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{label}</p>
+                  <p className="text-3xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{count ? count.total : '—'}</p>
+                  <p className="mt-1 text-xs text-gray-500">{count ? deltaNote(count) : 'Loading…'}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+                <h3 className="font-bold text-[var(--color-deepgray)] dark:text-white">Recent activity</h3>
+                <button onClick={() => navigate('/admin/audit')} className="text-sm font-semibold text-[var(--color-primary)] hover:underline">Full log</button>
+              </div>
+              {logsLoading ? (
+                <div className="h-24 animate-pulse bg-gray-100 dark:bg-white/5" />
+              ) : logs.length === 0 ? (
+                <PanelEmpty icon={<Clock className="h-8 w-8" />} title="No activity yet" hint="Approvals, suspensions and other admin actions will be listed here as they happen." />
+              ) : (
+                <ul className="divide-y divide-[var(--color-border)]">
+                  {logs.slice(0, 8).map((l) => (
+                    <li key={l.id} className="flex flex-wrap items-baseline justify-between gap-2 px-6 py-3 text-sm">
+                      <p className="min-w-0 dark:text-white">
+                        <span className="font-semibold">{l.user?.username ?? 'System'}</span>{' '}
+                        <span className="text-gray-500">{l.action.toLowerCase().replace(/_/g, ' ')}</span>
+                      </p>
+                      <time className="text-xs text-gray-400" dateTime={l.createdAt}>{new Date(l.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {analyticsLoading ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4" aria-busy="true" aria-live="polite">
-                {[...Array(12)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+                {[...Array(12)].map((_, i) => <div key={i} className="h-28 bg-gray-100 dark:bg-white/5 rounded-lg animate-pulse" />)}
               </div>
             ) : (
               <>
@@ -589,8 +641,8 @@ const SuperAdminDashboard = () => {
                   />
                   <StatCard
                     label="Customer Lifetime Value"
-                    value={analytics?.cltv == null ? 'No churn yet' : `₹${analytics.cltv.toLocaleString('en-IN')}`}
-                    sub="CLTV"
+                    value={analytics?.cltv == null ? 'N/A' : `₹${analytics.cltv.toLocaleString('en-IN')}`}
+                    sub={analytics?.cltv == null ? 'CLTV, no churn yet' : 'CLTV'}
                     color="text-blue-500"
                   />
                 </div>
@@ -671,9 +723,9 @@ const SuperAdminDashboard = () => {
                     ) : (
                       <div className="space-y-4">
                         {Object.entries(analytics?.revenueByPlan || {}).map(([plan, revenue]) => (
-                          <div key={plan} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                          <div key={plan} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-lg">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
+                              <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center">
                                 <DollarSign className="w-5 h-5" />
                               </div>
                               <span className="font-semibold dark:text-white">{plan}</span>
@@ -703,9 +755,9 @@ const SuperAdminDashboard = () => {
                           expired: 'Expired/Cancelled',
                         };
                         return (
-                          <div key={status} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
+                          <div key={status} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-lg">
                             <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-xl ${colors[status]}10 ${colors[status]} flex items-center justify-center`}>
+                              <div className={`w-10 h-10 rounded-lg ${colors[status]}10 ${colors[status]} flex items-center justify-center`}>
                                 <Building2 className="w-5 h-5" />
                               </div>
                               <span className="font-semibold dark:text-white">{labels[status] || status}</span>
@@ -728,7 +780,7 @@ const SuperAdminDashboard = () => {
                         <thead className="bg-gray-50 dark:bg-white/5">
                           <tr>
                             {['Gym', 'Location', 'Members', 'Plan', 'Subscription'].map((h) => (
-                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                              <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -767,7 +819,7 @@ const SuperAdminDashboard = () => {
                         <thead className="bg-gray-50 dark:bg-white/5">
                           <tr>
                             {['Gym Name', 'Location', 'Owner', 'Registered', 'Status'].map((h) => (
-                              <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                              <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -797,7 +849,7 @@ const SuperAdminDashboard = () => {
           </div>
         )}
 
-        {/* ============ GYMS ============ */}
+        {/* GYMS */}
         {activeTab === 'gyms' && (
           <Panel title={`Registered Gym Partners (${gyms.length})`}>
             {gymsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : gyms.length === 0 ? (
@@ -808,7 +860,7 @@ const SuperAdminDashboard = () => {
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       {['Gym Name', 'Location', 'Owner', 'Registered', 'Status', 'Action'].map((h) => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -870,9 +922,9 @@ const SuperAdminDashboard = () => {
           </Panel>
         )}
 
-        {/* ============ GYM EDITOR ============ */}
+        {/* GYM EDITOR */}
         {editingGymId && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 mt-6">
+          <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 mt-6">
             <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-4">Edit Gym Details</h3>
             <form
               className="grid sm:grid-cols-2 gap-4"
@@ -919,11 +971,11 @@ const SuperAdminDashboard = () => {
           </div>
         )}
 
-        {/* ============ DELETE GYM CONFIRMATION ============ */}
+        {/* DELETE GYM CONFIRMATION */}
         {deletingGym && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border-2 border-red-200 dark:border-red-900/40 p-6 mt-6">
+          <div className="bg-[var(--color-surface)] rounded-lg border-2 border-red-200 dark:border-red-900/40 p-6 mt-6">
             <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
@@ -957,8 +1009,10 @@ const SuperAdminDashboard = () => {
           </div>
         )}
 
-        {/* ============ BRANCH APPROVALS ============ */}
+        {/* BRANCH APPROVALS */}
         {activeTab === 'branches' && (
+          <div className="space-y-6">
+          <ChangeRequestsPanel />
           <Panel title={`Pending Branch Requests (${pendingBranches.length})`}>
             {pendingBranchesLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : pendingBranches.length === 0 ? (
               <EmptyState text="No branch requests waiting for review." />
@@ -996,12 +1050,21 @@ const SuperAdminDashboard = () => {
               <p className="px-6 pb-4 text-sm text-red-600">{(approveBranchMut.error as any)?.response?.data?.error || 'Failed to approve branch.'}</p>
             )}
           </Panel>
+          </div>
         )}
 
-        {/* ============ REJECT BRANCH ============ */}
+        {activeTab === 'bookings' && (
+          <Panel title="Bookings">
+            <PanelEmpty icon={<CalendarDays className="h-8 w-8" />} title="Cross-gym bookings arrive in a later phase" hint="Each gym's PT and class bookings are in its owner console for now. A platform-wide view comes with marketplace orders." />
+          </Panel>
+        )}
+
+        {activeTab === 'system' && <SystemStatus />}
+
+        {/* REJECT BRANCH */}
         {rejectingBranch && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRejectingBranch(null)}>
-            <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setRejectingBranch(null)}>
+            <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <h3 className="font-bold text-lg text-[var(--color-deepgray)] dark:text-white mb-1">Reject "{rejectingBranch.name}"?</h3>
               <p className="text-sm text-gray-500 mb-4">The gym owner will see this reason on their dashboard.</p>
               <label className="block text-sm mb-4">
@@ -1022,7 +1085,7 @@ const SuperAdminDashboard = () => {
           </div>
         )}
 
-        {/* ============ PAYMENTS ============ */}
+        {/* PAYMENTS */}
         {activeTab === 'payments' && (
           <Panel
             title={`Payments Ledger (${platformFees.length})`}
@@ -1036,7 +1099,7 @@ const SuperAdminDashboard = () => {
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       {['Member', 'Gym', 'Amount', 'Due', 'Status', 'Receipt'].map((h) => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1068,112 +1131,36 @@ const SuperAdminDashboard = () => {
           </Panel>
         )}
 
-        {/* ============ USERS ============ */}
+        {/* USERS */}
         {activeTab === 'users' && (
-          <Panel
-            title={`Platform Users (${filteredUsers.length})`}
-            action={
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} aria-label="Search users" placeholder="Search users…" className="input-field pl-9! py-2! text-sm" />
-                </div>
-                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label="Filter by role" className="input-field py-2! text-sm bg-white! dark:bg-[#1a1a1a]!">
+          <Panel title={`Platform Users (${filteredUsers.length})`}>
+            <DataTable
+              label="Platform users"
+              columns={userColumns}
+              rows={usersData ? filteredUsers : undefined}
+              rowKey={(u) => u.id}
+              state={usersTable.state}
+              onChange={usersTable.update}
+              loading={usersLoading}
+              error={usersError}
+              onRetry={() => refetchUsers()}
+              searchPlaceholder="Search users…"
+              filters={
+                <select
+                  value={roleFilter}
+                  onChange={(e) => usersTable.update({ filters: e.target.value === 'ALL' ? {} : { role: e.target.value } })}
+                  aria-label="Filter by role"
+                  className="input-field min-h-11 sm:w-44"
+                >
                   {ROLES.map((r) => <option key={r} value={r}>{r === 'ALL' ? 'All roles' : r.replace('_', ' ')}</option>)}
                 </select>
-              </div>
-            }
-          >
-            {usersLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : filteredUsers.length === 0 ? (
-              <EmptyState text="No users match your filters." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-white/5">
-                    <tr>
-                      {['User', 'Role', 'Gym / Membership', 'Phone', 'Joined', 'Account', 'Delete'].map((h) => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                    {filteredUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-[var(--color-deepgray)] dark:text-white">{u.username}</p>
-                          <p className="text-xs text-gray-500 flex items-center gap-1"><Mail className="w-3 h-3" /> {u.email}</p>
-                        </td>
-                        <td className="px-6 py-4">{roleBadge(u.role)}</td>
-                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">
-                          {u.memberDetails ? (
-                            <span>{u.memberDetails.gym?.name} <span className={`ml-1 text-xs font-bold ${u.memberDetails.status === 'ACTIVE' ? 'text-green-600' : 'text-amber-500'}`}>({u.memberDetails.status})</span></span>
-                          ) : u.ownedGyms?.length ? (
-                            u.ownedGyms.map((g) => g.name).join(', ')
-                          ) : '—'}
-                        </td>
-                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{u.phone || '—'}</td>
-                        <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
-                        <td className="px-6 py-4">
-                          {u.role === 'SUPER_ADMIN' ? (
-                            <span className="text-xs font-semibold text-gray-400">—</span>
-                          ) : u.isActive ? (
-                            <button
-                              onClick={() => setConfirmAction({
-                                title: `Suspend ${u.username}?`,
-                                message: 'They will be logged out and blocked from signing in.',
-                                confirmLabel: 'Suspend',
-                                destructive: true,
-                                onConfirm: () => { setUserActive.mutate({ id: u.id, isActive: false }); setConfirmAction(null); },
-                              })}
-                              disabled={setUserActive.isPending}
-                              className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
-                            >
-                              <XCircle className="w-3.5 h-3.5" /> Suspend
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setUserActive.mutate({ id: u.id, isActive: true })}
-                              disabled={setUserActive.isPending}
-                              className="inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-semibold text-xs hover:underline disabled:opacity-50"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" /> Activate
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          {u.role !== 'SUPER_ADMIN' && (
-                            u.ownedGyms?.length ? (
-                              <span className="text-xs text-gray-400" title="This user owns a gym — delete the gym instead, which handles the owner account correctly.">
-                                Delete via gym
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => setConfirmAction({
-                                  title: `Delete ${u.username}?`,
-                                  message: "This permanently removes the account and all their data. This can't be undone.",
-                                  confirmLabel: 'Delete',
-                                  destructive: true,
-                                  onConfirm: () => { deleteUser.mutate(u.id); setConfirmAction(null); },
-                                })}
-                                disabled={deleteUser.isPending}
-                                aria-label={`Delete ${u.username}`}
-                                className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs hover:underline disabled:opacity-50"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Delete
-                              </button>
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              }
+              emptyTitle="No users yet."
+            />
           </Panel>
         )}
 
-        {/* ============ CMS ============ */}
+        {/* CMS */}
         {activeTab === 'cms' && (
           <div className="space-y-8">
             <Panel title="FAQs" action={<span className="text-xs font-semibold text-gray-400">{faqs.length} items · shown on Help page</span>}>
@@ -1277,7 +1264,7 @@ const SuperAdminDashboard = () => {
               ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
                   {testimonials.map((t) => (
-                    <div key={t.id} className="rounded-2xl border border-[var(--color-border)] p-4 bg-gray-50/50 dark:bg-white/[0.03]">
+                    <div key={t.id} className="rounded-lg border border-[var(--color-border)] p-4 bg-gray-50/50 dark:bg-white/[0.03]">
                       {editingTesti?.id === t.id ? (
                         <div className="space-y-2">
                           <input className="input-field text-sm" aria-label="Testimonial name" defaultValue={t.name} onChange={(e) => setEditingTesti({ ...editingTesti, name: e.target.value })} />
@@ -1403,7 +1390,7 @@ const SuperAdminDashboard = () => {
           </div>
         )}
 
-        {/* ============ SUPPORT ============ */}
+        {/* SUPPORT */}
         {activeTab === 'support' && (
           <Panel title={`Support Tickets (${tickets.length})`}>
             {ticketsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : tickets.length === 0 ? (
@@ -1414,7 +1401,7 @@ const SuperAdminDashboard = () => {
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       {['From', 'Subject', 'Priority', 'Status', 'Created', 'Actions'].map((h) => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1459,7 +1446,7 @@ const SuperAdminDashboard = () => {
           </Panel>
         )}
 
-        {/* ============ CONTACT MESSAGES ============ */}
+        {/* CONTACT MESSAGES */}
         {activeTab === 'messages' && (
           <Panel
             title={`Contact Form Messages (${platformMessages.length})`}
@@ -1500,10 +1487,10 @@ const SuperAdminDashboard = () => {
           </Panel>
         )}
 
-        {/* ============ SAAS ============ */}
+        {/* SAAS */}
         {activeTab === 'saas' && (
           <div className="space-y-8">
-            <Panel title="SaaS Plans (Vajra subscriptions)" action={
+            <Panel title="SaaS Plans (Kavach subscriptions)" action={
               <span className="text-xs font-semibold text-gray-400">{saasPlans.length} plans</span>
             }>
               {saasPlansLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : saasPlans.length === 0 ? (
@@ -1514,7 +1501,7 @@ const SuperAdminDashboard = () => {
                     <thead className="bg-gray-50 dark:bg-white/5">
                       <tr>
                         {['Plan', 'Cycle', 'Price', 'Limits', 'Status', 'Action'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                          <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1560,7 +1547,7 @@ const SuperAdminDashboard = () => {
 
             <Panel title="Create SaaS Plan">
               <div className="p-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <input value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} aria-label="Plan name" placeholder="Plan name" className="input-field py-2! text-sm" />
                   <input value={planForm.code} onChange={(e) => setPlanForm({ ...planForm, code: e.target.value.toUpperCase() })} aria-label="Plan code" placeholder="Code (e.g. GROW)" className="input-field py-2! text-sm" />
                   <input type="number" value={planForm.monthlyPrice} onChange={(e) => setPlanForm({ ...planForm, monthlyPrice: Number(e.target.value) })} aria-label="Plan price" placeholder="Price (₹/mo)" className="input-field py-2! text-sm" />
@@ -1588,7 +1575,7 @@ const SuperAdminDashboard = () => {
                     <thead className="bg-gray-50 dark:bg-white/5">
                       <tr>
                         {['Gym', 'Plan', 'Amount', 'Period', 'Status', 'Update'].map((h) => (
-                          <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                          <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1639,7 +1626,8 @@ const SuperAdminDashboard = () => {
           </div>
         )}
 
-        {/* ============ AUDIT ============ */}
+        {activeTab === 'website-requests' && <WebsiteRequestsPanel />}
+        {/* AUDIT */}
         {activeTab === 'audit' && (
           <Panel title="Security & Activity Logs">
             {logsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : logs.length === 0 ? (
@@ -1650,7 +1638,7 @@ const SuperAdminDashboard = () => {
                   <thead className="bg-gray-50 dark:bg-white/5">
                     <tr>
                       {['Action', 'Entity', 'Details', 'Performed By', 'When'].map((h) => (
-                        <th key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                        <th scope="col" key={h} className="text-left px-6 py-3 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1675,7 +1663,6 @@ const SuperAdminDashboard = () => {
           </Panel>
         )}
       </div>
-      </div>
 
       <ConfirmDialog
         open={!!confirmAction}
@@ -1686,7 +1673,7 @@ const SuperAdminDashboard = () => {
         onConfirm={() => confirmAction?.onConfirm()}
         onCancel={() => setConfirmAction(null)}
       />
-    </div>
+    </>
   );
 };
 

@@ -12,7 +12,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 const CookiesPage = () => {
   usePageMeta(
     'Cookie Policy',
-    'How Vajra Fitness uses cookies. We only set essential cookies to keep you signed in; we do not set advertising or tracking cookies.',
+    'How Kavach Fitness uses cookies. We only set essential cookies to keep you signed in; we do not set advertising or tracking cookies.',
     '/cookies',
   );
   return (
@@ -22,7 +22,7 @@ const CookiesPage = () => {
         <p className="text-gray-500 dark:text-gray-400 mb-12 text-sm">Last updated: August 2026</p>
 
         <Section title="1. What cookies do we use?">
-          <p>Vajra Fitness sets only <strong>essential cookies</strong> required for the platform to function:</p>
+          <p>Kavach Fitness sets only <strong>essential cookies</strong> required for the platform to function:</p>
           <ul className="list-disc pl-6 space-y-2">
             <li><strong>refreshToken</strong> — an httpOnly, SameSite=Strict cookie that keeps you signed in. It never stores your password and cannot be read by JavaScript.</li>
             <li><strong>vf-theme</strong> — remembers your light/dark theme preference on this device.</li>
@@ -58,7 +58,7 @@ const CookiesPage = () => {
         <Section title="5. Contact">
           <p>
             Questions about cookies? Write to us at{' '}
-            <a href="mailto:privacy@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">privacy@vajrafitness.in</a>.
+            <a href="mailto:privacy@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">privacy@kavachfitness.in</a>.
           </p>
         </Section>
       </div>

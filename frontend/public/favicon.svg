@@ -23,7 +23,7 @@
   <polygon points="84,44 106,40 96,74 72,58" fill="#D97706" />
   <polygon points="72,58 96,74 74,110 64,92" fill="url(#favGold)" />
 
-  <!-- Thunderbolt Strike (Vajra Core) -->
+  <!-- Thunderbolt Strike (Kavach Core) -->
   <polygon points="63,10 39,56 58,56 46,114 80,49 60,49" fill="url(#favGold)" />
   <!-- Thunderbolt Highlight -->
   <polygon points="61,16 45,53 58,53 52,94 72,51 59,51" fill="#FFFFFF" opacity="0.6" />

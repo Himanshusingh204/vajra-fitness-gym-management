@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
+import { SITE_NAME, SITE_URL } from '../utils/constants';
 
-const SITE_NAME = 'Vajra Fitness';
-const DEFAULT_TITLE = 'Vajra Fitness - Enterprise Gym Management Platform';
+const DEFAULT_TITLE = 'Kavach Fitness - Enterprise Gym Management Platform';
 const DEFAULT_DESCRIPTION =
   'Enterprise gym management platform for Indian fitness businesses. Manage memberships, automate payments, assign workout slips, and scale.';
-const SITE_URL = 'https://vajrafitness.in';
 
 const setMeta = (attr: 'name' | 'property', key: string, content: string) => {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);

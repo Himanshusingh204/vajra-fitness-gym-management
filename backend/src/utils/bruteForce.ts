@@ -10,8 +10,6 @@ const KEY_PREFIX = 'auth:lockout:';
 
 const memory = new Map<string, { count: number; lockedUntil: number }>();
 
-const memKey = (key: string) => `${KEY_PREFIX}mem:${key}`;
-
 // Returns milliseconds remaining in the lock (0 = not locked).
 export const isLocked = async (key: string): Promise<number> => {
   if (isRedisAvailable() && redis) {

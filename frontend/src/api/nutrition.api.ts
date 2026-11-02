@@ -28,14 +28,6 @@ export const createNutritionPlan = async (data: {
   return response.data;
 };
 
-export const updateNutritionPlan = async (
-  id: string,
-  data: { title: string; calories?: number | null; meals: string },
-) => {
-  const response = await api.put<NutritionPlan>(`/nutrition/${id}`, data);
-  return response.data;
-};
-
 export const deleteNutritionPlan = async (id: string) => {
   const response = await api.delete(`/nutrition/${id}`);
   return response.data;

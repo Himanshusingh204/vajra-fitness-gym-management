@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-// Load-test baseline for the Vajra Fitness backend.
+// Load-test baseline for the Kavach Fitness backend.
 // Usage:
 //   k6 run load/smoke.js                 # quick smoke (10 VUs, 30s)
 //   k6 run --vus 100 --duration 5m load/load.js

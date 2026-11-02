@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { joinGym } from '@/api/gym';
+import { setMemberGymId } from '@/api/session';
 import { Button } from '@/components/Button';
 import { Card, StatusPill } from '@/components/Card';
 import { GymPicker } from '@/components/GymPicker';
 import { Screen } from '@/components/Screen';
+import { Segmented } from '@/components/Segmented';
 import { ErrorState, FormError, Loading } from '@/components/States';
 import { Text } from '@/components/Text';
 import { WorkoutCard } from '@/components/WorkoutCard';
-import { useMemberProfile, useMyFees, useMyMemberships, useMyWorkouts } from '@/hooks/useMemberData';
+import { useMemberProfile, useMyFees, useMyGyms, useMyMemberships, useMyWorkouts } from '@/hooks/useMemberData';
 import { daysLeftLabel, daysUntil, formatDate, formatMoney, isOverdue, nextDueFee } from '@/lib/format';
 import { useUser } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -31,6 +33,28 @@ function JoinGym() {
       <GymPicker value={gymId} onChange={setGymId} />
       <Button label="Send request" onPress={() => join.mutate()} disabled={!gymId} loading={join.isPending} />
     </Card>
+  );
+}
+
+// shortcut: a segmented control gets cramped past three gyms; move to a picker sheet if members often have more.
+function GymSwitch({ current }: { current: string }) {
+  const queryClient = useQueryClient();
+  const gyms = useMyGyms();
+  if (!gyms.data || gyms.data.length < 2) return null;
+
+  const choose = (gymId: string) => {
+    setMemberGymId(gymId);
+    // Everything else under 'member' belongs to one gym; the gym list itself stays.
+    queryClient.resetQueries({ queryKey: ['member'], predicate: (q) => q.queryKey[1] !== 'gyms' });
+  };
+
+  return (
+    <Segmented
+      label="Gym"
+      value={current}
+      options={gyms.data.map((g) => ({ value: g.gymId, label: g.gym.name }))}
+      onChange={choose}
+    />
   );
 }
 
@@ -67,6 +91,7 @@ export default function MemberHome() {
 
     content = (
       <>
+        <GymSwitch current={profile.data.gymId} />
         {profile.data.status === 'PENDING' && (
           <Card style={{ backgroundColor: colors.warningSoft, borderColor: colors.warningSoft }}>
             <Text color={colors.warning}>Waiting for {profile.data.gym.name} to approve your membership.</Text>

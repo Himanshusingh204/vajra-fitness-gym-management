@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { useGymStore } from './useGymStore';
 
-export interface User {
+interface User {
   id: string;
   username: string;
   email: string;
@@ -35,6 +36,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     import('../services/api').then(({ default: api }) => {
       api.post('/auth/logout').catch(() => {});
     });
+    useGymStore.getState().setGymId(null);
     set({ user: null, token: null, isAuthenticated: false, bootstrapped: true });
   },
   bootstrap: async () => {

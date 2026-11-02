@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { listTrainers, createBooking, getMyBookings, getTrainerBookings, getGymBookings, updateBookingStatus } from '../controllers/booking.controller';
+import { listTrainers, createBooking, getMyBookings, getTrainerBookings, getGymBookings, updateBookingStatus, getAvailableSlots, rescheduleBooking } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { publicWriteLimiter, userWriteLimiter } from '../middlewares/rateLimit.middleware';
-import { createBookingSchema, updateBookingSchema, idParams, gymIdParams, dateRangeQuery, statusQuery, z } from '../utils/validators';
+import { createBookingSchema, updateBookingSchema, rescheduleBookingSchema, slotsQuery, idParams, gymIdParams, dateRangeQuery, statusQuery, z } from '../utils/validators';
 
 const router = Router();
 
@@ -17,6 +17,8 @@ router.get('/trainers', validate(z.object({ gymId: z.string().uuid('A valid gym 
 // Member routes
 router.post('/', authenticate, authorize(['MEMBER']), publicWriteLimiter, validate(createBookingSchema), wrap(createBooking));
 router.get('/my', authenticate, authorize(['MEMBER']), wrap(getMyBookings));
+router.get('/slots', authenticate, authorize(['MEMBER']), validate(slotsQuery, ['query']), wrap(getAvailableSlots));
+router.patch('/:id/reschedule', authenticate, authorize(['MEMBER']), userWriteLimiter, validate(idParams, ['params']), validate(rescheduleBookingSchema), wrap(rescheduleBooking));
 router.patch('/:id', authenticate, userWriteLimiter, validate(idParams, ['params']), validate(updateBookingSchema), wrap(updateBookingStatus));
 
 // Trainer routes

@@ -100,6 +100,8 @@ const seedTenant = async (label: string) => {
   await prisma.gym.update({ where: { id: gym.id }, data: { name: `${label} Gym ${MARKER}` } });
   const member = await seedMember(gym.id);
   const trainer = await seedTrainer(gym.id);
+  const applicant = await seedTrainer(gym.id);
+  await prisma.trainerDetails.update({ where: { id: applicant.details.id }, data: { status: 'PENDING' } });
   const staffUser = await prisma.user.create({
     data: { username: `${label} Desk`, email: uniq('staff'), password: 'x', role: 'STAFF' },
   });
@@ -147,7 +149,7 @@ const seedTenant = async (label: string) => {
   const branch = await prisma.branch.create({ data: { gymId: gym.id, name: `Branch ${MARKER}`, address: '1 Road', city: 'Pune', state: 'MH' } });
 
   return {
-    gym, admin, member, trainer, staffUser, staff, plan, membership, fee, attendance, slip, enquiry, booking, progress,
+    gym, admin, member, trainer, applicant, staffUser, staff, plan, membership, fee, attendance, slip, enquiry, booking, progress,
     nutrition, notification, memberNotification, notice, expense, category, product, equipment, gymClass, classBooking,
     payslip, referral, branch,
   };
@@ -219,7 +221,6 @@ const probes = (a: Tenant, b: Tenant): Probe[] => {
     { method: 'delete', path: `/api/members/${mB}` },
     { method: 'post', path: `/api/members/gym/${A}`, body: { username: 'Cross Plan', email: email(), status: 'ACTIVE', planId: b.plan.id } },
     { method: 'post', path: `/api/members/gym/${A}`, body: { username: 'Cross Branch', email: email(), status: 'ACTIVE', branchId: b.branch.id } },
-    { method: 'post', path: '/api/members/enroll', body: { gymId: B } },
     // membership plans
     { method: 'get', path: `/api/plans/admin/gym/${B}` },
     { method: 'post', path: '/api/plans', body: { name: 'Intruder plan', duration: 30, price: 100, gymId: B } },
@@ -230,6 +231,16 @@ const probes = (a: Tenant, b: Tenant): Probe[] => {
     { method: 'post', path: `/api/staff/gym/${B}`, body: { username: 'Intruder', email: email(), roleType: 'STAFF', roleSpecifics: 'Desk' } },
     { method: 'delete', path: `/api/staff/${b.staff.id}` },
     { method: 'delete', path: `/api/staff/${b.trainer.details.id}` },
+    { method: 'get', path: `/api/staff/gym/${B}/trainer-applications` },
+    { method: 'put', path: `/api/staff/trainer-applications/${b.applicant.details.id}/approve` },
+    { method: 'put', path: `/api/staff/trainer-applications/${b.applicant.details.id}/reject`, body: { reason: 'Intruder' } },
+    // member self-service with gym B picked (members can belong to several gyms)
+    { method: 'get', path: `/api/members/my-profile?gymId=${B}` },
+    { method: 'get', path: `/api/memberships/my?gymId=${B}` },
+    { method: 'get', path: `/api/attendance/my?gymId=${B}` },
+    { method: 'post', path: `/api/attendance/my/check-in?gymId=${B}`, body: {} },
+    { method: 'get', path: `/api/referrals/me?gymId=${B}` },
+    { method: 'get', path: `/api/bookings/my?gymId=${B}` },
     // fees
     { method: 'get', path: `/api/fees/member/${mB}` },
     { method: 'get', path: `/api/fees/${b.fee.id}/receipt` },

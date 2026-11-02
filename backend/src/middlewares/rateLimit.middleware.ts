@@ -10,7 +10,8 @@ const bypass = (_req: any, _res: any, next: any) => next();
 // Generic auth endpoints limiter (register / refresh)
 export const authLimiter = isTest ? bypass : rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  // Every page load calls /refresh, so dev reloads hit 30 quickly.
+  max: process.env.NODE_ENV === 'production' ? 60 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   store: new RedisRateLimitStore('auth'),
@@ -48,6 +49,16 @@ export const userWriteLimiter = isTest ? bypass : rateLimit({
   legacyHeaders: false,
   store: new RedisRateLimitStore('userWrite'),
   message: { error: 'Too many requests, please slow down.' },
+});
+
+// File uploads: each one is up to 5 MB written to storage.
+export const uploadLimiter = isTest ? bypass : rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisRateLimitStore('upload'),
+  message: { error: 'Too many uploads, please try again later.', code: 'RATE_LIMITED' },
 });
 
 // Logout — prevents cookie-flooding / token-revocation spam. Light touch since

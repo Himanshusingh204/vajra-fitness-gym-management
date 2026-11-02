@@ -12,7 +12,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 const RefundPage = () => {
   usePageMeta(
     'Refund & Cancellation Policy',
-    'Vajra Fitness refund and cancellation policy for membership plans and payments.',
+    'Kavach Fitness refund and cancellation policy for membership plans and payments.',
     '/refund',
   );
   return (
@@ -20,7 +20,7 @@ const RefundPage = () => {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20">
       <h1 className="text-4xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-3">Refund & Cancellation Policy</h1>
       <p className="text-gray-500 dark:text-gray-400 mb-12 text-sm">
-        Last updated: 1 August 2026 · Governs all Vajra Fitness subscription and membership transactions
+        Last updated: 1 August 2026 · Governs all Kavach Fitness subscription and membership transactions
       </p>
 
       <Section title="1. SaaS Platform Subscriptions (Gym Owners)">
@@ -29,11 +29,11 @@ const RefundPage = () => {
       </Section>
 
       <Section title="2. Member Gym Memberships">
-        <p>Membership fee refund eligibility is determined by the individual gym branch and their own cancellation policy. Vajra Fitness platform does not directly control member refund decisions — please contact your enrolled gym branch directly.</p>
+        <p>Membership fee refund eligibility is determined by the individual gym branch and their own cancellation policy. Kavach Fitness platform does not directly control member refund decisions — please contact your enrolled gym branch directly.</p>
       </Section>
 
       <Section title="3. Duplicate or Failed Payments">
-        <p>In the event of a duplicate charge or a payment deducted where the service was not activated, raise a request at <a href="mailto:billing@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">billing@vajrafitness.in</a> within 7 days. We will verify and process the refund within 5 business days.</p>
+        <p>In the event of a duplicate charge or a payment deducted where the service was not activated, raise a request at <a href="mailto:billing@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">billing@kavachfitness.in</a> within 7 days. We will verify and process the refund within 5 business days.</p>
       </Section>
 
       <Section title="4. Refund Process">
@@ -41,7 +41,7 @@ const RefundPage = () => {
       </Section>
 
       <Section title="5. Contact for Disputes">
-        <p>Raise a ticket at <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact Us</Link> or email <a href="mailto:billing@vajrafitness.in" className="text-[var(--color-primary)] hover:underline">billing@vajrafitness.in</a>. All disputes are subject to applicable legal jurisdiction in India.</p>
+        <p>Raise a ticket at <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact Us</Link> or email <a href="mailto:billing@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">billing@kavachfitness.in</a>. All disputes are subject to applicable legal jurisdiction in India.</p>
       </Section>
     </div>
   </div>

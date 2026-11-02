@@ -3,11 +3,12 @@ import { MapPin, Phone, Mail, Clock, Send, CheckCircle, MessageCircle } from 'lu
 import api from '../services/api';
 import { Reveal } from '../components/Reveal';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_PHONE_DISPLAY, WORKING_HOURS } from '../utils/constants';
 
 const ContactPage = () => {
   usePageMeta(
     'Contact Us',
-    'Get in touch with the Vajra Fitness team. Questions, partnerships, or support — reach us via phone, email, or the contact form.',
+    'Get in touch with the Kavach Fitness team. Questions, partnerships, or support — reach us via phone, email, or the contact form.',
     '/contact',
   );
   const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '' });
@@ -58,17 +59,15 @@ const ContactPage = () => {
   };
 
   const contactDetails = [
-    { icon: MapPin, label: 'Address', value: 'Vajra Fitness HQ, India' },
-    { icon: Phone, label: 'Phone', value: '+91 98765 43210', href: 'tel:+919876543210' },
-    { icon: Mail, label: 'Email', value: 'support@vajrafitness.in', href: 'mailto:support@vajrafitness.in' },
-    { icon: Clock, label: 'Working Hours', value: 'Mon–Sat: 9 AM – 7 PM IST' },
+    { icon: MapPin, label: 'Address', value: 'Kavach Fitness HQ, India' },
+    { icon: Phone, label: 'Phone', value: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE}` },
+    { icon: Mail, label: 'Email', value: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` },
+    { icon: Clock, label: 'Working Hours', value: WORKING_HOURS },
   ];
 
   return (
     <div className="min-h-screen bg-[var(--color-base)] dark:bg-[var(--color-base)] overflow-x-hidden">
       <div className="relative pt-32 pb-20 md:pt-40 overflow-hidden">
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[var(--color-primary)]/10 rounded-full blur-3xl animate-blob" />
-        <div className="absolute top-1/3 -left-24 w-80 h-80 bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-7s]" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
