@@ -1,6 +1,6 @@
 # Build context is ./backend (see docker-compose.yml).
 
-FROM node:22-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 
 # Prisma needs openssl to pick the right query engine.
@@ -26,7 +26,7 @@ FROM build AS prod-deps
 RUN npm prune --omit=dev && npx prisma generate
 
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     PORT=5000
 WORKDIR /app
