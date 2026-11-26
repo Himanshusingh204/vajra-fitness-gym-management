@@ -6,8 +6,10 @@ import {
   deleteNotification,
 } from '../controllers/notification.controller';
 import { authenticate } from '../middlewares/auth.middleware';
+import { readLimiter } from '../middlewares/rateLimit.middleware';
 
 const router = Router();
+router.use(readLimiter);
 
 const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve(fn(req, res, next)).catch(next);

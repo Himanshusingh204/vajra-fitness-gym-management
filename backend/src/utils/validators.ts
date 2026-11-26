@@ -110,7 +110,16 @@ const sanitize = (max: number) =>
     .string()
     .trim()
     .max(max, `Must be at most ${max} characters`)
-    .transform((v) => v.replace(/<[^>]*>/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ''));
+    .transform((v) => {
+      // Repeat until stable: one pass turns "<<b>script>" into "<script>".
+      let out = v;
+      let prev: string;
+      do {
+        prev = out;
+        out = out.replace(/<[^>]*>/g, '');
+      } while (out !== prev);
+      return out.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+    });
 
 // ---- Re-usable schemas ----
 export const nameSchema = username;
