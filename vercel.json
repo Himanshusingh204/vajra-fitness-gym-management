@@ -1,6 +1,7 @@
 {
   "version": 2,
   "outputDirectory": "frontend/dist",
+  "regions": ["sin1"],
   "crons": [
     {
       "path": "/api/internal/cron",
