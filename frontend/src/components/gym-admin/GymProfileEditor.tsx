@@ -15,6 +15,11 @@ type Form = {
   phone: string;
   email: string;
   openingHours: string;
+  lat: string;
+  lng: string;
+  parking: string;
+  accessibility: string;
+  rules: string;
   imageUrl: string;
   logoUrl: string;
   brandColor: string;
@@ -30,6 +35,11 @@ const toForm = (gym: MyGym): Form => ({
   phone: gym.phone ?? '',
   email: gym.email ?? '',
   openingHours: gym.openingHours ?? '',
+  lat: gym.lat == null ? '' : String(gym.lat),
+  lng: gym.lng == null ? '' : String(gym.lng),
+  parking: gym.parking ?? '',
+  accessibility: gym.accessibility ?? '',
+  rules: gym.rules ?? '',
   imageUrl: gym.imageUrl ?? '',
   logoUrl: gym.logoUrl ?? '',
   brandColor: gym.brandColor ?? '',
@@ -72,10 +82,11 @@ function Field({ label, wide, children }: { label: string; wide?: boolean; child
 }
 
 export default function GymProfileEditor() {
-  const { data: gym, isLoading } = useQuery({ queryKey: ['my-branch'], queryFn: getMyGym });
-  if (isLoading || !gym) {
+  const { data: gym, isLoading, isError, refetch } = useQuery({ queryKey: ['my-branch'], queryFn: getMyGym });
+  if (isLoading) {
     return <div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />;
   }
+  if (isError || !gym) return <div role="alert" className="rounded-lg border border-[var(--color-border)] p-5">Could not load your gym profile. <button type="button" className="underline" onClick={() => refetch()}>Try again</button></div>;
   return <ProfileForm key={gym.id} gym={gym} />;
 }
 
@@ -90,6 +101,7 @@ function ProfileForm({ gym }: { gym: MyGym }) {
   const [requesting, setRequesting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [locationError, setLocationError] = useState('');
   const { data: requests = [] } = useQuery({ queryKey: ['my-change-requests'], queryFn: getMyChangeRequests });
   const pending = requests.find((r) => r.status === 'PENDING_REVIEW');
   const lastDecided = requests.find((r) => r.status === 'REJECTED' || r.status === 'APPROVED');
@@ -106,6 +118,11 @@ function ProfileForm({ gym }: { gym: MyGym }) {
         phone: f.phone || null,
         email: f.email || null,
         openingHours: f.openingHours || null,
+        lat: f.lat.trim() ? Number(f.lat) : null,
+        lng: f.lng.trim() ? Number(f.lng) : null,
+        parking: f.parking || null,
+        accessibility: f.accessibility || null,
+        rules: f.rules || null,
         imageUrl: f.imageUrl || null,
         logoUrl: f.logoUrl || null,
         brandColor: f.brandColor || null,
@@ -179,6 +196,13 @@ function ProfileForm({ gym }: { gym: MyGym }) {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
+    const lat = form.lat.trim();
+    const lng = form.lng.trim();
+    if ((lat === '') !== (lng === '') || (lat && (!Number.isFinite(Number(lat)) || Number(lat) < -90 || Number(lat) > 90)) || (lng && (!Number.isFinite(Number(lng)) || Number(lng) < -180 || Number(lng) > 180))) {
+      setLocationError('Enter a valid latitude and longitude together, or leave both blank.');
+      return;
+    }
+    setLocationError('');
     save.mutate(form);
   };
 
@@ -272,6 +296,23 @@ function ProfileForm({ gym }: { gym: MyGym }) {
         <Field label="Opening hours" wide>
           <input className="input-field" value={form.openingHours} onChange={set('openingHours')} maxLength={200} placeholder="Mon-Sat 6 AM - 10 PM, Sun 7 AM - 12 PM" />
         </Field>
+      </Section>
+
+      <Section title="Location and visitor information" hint="Add the precise location and practical details visitors need before they arrive.">
+        <Field label="Latitude">
+          <input className="input-field" type="number" step="any" min="-90" max="90" value={form.lat} onChange={set('lat')} placeholder="e.g. 19.0760" />
+        </Field>
+        <Field label="Longitude">
+          <input className="input-field" type="number" step="any" min="-180" max="180" value={form.lng} onChange={set('lng')} placeholder="e.g. 72.8777" />
+        </Field>
+        <div className="sm:col-span-2 text-sm text-gray-500">
+          Enter both coordinates, or leave both blank to use the street address.{' '}
+          <a className="font-semibold text-[var(--color-primary)] underline" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.lat.trim() && form.lng.trim() ? `${form.lat.trim()},${form.lng.trim()}` : [form.name, form.address, form.city, form.state].filter(Boolean).join(', '))}`}>Check location on Google Maps <ExternalLink className="inline h-3.5 w-3.5" /></a>
+          {locationError && <p role="alert" className="mt-2 text-red-600">{locationError}</p>}
+        </div>
+        <Field label="Parking"><input className="input-field" value={form.parking} onChange={set('parking')} maxLength={200} placeholder="e.g. Parking available behind the building" /></Field>
+        <Field label="Accessibility"><input className="input-field" value={form.accessibility} onChange={set('accessibility')} maxLength={200} placeholder="e.g. Step-free entrance" /></Field>
+        <Field label="Visitor guidelines" wide><textarea className="input-field min-h-24" value={form.rules} onChange={set('rules')} maxLength={2000} placeholder="What should visitors know before their first visit?" /></Field>
       </Section>
 
       <Section title="Facilities">

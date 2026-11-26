@@ -33,7 +33,7 @@ const RefundPage = () => {
       </Section>
 
       <Section title="3. Duplicate or Failed Payments">
-        <p>In the event of a duplicate charge or a payment deducted where the service was not activated, raise a request at <a href="mailto:billing@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">billing@kavachfitness.in</a> within 7 days. We will verify and process the refund within 5 business days.</p>
+        <p>In the event of a duplicate charge or a payment deducted where the service was not activated, raise a request at <a href="mailto:billing@kavachfitness.in" className="text-[var(--color-primary)] underline underline-offset-2">billing@kavachfitness.in</a> within 7 days. We will verify and process the refund within 5 business days.</p>
       </Section>
 
       <Section title="4. Refund Process">
@@ -41,7 +41,7 @@ const RefundPage = () => {
       </Section>
 
       <Section title="5. Contact for Disputes">
-        <p>Raise a ticket at <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact Us</Link> or email <a href="mailto:billing@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">billing@kavachfitness.in</a>. All disputes are subject to applicable legal jurisdiction in India.</p>
+        <p>Raise a ticket at <Link to="/contact" className="text-[var(--color-primary)] underline underline-offset-2">Contact Us</Link> or email <a href="mailto:billing@kavachfitness.in" className="text-[var(--color-primary)] underline underline-offset-2">billing@kavachfitness.in</a>. All disputes are subject to applicable legal jurisdiction in India.</p>
       </Section>
     </div>
   </div>

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useQueryClient } from '@tanstack/react-query';
 import * as auth from '../api/auth';
 import { ApiError } from '../api/errors';
-import { api, getRefreshToken, onSessionEnded } from '../api/session';
+import { api, getRefreshToken, loadMemberGymId, onSessionEnded } from '../api/session';
 import type { Me } from '../api/types';
 import { onAccountStateChanged } from '../lib/queryClient';
 
@@ -11,6 +11,8 @@ type Status = 'loading' | 'signedOut' | 'signedIn' | 'unreachable';
 type AuthValue = {
   status: Status;
   user: Me | null;
+  // Why the app is 'unreachable': offline or the database is down.
+  error: unknown;
   signIn: (email: string, password: string) => Promise<void>;
   signUpMember: (body: auth.MemberSignup) => Promise<void>;
   signUpTrainer: (body: auth.TrainerSignup) => Promise<void>;
@@ -26,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [user, setUser] = useState<Me | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [error, setError] = useState<unknown>(null);
 
   const endSession = useCallback(() => {
     queryClient.clear();
@@ -48,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!cancelled) setStatus('signedOut');
           return;
         }
+        await loadMemberGymId();
         const me = await auth.getMe();
         if (!cancelled) {
           setUser(me);
@@ -57,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         // Offline or the database is down: the session is still good, so offer a retry instead of sign in.
         const unreachable = err instanceof ApiError && (err.code === 'NETWORK' || err.code === 'DB_UNREACHABLE');
+        setError(err);
         setStatus(unreachable ? 'unreachable' : 'signedOut');
       }
     })();
@@ -82,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       user,
+      error,
       signIn: async (email, password) => {
         await auth.login(email, password);
         await loadUser();
@@ -104,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAttempt((n) => n + 1);
       },
     }),
-    [status, user, loadUser, endSession],
+    [status, user, error, loadUser, endSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

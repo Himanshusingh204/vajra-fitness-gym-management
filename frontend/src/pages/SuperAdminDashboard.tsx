@@ -12,6 +12,7 @@ import { LineChart } from '../components/charts';
 import WebsiteRequestsPanel from './superadmin/WebsiteRequestsPanel';
 import ChangeRequestsPanel from './superadmin/ChangeRequestsPanel';
 import SystemStatus from './superadmin/SystemStatus';
+import FinancePanel from './superadmin/FinancePanel';
 import PanelEmpty from '../components/ui/EmptyState';
 import DataTable, { type Column } from '../components/ui/DataTable';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -851,7 +852,10 @@ const SuperAdminDashboard = () => {
 
         {/* GYMS */}
         {activeTab === 'gyms' && (
-          <Panel title={`Registered Gym Partners (${gyms.length})`}>
+          <Panel
+            title={`Registered Gym Partners (${gyms.length})`}
+            action={<button onClick={() => downloadFile('/exports/gyms.csv', 'gyms.csv')} className="btn-outline text-sm px-3 py-1.5">Export CSV</button>}
+          >
             {gymsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : gyms.length === 0 ? (
               <EmptyState text="No gyms registered yet." />
             ) : (
@@ -1060,6 +1064,7 @@ const SuperAdminDashboard = () => {
         )}
 
         {activeTab === 'system' && <SystemStatus />}
+        {activeTab === 'finance' && <FinancePanel />}
 
         {/* REJECT BRANCH */}
         {rejectingBranch && (
@@ -1155,6 +1160,7 @@ const SuperAdminDashboard = () => {
                   {ROLES.map((r) => <option key={r} value={r}>{r === 'ALL' ? 'All roles' : r.replace('_', ' ')}</option>)}
                 </select>
               }
+              onExport={() => downloadFile(`/exports/users.csv${roleFilter === 'ALL' ? '' : `?role=${roleFilter}`}`, 'users.csv')}
               emptyTitle="No users yet."
             />
           </Panel>

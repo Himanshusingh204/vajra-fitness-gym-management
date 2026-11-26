@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router';
 import { usePageMeta } from '../../hooks/usePageMeta';
 import { useGymSite } from './gymData';
-import { GymPageIntro, JoinBand, PlanGrid, Section } from './shared';
+import { GymPageIntro, JoinBand, PlanGrid } from './shared';
 
 export default function GymPlansPage() {
   const { gym, base, joinUrl } = useGymSite();
@@ -10,10 +10,15 @@ export default function GymPlansPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
-      <GymPageIntro eyebrow="Membership" title="Choose a plan that moves with you." description={`Clear membership options at ${gym.name}. Compare duration and pricing, then send your request online.`} />
-      <Section title="Membership plans">
+      <GymPageIntro
+        eyebrow="Membership"
+        title="Plans and prices"
+        description={`${gym.plans.length} ${gym.plans.length === 1 ? 'plan' : 'plans'} at ${gym.name}. Pick one and send a join request, and the gym confirms your start date.`}
+        photo={1}
+      />
+      <div className="mt-10 md:mt-14">
         <PlanGrid plans={gym.plans} gymId={gym.id} />
-      </Section>
+      </div>
       <JoinBand gym={gym} joinUrl={joinUrl} />
     </div>
   );

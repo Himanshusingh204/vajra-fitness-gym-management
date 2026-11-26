@@ -478,30 +478,9 @@ const GymAdminDashboard = () => {
   });
 
   // ---------- Reports ----------
-  const downloadCsv = (filename: string, rows: (string | number)[][]) => {
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportFees = () => {
-    downloadCsv(`fees-${branch?.name || 'gym'}.csv`, [
-      ['Member', 'Email', 'Amount', 'Payment Date', 'Due Date', 'Status'],
-      ...fees.map((f: any) => [f.member?.user?.username || '', f.member?.user?.email || '', f.amount, new Date(f.paymentDate).toLocaleDateString('en-IN'), new Date(f.dueDate).toLocaleDateString('en-IN'), f.status]),
-    ]);
-  };
-
-  const exportMembers = () => {
-    downloadCsv(`members-${branch?.name || 'gym'}.csv`, [
-      ['Name', 'Email', 'Phone', 'Plan', 'Joined', 'Status'],
-      ...members.map((m) => [m.user?.username || '', m.user?.email || '', m.user?.phone || '', m.membershipPlan?.name || '—', new Date(m.joiningDate).toLocaleDateString('en-IN'), m.status]),
-    ]);
-  };
+  const exportCsv = (kind: string) => downloadFile(`/exports/gym/${branch?.id}/${kind}.csv`, `${kind}.csv`);
+  const exportFees = () => exportCsv('payments');
+  const exportMembers = () => exportCsv('members');
 
   const monthlyRows = useMemo(() => {
     const monthly: Record<string, { collected: number; outstanding: number; count: number }> = {};
@@ -1402,8 +1381,9 @@ const GymAdminDashboard = () => {
         {/* PT Bookings */}
         {activeTab === 'bookings' && (
           <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
-            <div className="px-6 py-4 border-b border-[var(--color-border)]">
+            <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
               <h2 className="font-bold text-lg dark:text-white">PT Bookings ({bookings.length})</h2>
+              <button onClick={() => exportCsv('bookings')} className="btn-outline text-sm px-3 py-1.5"><Download className="w-3.5 h-3.5" /> CSV</button>
             </div>
             {bookingsLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : bookings.length === 0 ? (
               <EmptyState icon={<CalendarDays className="h-8 w-8" />} title="No PT bookings yet" hint="Sessions booked by members with your trainers will show up here." />
@@ -1946,6 +1926,7 @@ const GymAdminDashboard = () => {
                   <div className="flex items-center gap-3">
                     {branches.length > 0 && branchFilterSelect}
                     <span className="text-xs font-semibold text-blue-500">{stats?.attendanceToday ?? 0} check-ins</span>
+                    <button onClick={() => exportCsv('attendance')} className="btn-outline text-sm px-3 py-1.5"><Download className="w-3.5 h-3.5" /> CSV</button>
                   </div>
                 </div>
                 {attendanceLoading ? <div className="p-8 text-center text-gray-400">Loading…</div> : attendance.length === 0 ? (

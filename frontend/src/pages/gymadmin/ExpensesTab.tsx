@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Wallet, Receipt, TrendingDown, Plus, Trash2, Download, RotateCcw } from 'lucide-react';
 import { getExpenses, recordExpense, deleteExpense, getExpenseSummary, type Expense } from '../../api/expense.api';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { downloadFile } from '../../services/api';
 import { localDateString } from '../../utils/format';
 
 const CATEGORIES = [
@@ -96,27 +97,7 @@ export default function ExpensesTab({ gymId }: { gymId: string }) {
     },
   });
 
-  const exportCsv = () => {
-    const rows: (string | number)[][] = [
-      ['Date', 'Category', 'Description', 'Amount', 'Recurring', 'Notes'],
-      ...expenses.map((e) => [
-        new Date(e.date).toLocaleDateString('en-IN'),
-        categoryLabel(e.category),
-        e.description,
-        e.amount,
-        e.isRecurring ? 'Yes' : 'No',
-        e.notes || '',
-      ]),
-    ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'expenses.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportCsv = () => downloadFile(`/exports/gym/${gymId}/expenses.csv`, 'expenses.csv');
 
   const topCategory = summary?.byCategory?.length
     ? [...summary.byCategory].sort((a, b) => (b._sum.amount ?? 0) - (a._sum.amount ?? 0))[0]

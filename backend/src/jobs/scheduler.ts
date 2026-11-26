@@ -6,6 +6,7 @@ import { backgroundJobsRun, backgroundJobsErrors } from '../utils/metrics';
 import { sendMembershipExpiryEmail } from '../utils/email';
 import { logger } from '../utils/logger';
 import { runJobs } from './queue';
+import { scheduleMoneyJobs } from '../services/payout.service';
 
 export const JOB_INTERVAL_MS = 60 * 60 * 1000; // run hourly
 
@@ -224,6 +225,7 @@ export const runScheduledJobs = async () => {
     runTracked('paymentReconciliation', runPaymentReconciliation),
     runTracked('subscriptionDunning', runSubscriptionDunning),
     runTracked('jobQueue', runJobs),
+    runTracked('moneyJobs', scheduleMoneyJobs),
   ]);
   return { expired, expiryNudges, feeNudges, subscriptionLifecycle, paymentReconciliation, dunning, jobQueue };
 };

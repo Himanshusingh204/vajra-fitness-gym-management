@@ -115,6 +115,16 @@ describe('Auth', () => {
     expect(refresh.status).toBe(403);
   });
 
+  it('accepts the loopback preview origin when rotating a web session', async () => {
+    const { user } = await seedAdmin();
+    const loginRes = await login(user.email);
+    const res = await agent.post('/api/auth/refresh')
+      .set('Origin', 'http://127.0.0.1:5173')
+      .set('Cookie', refreshCookie(loginRes)!);
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeTruthy();
+  });
+
   it('activates an admin-created member via one-time link, then logs in', async () => {
     const { user: admin, gym } = await seedAdmin();
     const adminToken = await login(admin.email).then((r) => r.body.token as string);
@@ -132,6 +142,7 @@ describe('Auth', () => {
     const act = await agent.post('/api/auth/activate').send({ token, password: PASSWORD });
     expect(act.status).toBe(200);
     expect(act.body.token).toBeTruthy();
+    expect((await agent.get('/api/auth/me').set('Authorization', `Bearer ${act.body.token}`)).status).toBe(200);
 
     const member = await prisma.user.findUniqueOrThrow({ where: { email: addRes.body.email } });
     const again = await login(member.email, PASSWORD);

@@ -16,7 +16,7 @@ import { Banner, Field, FormFooter, SubmitButton } from './auth/formParts';
 import { a11y, accountFields, errorInput, focusFirstError, footerLink, mismatch, passwordsMatch } from './auth/authForm';
 import { ROUTES } from '../utils/routes';
 
-const stripUnsafeText = (value: string) => value.replace(/<[^>]*>/g, '').split('').filter((char) => {
+const stripUnsafeText = (value: string) => value.replace(/[<>]/g, '').split('').filter((char) => {
   const code = char.charCodeAt(0);
   return (code >= 32 || code === 9 || code === 10 || code === 13) && code !== 127;
 }).join('').trim();
@@ -54,8 +54,8 @@ const VendorRegisterPage = () => {
     try {
       const { token, user, message } = (await api.post('/auth/register/vendor', { username, email, phone, password, gymName, city, state, address })).data;
       setAuth(user, token);
-      addNotification('success', message || 'Gym registered. We will review it shortly.');
-      navigate('/owner', { replace: true });
+      addNotification('success', message || 'Account created. Now fill in your gym application.');
+      navigate(ROUTES.partnerApply, { replace: true });
     } catch (err: any) {
       const issues: Array<{ path?: string; message?: string }> = err.response?.data?.issues ?? [];
       let focusedField: string | undefined;
@@ -80,8 +80,9 @@ const VendorRegisterPage = () => {
   return (
     <AuthSplitLayout
       role="owner"
+      variant="register"
       title="Register your gym"
-      subtitle="Your gym goes live once our team approves it."
+      subtitle="Next you fill a short application. Your gym goes live once our team approves it."
       top={<><RegistrationProgress current={2} /><AuthRoleTabs active="owner" mode="register" /></>}
       wide
     >

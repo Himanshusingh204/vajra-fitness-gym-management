@@ -2,12 +2,11 @@ import { Redirect } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { ErrorState, Loading } from '@/components/States';
-import { ApiError } from '@/api/errors';
 import { homePath } from '@/lib/roles';
 import { useAuth } from '@/providers/AuthProvider';
 
 export default function Index() {
-  const { status, user, retry, signOut } = useAuth();
+  const { status, user, retry, signOut, error } = useAuth();
 
   if (status === 'loading') {
     return (
@@ -20,7 +19,7 @@ export default function Index() {
   if (status === 'unreachable') {
     return (
       <Screen scroll={false}>
-        <ErrorState error={new ApiError(0, 'offline', 'NETWORK')} onRetry={retry} />
+        <ErrorState error={error} onRetry={retry} />
         <Button label="Sign out" variant="ghost" onPress={signOut} />
       </Screen>
     );

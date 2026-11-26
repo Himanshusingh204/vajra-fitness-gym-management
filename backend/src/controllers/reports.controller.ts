@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { canAccessGym } from '../utils/tenant';
 import { redis, isRedisAvailable } from '../utils/redis';
+import { APP_TIMEZONE, startOfDayIn as startOfDay, endOfDayIn as endOfDay, startOfMonthIn, endOfMonthIn, monthIndexIn } from '../utils/time';
 
 // Analytics is heavy (a dozen+ queries) and polled every 60s by the
 // dashboard, which already tolerates that much staleness — cache the
@@ -10,19 +11,9 @@ import { redis, isRedisAvailable } from '../utils/redis';
 // instead of re-running the full query set against a remote DB.
 const ANALYTICS_CACHE_TTL_SECONDS = 30;
 
-const startOfDay = (d: Date) => {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  return date;
-};
-
-const endOfDay = (d: Date) => {
-  const date = new Date(d);
-  date.setHours(23, 59, 59, 999);
-  return date;
-};
-
 const today = () => new Date();
+const DAY_MS = 24 * 60 * 60 * 1000;
+const monthLabel = (d: Date) => d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit', timeZone: APP_TIMEZONE });
 
 // A membership is "active on date D" if it has startDate <= end of D and
 // endDate >= start of D, and its (current) status is not CANCELLED,
@@ -54,12 +45,11 @@ export const revenueReport = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const fromDate = from ? startOfDay(new Date(from)) : new Date(today().getFullYear(), today().getMonth(), 1);
-    const toDate = to ? endOfDay(new Date(to)) : endOfDay(today());
-
-    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+    if ([from, to].some((d) => d && Number.isNaN(Date.parse(d)))) {
       return res.status(400).json({ error: 'Invalid date range' });
     }
+    const fromDate = from ? startOfDay(new Date(from)) : startOfMonthIn(today());
+    const toDate = to ? endOfDay(new Date(to)) : endOfDay(today());
 
     const [fees, membershipCount, activeMemberCount, feeCountByStatus] = await Promise.all([
       prisma.fee.findMany({
@@ -156,7 +146,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     }
 
     const now = new Date();
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const sixMonthsAgo = startOfMonthIn(now, 5);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     // This endpoint fires ~14 independent read queries. Against a remote DB
@@ -186,8 +176,8 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       // membership sales.
       Promise.all(Array.from({ length: 6 }, async (_, index) => {
         const i = 5 - index;
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        const startOfMonth = startOfMonthIn(now, i);
+        const endOfMonth = endOfMonthIn(now, i);
 
         const monthFees = await prisma.fee.aggregate({
           _sum: { amount: true },
@@ -195,7 +185,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
         });
 
         return {
-          month: startOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+          month: monthLabel(startOfMonth),
           total: monthFees._sum.amount?.toNumber() ?? 0,
         };
       })),
@@ -211,12 +201,12 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       // Member growth trend (last 6 months)
       Promise.all(Array.from({ length: 6 }, async (_, index) => {
         const i = 5 - index;
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        const endOfMonth = endOfMonthIn(now, i);
         const count = await prisma.memberDetails.count({
           where: { gymId, joiningDate: { lte: endOfMonth } }
         });
         return {
-          month: endOfMonth.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+          month: monthLabel(endOfMonth),
           totalMembers: count
         };
       })),
@@ -304,11 +294,10 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
 
     // Daily attendance trend (last 30 days) — bucket the same raw
     // check-in list used for the heatmap instead of running 30 separate
-    // COUNT queries. Bucketed by local calendar day (matches the original
-    // per-day startOfDay/endOfDay window this replaced), not UTC day.
-    const localDayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    // COUNT queries. Bucketed by the gym's calendar day, not the server's.
+    const localDayKey = (d: Date) => startOfDay(d).getTime();
 
-    const attendanceByDayKey = new Map<string, number>();
+    const attendanceByDayKey = new Map<number, number>();
     attendanceRecords.forEach((record) => {
       const date = new Date(record.checkIn);
       const day = date.getDay();
@@ -323,9 +312,9 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
 
     const attendanceTrend = Array.from({ length: 30 }, (_, index) => {
       const i = 29 - index;
-      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const date = new Date(now.getTime() - i * DAY_MS);
       return {
-        date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        date: date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: APP_TIMEZONE }),
         checkIns: attendanceByDayKey.get(localDayKey(date)) ?? 0
       };
     });
@@ -342,8 +331,8 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
     // start vs. still active at month end.
     const churnTrend = [];
     for (let i = 5; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+      const monthStart = startOfMonthIn(now, i);
+      const monthEnd = endOfMonthIn(now, i);
       const startSet = activeMemberIdsOn(gymMemberships, monthStart);
       const endSet = activeMemberIdsOn(gymMemberships, monthEnd);
       let lost = 0;
@@ -352,7 +341,7 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       });
       const startActive = startSet.size;
       churnTrend.push({
-        month: monthStart.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        month: monthLabel(monthStart),
         startActive,
         lost,
         churnRate: startActive > 0 ? lost / startActive : 0
@@ -384,14 +373,14 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
       if (!current || m.startDate < current) memberEarliestStart.set(m.memberId, m.startDate);
     }
 
-    const nowSerial = now.getFullYear() * 12 + now.getMonth();
+    const nowSerial = monthIndexIn(now);
     const cohortRetention = [];
     for (let i = 5; i >= 0; i--) {
-      const cohortMonthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const cohortMonthStart = startOfMonthIn(now, i);
       const cohortSerial = nowSerial - i;
       const cohortMemberIds: string[] = [];
       memberEarliestStart.forEach((startDate, memberId) => {
-        const serial = startDate.getFullYear() * 12 + startDate.getMonth();
+        const serial = monthIndexIn(startDate);
         if (serial === cohortSerial) cohortMemberIds.push(memberId);
       });
 
@@ -402,14 +391,14 @@ export const gymAnalytics = async (req: AuthRequest, res: Response) => {
           retention.push(null);
           continue;
         }
-        const targetMonthEnd = new Date(now.getFullYear(), now.getMonth() - i + offset + 1, 0, 23, 59, 59, 999);
+        const targetMonthEnd = endOfMonthIn(now, i - offset);
         const activeAtTarget = activeMemberIdsOn(gymMemberships, targetMonthEnd);
         const retained = cohortMemberIds.filter((id) => activeAtTarget.has(id)).length;
         retention.push(retained / cohortMemberIds.length);
       }
 
       cohortRetention.push({
-        cohortMonth: cohortMonthStart.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        cohortMonth: monthLabel(cohortMonthStart),
         cohortSize: cohortMemberIds.length,
         retention
       });
@@ -576,7 +565,7 @@ export const gymStats = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const monthStart = new Date(today().getFullYear(), today().getMonth(), 1);
+    const monthStart = startOfMonthIn(today());
     const dayStart = startOfDay(today());
 
     const [members, activeMembers, trainers, staff, todayCheckIns, pendingBookings, monthRevenue, pendingMembers, expiringMemberships] =

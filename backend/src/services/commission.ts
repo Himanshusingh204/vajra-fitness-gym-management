@@ -32,3 +32,21 @@ export const commissionBpsForGym = async (gymId: string) => {
   const rule = rules.find((r) => r.gymId === gymId) ?? rules.find((r) => r.gymId === null);
   return rule?.percentBps ?? DEFAULT_COMMISSION_BPS;
 };
+
+// A refund reverses each line of the order in proportion. Each line is rounded
+// on the running total refunded so far, so a series of part refunds that adds
+// up to the whole order reverses every line exactly; the gym takes the rest.
+export const splitRefund = (
+  order: { totalPaise: number; commissionPaise: number; commissionGstPaise: number },
+  refundedPaise: number,
+  amountPaise: number,
+) => {
+  if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0 || refundedPaise < 0 || refundedPaise + amountPaise > order.totalPaise) {
+    throw new Error('INVALID_AMOUNT');
+  }
+  const share = (line: number) =>
+    Math.round((line * (refundedPaise + amountPaise)) / order.totalPaise) - Math.round((line * refundedPaise) / order.totalPaise);
+  const commissionPaise = share(order.commissionPaise);
+  const commissionGstPaise = share(order.commissionGstPaise);
+  return { commissionPaise, commissionGstPaise, gymNetPaise: amountPaise - commissionPaise - commissionGstPaise };
+};

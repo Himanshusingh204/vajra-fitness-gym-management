@@ -47,12 +47,12 @@ const HelpCenterPage = () => {
   const [ticketForm, setTicketForm] = useState({ subject: '', priority: 'MEDIUM', message: '' });
   const [error, setError] = useState('');
 
-  const { data: faqs = [], isLoading: faqsLoading } = useQuery({
+  const { data: faqs = [], isLoading: faqsLoading, isError: faqsError, refetch: retryFaqs } = useQuery({
     queryKey: ['public-faqs'],
     queryFn: () => api.get('/public/faqs').then((r) => r.data as Faq[]),
   });
 
-  const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
+  const { data: tickets = [], isLoading: ticketsLoading, isError: ticketsError, refetch: retryTickets } = useQuery({
     queryKey: ['my-tickets'],
     enabled: !!user,
     queryFn: () => api.get('/support/my').then((r) => r.data as Ticket[]),
@@ -79,7 +79,7 @@ const HelpCenterPage = () => {
 
   const contactDetails = [
     { icon: Mail, label: 'Email', value: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` },
-    { icon: Phone, label: 'Phone', value: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE}` },
+    ...(import.meta.env.VITE_SUPPORT_PHONE ? [{ icon: Phone, label: 'Phone', value: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE}` }] : []),
     { icon: Clock, label: 'Working Hours', value: WORKING_HOURS },
   ];
 
@@ -129,7 +129,8 @@ const HelpCenterPage = () => {
                   </div>
                 )}
 
-                {!faqsLoading && faqs.length === 0 && (
+                {faqsError && <div role="alert" className="glass-strong rounded-2xl p-5">Could not load FAQs. <button type="button" className="underline" onClick={() => retryFaqs()}>Try again</button></div>}
+                {!faqsLoading && !faqsError && faqs.length === 0 && (
                   <div className="glass-strong rounded-2xl p-8 text-center text-[var(--color-muted)]">
                     No FAQs published yet. Contact us directly for assistance.
                   </div>
@@ -283,7 +284,8 @@ const HelpCenterPage = () => {
                   </div>
                 )}
 
-                {!ticketsLoading && tickets.length === 0 && (
+                {ticketsError && <div role="alert" className="glass-strong rounded-2xl p-5">Could not load tickets. <button type="button" className="underline" onClick={() => retryTickets()}>Try again</button></div>}
+                {!ticketsLoading && !ticketsError && tickets.length === 0 && (
                   <div className="glass-strong rounded-2xl p-8 text-center text-[var(--color-muted)]">
                     You haven't raised any tickets yet.
                   </div>

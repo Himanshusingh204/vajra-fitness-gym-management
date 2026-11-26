@@ -72,7 +72,7 @@ export default function Wizard({
     onNext();
   };
 
-  const locked = busy || checking;
+  const locked = busy || checking || saving;
 
   return (
     <div className="flex flex-col gap-6">
@@ -128,7 +128,7 @@ export default function Wizard({
         </ol>
       </nav>
 
-      <div>{children}</div>
+      <fieldset disabled={!!locked} className="min-w-0">{children}</fieldset>
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:bg-transparent sm:px-0">
         {current > 0 && onBack && (

@@ -112,6 +112,86 @@ describe('Member at many gyms', () => {
     expect((await prisma.memberDetails.findUnique({ where: { id: atA.id } }))?.status).toBe('ACTIVE');
   });
 
+  it('re-enrolling while frozen returns 409, while expired it asks again', async () => {
+    const { a, b, user, atA, atB } = await seedTwoGymMember();
+    await prisma.memberDetails.update({ where: { id: atA.id }, data: { status: 'FROZEN' } });
+    await prisma.membership.updateMany({ where: { memberId: atB.id }, data: { status: 'EXPIRED' } });
+    await prisma.memberDetails.update({ where: { id: atB.id }, data: { status: 'EXPIRED' } });
+    const token = await tokenFor(user.email);
+
+    expect((await authPost(token, '/api/members/enroll', { gymId: a.gym.id })).status).toBe(409);
+    expect((await prisma.memberDetails.findUnique({ where: { id: atA.id } }))?.status).toBe('FROZEN');
+    expect((await authPost(token, '/api/members/enroll', { gymId: b.gym.id })).status).toBe(200);
+    expect((await prisma.memberDetails.findUnique({ where: { id: atB.id } }))?.status).toBe('PENDING');
+  });
+
+  it('an owner can add a member of another gym without a new account', async () => {
+    const { a, user, atA } = await seedTwoGymMember();
+    const { user: owner, gym } = await seedAdmin();
+    const token = await tokenFor(owner.email);
+
+    const res = await authPost(token, `/api/members/gym/${gym.id}`, { username: 'Someone Else', email: user.email });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBe(user.id);
+    expect(res.body.activationLink).toBeNull();
+    expect(res.body.memberDetails.gymId).toBe(gym.id);
+    expect(JSON.stringify(res.body)).not.toContain(a.gym.id);
+    // Their other gyms and password are untouched.
+    expect((await prisma.memberDetails.findUnique({ where: { id: atA.id } }))?.status).toBe('ACTIVE');
+    expect((await login(user.email)).status).toBe(200);
+
+    const again = await authPost(token, `/api/members/gym/${gym.id}`, { username: 'Someone Else', email: user.email });
+    expect(again.status).toBe(409);
+    expect((await authPost(token, `/api/members/gym/${gym.id}`, { username: 'Owner', email: a.user.email })).status).toBe(400);
+  });
+
+  it('CSV import links members of other gyms and skips staff accounts', async () => {
+    const { a, user } = await seedTwoGymMember();
+    const { user: owner, gym } = await seedAdmin();
+    const csv = `username,email
+Linked,${user.email}
+Owner,${a.user.email}
+Fresh,fresh${Date.now()}@test.local`;
+
+    const res = await authPost(await tokenFor(owner.email), `/api/members/gym/${gym.id}/import`, { csv });
+    expect(res.status).toBe(201);
+    expect(res.body.imported).toBe(2);
+    expect(res.body.errors).toEqual([{ row: 3, email: a.user.email, error: 'Email already registered' }]);
+    expect(await prisma.memberDetails.count({ where: { userId: user.id, gymId: gym.id, status: 'PENDING' } })).toBe(1);
+    expect((await login(user.email)).status).toBe(200);
+  });
+
+  it('adding the same user to the same gym twice gives 409, and CSV import skips them', async () => {
+    const { user: owner, gym } = await seedAdmin();
+    const { user } = await seedMember((await seedAdmin()).gym.id);
+    const token = await tokenFor(owner.email);
+    const body = { username: 'Repeat Member', email: user.email };
+
+    expect((await authPost(token, `/api/members/gym/${gym.id}`, body)).status).toBe(201);
+    const again = await authPost(token, `/api/members/gym/${gym.id}`, body);
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('ALREADY_MEMBER');
+
+    const res = await authPost(token, `/api/members/gym/${gym.id}/import`, { csv: `username,email
+Repeat Member,${user.email}` });
+    expect(res.status).toBe(201);
+    expect(res.body.imported).toBe(0);
+    expect(res.body.skipped).toBe(1);
+    expect(res.body.errors).toEqual([{ row: 2, email: user.email, error: 'Already a member of this gym' }]);
+    expect(await prisma.memberDetails.count({ where: { userId: user.id, gymId: gym.id } })).toBe(1);
+  });
+
+  it('removing a member with fees keeps the row as INACTIVE', async () => {
+    const { user: owner, gym } = await seedAdmin();
+    const { user, details } = await seedMember(gym.id);
+    await prisma.fee.create({ data: { memberId: details.id, gymId: gym.id, amount: 500, dueDate: new Date() } });
+
+    expect((await authDelete(await tokenFor(owner.email), `/api/members/${details.id}`)).status).toBe(200);
+    expect((await prisma.memberDetails.findUnique({ where: { id: details.id } }))?.status).toBe('INACTIVE');
+    expect(await prisma.fee.count({ where: { memberId: details.id } })).toBe(1);
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).not.toBeNull();
+  });
+
   it('owner of gym A sees only the gym A side of the user', async () => {
     const { a, b, user, atA, atB, membershipB } = await seedTwoGymMember();
     await prisma.fee.create({ data: { memberId: atB.id, gymId: b.gym.id, amount: 500, dueDate: new Date(Date.now() + DAY) } });

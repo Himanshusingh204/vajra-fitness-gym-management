@@ -4,9 +4,12 @@ import type {
   Booking,
   BookingStatus,
   Enquiry,
+  CheckoutOrder,
   Fee,
   GymAttendance,
   GymMember,
+  GymPage,
+  GymSort,
   GymStats,
   Membership,
   MemberProfile,
@@ -17,6 +20,23 @@ import type {
 } from './types';
 
 export const listGyms = () => api.get<PublicGym[]>('/gym');
+
+export type GymSearch = {
+  q?: string;
+  city?: string;
+  facility?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  sort: GymSort;
+  page: number;
+};
+
+export const searchGyms = (s: GymSearch) => api.get<GymPage>('/gym', { ...s, limit: 12, paged: 1 });
+export const getGymCities = () => api.get<string[]>('/gym/cities');
+
+// The same key returns the same order, so a retry after a dropped connection can't double-charge.
+export const createOrder = (gymId: string, planId: string, idempotencyKey: string) =>
+  api.post<CheckoutOrder>('/orders', { gymId, planId }, true, { 'Idempotency-Key': idempotencyKey });
 
 // Member self-service
 export const getMyProfile = () => api.get<MemberProfile>('/members/my-profile');

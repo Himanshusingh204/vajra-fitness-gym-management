@@ -2,6 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationStore } from '../store/useNotificationStore';
 import { useGymStore } from '../store/useGymStore';
+import { loginPageFor } from '../utils/routes';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -36,7 +37,11 @@ const performRefresh = async (): Promise<string | null> => {
       useNotificationStore.getState().addNotification('error', DB_DOWN_MESSAGE);
       throw err;
     }
-    return null;
+    // Only an explicit authentication rejection establishes an expired session.
+    // Network errors and server failures must not revoke a valid refresh cookie.
+    if (axios.isAxiosError(err) && err.response?.status === 401) return null;
+    useNotificationStore.getState().addNotification('error', 'Could not renew your session. Check your connection and try again.');
+    throw err;
   }
 };
 
@@ -70,8 +75,10 @@ api.interceptors.response.use(
       }
       if (token) return api(original);
 
+      const role = useAuthStore.getState().user?.role ?? 'MEMBER';
+      const redirect = encodeURIComponent(window.location.pathname + window.location.search);
       useAuthStore.getState().logout();
-      window.location.href = '/login';
+      window.location.href = `${loginPageFor(role)}?redirect=${redirect}`;
     } else {
       const isSilentAuthCheck = original?.url?.includes('/auth/refresh') || original?.url?.includes('/auth/me');
       // Do not pop up error notifications for expected 401s during background session checks
@@ -89,10 +96,10 @@ api.interceptors.response.use(
   }
 );
 
-// Download a file (PDF) using the authenticated client
+// Download a file (PDF or CSV) using the authenticated client
 export const downloadFile = async (url: string, fallbackName: string) => {
   const res = await api.get(url, { responseType: 'blob' });
-  const blob = new Blob([res.data], { type: 'application/pdf' });
+  const blob = new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;

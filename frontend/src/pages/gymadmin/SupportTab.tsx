@@ -8,7 +8,7 @@ type Ticket = { id: string; subject: string; message: string; status: string; pr
 
 // Tickets are raised from the Help Center form; this lists the owner's own.
 export default function SupportTab() {
-  const { data: tickets = [], isLoading } = useQuery({
+  const { data: tickets = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['my-tickets'],
     queryFn: () => api.get('/support/my').then((r) => r.data as Ticket[]),
   });
@@ -23,6 +23,8 @@ export default function SupportTab() {
         <div className="space-y-3 p-6" aria-busy="true">
           {[0, 1].map((i) => <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />)}
         </div>
+      ) : isError ? (
+        <div role="alert" className="p-6 text-sm">Could not load support tickets. <button type="button" className="underline" onClick={() => refetch()}>Try again</button></div>
       ) : tickets.length === 0 ? (
         <EmptyState icon={<LifeBuoy className="h-8 w-8" />} title="No tickets yet" hint="Questions about billing, your account or a bug go to the Kavach team. You can follow their status here." />
       ) : (

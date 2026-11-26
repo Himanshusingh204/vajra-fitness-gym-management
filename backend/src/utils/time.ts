@@ -25,3 +25,22 @@ export const startOfDayIn = (d: Date, timeZone = APP_TIMEZONE) => {
 
 export const endOfDayIn = (d: Date, timeZone = APP_TIMEZONE) =>
   new Date(startOfDayIn(d, timeZone).getTime() + DAY_MS - 1);
+
+// year * 12 + month (0-based) of the calendar month `d` falls in, in `timeZone`.
+export const monthIndexIn = (d: Date, timeZone = APP_TIMEZONE) => {
+  const [year, month] = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' })
+    .format(d)
+    .split('-')
+    .map(Number);
+  return year! * 12 + month! - 1;
+};
+
+// Midnight of the 1st of the month `monthsBack` months before `d`'s month, in `timeZone`.
+export const startOfMonthIn = (d: Date, monthsBack = 0, timeZone = APP_TIMEZONE) => {
+  const index = monthIndexIn(d, timeZone) - monthsBack;
+  // Noon UTC on the 1st is still the 1st in any zone within 11 hours of UTC.
+  return startOfDayIn(new Date(Date.UTC(Math.floor(index / 12), index % 12, 1, 12)), timeZone);
+};
+
+export const endOfMonthIn = (d: Date, monthsBack = 0, timeZone = APP_TIMEZONE) =>
+  new Date(startOfMonthIn(d, monthsBack - 1, timeZone).getTime() - 1);

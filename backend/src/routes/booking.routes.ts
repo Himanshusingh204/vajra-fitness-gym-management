@@ -2,10 +2,11 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { listTrainers, createBooking, getMyBookings, getTrainerBookings, getGymBookings, updateBookingStatus, getAvailableSlots, rescheduleBooking } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { publicWriteLimiter, userWriteLimiter } from '../middlewares/rateLimit.middleware';
+import { publicWriteLimiter, readLimiter, userWriteLimiter } from '../middlewares/rateLimit.middleware';
 import { createBookingSchema, updateBookingSchema, rescheduleBookingSchema, slotsQuery, idParams, gymIdParams, dateRangeQuery, statusQuery, z } from '../utils/validators';
 
 const router = Router();
+router.use(readLimiter);
 
 const wrap = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve(fn(req, res, next)).catch(next);

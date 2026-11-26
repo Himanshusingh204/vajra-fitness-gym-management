@@ -39,7 +39,7 @@ export const rotateRefreshToken = async (raw: string): Promise<RotateResult> => 
   // rotated it first => revoke the whole family.
   const claimed = await prisma.$transaction(async (tx) => {
     const claimed = await tx.refreshToken.updateMany({
-      where: { id: record.id, usedAt: null },
+      where: { id: record.id, usedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
       data: { usedAt: new Date() },
     });
 

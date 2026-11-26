@@ -127,6 +127,8 @@ model Gym {
   orders          Order[]
   ledgerEntries   LedgerEntry[]
   commissionRule  CommissionRule?
+  payoutAccount   GymPayoutAccount?
+  payouts         Payout[]
 
   @@index([status, city])
   @@index([lat, lng])
@@ -398,7 +400,7 @@ model Order {
   commissionPaise    Int
   commissionGstPaise Int
   gymNetPaise        Int
-  status             String    @default("CREATED") // CREATED, PAID, FAILED, REFUNDED
+  status             String    @default("CREATED") // CREATED, PAID, FAILED, PARTIALLY_REFUNDED, REFUNDED
   razorpayOrderId    String?   @unique
   razorpayPaymentId  String?
   paidAt             DateTime?
@@ -411,7 +413,8 @@ model Order {
   gym          Gym             @relation(fields: [gymId], references: [id], onDelete: Restrict)
   planId       String?
   plan         MembershipPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
-  membershipId String?         @unique
+  // Several orders can point at one membership: a purchase while it is active extends it.
+  membershipId String?
   membership   Membership?     @relation(fields: [membershipId], references: [id], onDelete: SetNull)
 
   ledgerEntries LedgerEntry[]
@@ -419,6 +422,7 @@ model Order {
 
   @@unique([memberUserId, idempotencyKey])
   @@index([gymId, status])
+  @@index([membershipId])
 }
 
 // Raw Razorpay webhook events, kept for audit and so a redelivery is a no-op.
@@ -442,14 +446,16 @@ model CommissionRule {
   gym   Gym?    @relation(fields: [gymId], references: [id], onDelete: Cascade)
 }
 
-// Append-only. The rows for one order sum to zero: MEMBER_PAID is -total, and
-// GYM_PAYABLE, PLATFORM_COMMISSION and GST_PAYABLE are the positive shares.
-// A gym's payable balance is SUM(amountPaise) of its GYM_PAYABLE (and later PAYOUT) rows.
+// Append-only. The rows for one source sum to zero: for an ORDER, MEMBER_PAID is
+// -total and GYM_PAYABLE, PLATFORM_COMMISSION and GST_PAYABLE are the shares; a
+// REFUND reverses them in proportion; GATEWAY_FEE moves the Razorpay fee out of
+// PLATFORM_COMMISSION. A PAYOUT row is the money sent to the gym.
+// A gym's balance is SUM(amountPaise) of its GYM_PAYABLE, PAYOUT and ADJUSTMENT rows.
 model LedgerEntry {
   id          String   @id @default(uuid())
-  account     String // MEMBER_PAID, GYM_PAYABLE, PLATFORM_COMMISSION, GST_PAYABLE
+  account     String // MEMBER_PAID, GYM_PAYABLE, PLATFORM_COMMISSION, GST_PAYABLE, GATEWAY_FEE, PAYOUT, ADJUSTMENT
   amountPaise Int
-  sourceType  String // ORDER, REFUND
+  sourceType  String // ORDER, REFUND, GATEWAY_FEE, PAYOUT
   sourceId    String
   createdAt   DateTime @default(now())
 
@@ -464,19 +470,64 @@ model LedgerEntry {
 }
 
 model Refund {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   amountPaise      Int
   reason           String?
-  status           String   @default("REQUESTED") // REQUESTED, PROCESSED, FAILED
-  razorpayRefundId String?  @unique
+  status           String    @default("REQUESTED") // REQUESTED, PROCESSING, PROCESSED, REJECTED
+  razorpayRefundId String?   @unique
   requestedById    String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  decidedById      String?
+  decidedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
+  @@index([status])
+}
+
+// The gym's Razorpay Route linked account. Bank details live at Razorpay, never here.
+model GymPayoutAccount {
+  id                String   @id @default(uuid())
+  razorpayAccountId String
+  status            String   @default("PENDING_KYC") // PENDING_KYC, ACTIVE, SUSPENDED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  gymId String @unique
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Restrict)
+}
+
+// One Route transfer to a gym. The PAYOUT ledger row is written only once it is PAID.
+model Payout {
+  id                 String   @id @default(uuid())
+  amountPaise        Int
+  status             String   @default("PROCESSING") // PROCESSING, PAID, FAILED
+  razorpayTransferId String?  @unique
+  failureReason      String?
+  // Ledger rows up to this time were on the 7-day hold's far side when the payout was made.
+  periodEnd          DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Restrict)
+
+  @@index([gymId, status])
+}
+
+// Written by the reconciliation job when Razorpay and our rows disagree. Never auto-fixed.
+model ReconciliationIssue {
+  id         String    @id @default(uuid())
+  kind       String // CAPTURED_NOT_PAID, PAID_NOT_CAPTURED, AMOUNT_MISMATCH, REFUND_MISSING, TRANSFER_MISSING
+  ref        String // the Razorpay id, or ours when Razorpay has none
+  details    String?
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([kind, ref])
 }
 
 // =====================================================================
@@ -514,8 +565,8 @@ model Membership {
   previousMembership   Membership?  @relation("RenewalChain", fields: [previousMembershipId], references: [id], onDelete: SetNull)
   renewals             Membership[] @relation("RenewalChain")
 
-  fees  Fee[]
-  order Order?
+  fees   Fee[]
+  orders Order[]
 
   @@index([memberId])
   @@index([gymId])

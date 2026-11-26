@@ -4,6 +4,15 @@ import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
 import { startOfDayIn } from '../utils/time';
 import { canAccessGym, requestedGymId } from '../utils/tenant';
+import type { Prisma } from '@prisma/client';
+
+// Lock both participants in a stable order across create and reschedule so
+// concurrent requests cannot reserve the same trainer or member twice.
+const lockParticipants = async (tx: Prisma.TransactionClient, userId: string, trainerId: string) => {
+  for (const key of [`pt:member:${userId}`, `pt:trainer:${trainerId}`].sort()) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+  }
+};
 
 // Public: list active trainers at a specific approved gym so a member can pick one.
 // The gymId is required — an anonymous caller must never see trainers from every
@@ -18,7 +27,17 @@ export const listTrainers = async (req: AuthRequest, res: Response) => {
 
     const trainers = await prisma.trainerDetails.findMany({
       where: { gymId, status: 'ACTIVE', gym: { status: 'APPROVED' } },
-      include: {
+      // Public directory data must not expose the trainer's internal commission.
+      select: {
+        id: true,
+        userId: true,
+        gymId: true,
+        specialization: true,
+        bio: true,
+        hourlyRate: true,
+        experienceYears: true,
+        city: true,
+        status: true,
         user: { select: { id: true, username: true } },
         gym: { select: { id: true, name: true, city: true } },
       },
@@ -84,19 +103,24 @@ export const rescheduleBooking = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Booking must be in the future' });
     }
 
-    const clash = await prisma.booking.findFirst({
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockParticipants(tx, userId, booking.trainerId);
+      const clash = await tx.booking.findFirst({
       where: { id: { not: id }, date, time, status: { not: 'CANCELLED' }, OR: [{ trainerId: booking.trainerId }, { userId }] },
-    });
-    if (clash) return res.status(409).json({ error: 'That time slot is not available' });
+      });
+      if (clash) return null;
 
-    // The trainer has to agree to the new time again.
-    const updated = await prisma.booking.update({ where: { id }, data: { date, time, status: 'PENDING' } });
+      // Recheck status after acquiring locks; cancellation may have raced us.
+      const claimed = await tx.booking.updateMany({ where: { id, status: { in: ['PENDING', 'CONFIRMED'] } }, data: { date, time, status: 'PENDING' } });
+      return claimed.count ? tx.booking.findUniqueOrThrow({ where: { id } }) : null;
+    });
+    if (!updated) return res.status(409).json({ error: 'The booking changed or that time slot is not available' });
     await createNotification({
       userId: booking.trainerId,
       type: 'INFO',
       title: 'Session rescheduled',
       message: `A member moved their PT session to ${date} at ${time}. Please confirm it.`,
-      link: '/dashboard',
+      link: '/trainer/bookings',
     });
     res.json(updated);
   } catch {
@@ -120,6 +144,7 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
     if (!trainer || trainer.role !== 'TRAINER' || trainer.trainerDetails?.status !== 'ACTIVE') {
       return res.status(400).json({ error: 'Selected trainer is not valid' });
     }
+    const trainerGymId = trainer.trainerDetails.gymId;
 
     // The member's row at the trainer's gym; they may belong to other gyms too.
     const member = await prisma.memberDetails.findUnique({
@@ -139,35 +164,27 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
     }
 
     // Prevent duplicates: same slot for the trainer, or same slot for the member
-    const existingTrainer = await prisma.booking.findFirst({
-      where: { trainerId, date, time, status: { notIn: ['CANCELLED'] } },
+    const booking = await prisma.$transaction(async (tx) => {
+      await lockParticipants(tx, userId, trainerId);
+      const existing = await tx.booking.findFirst({ where: { date, time, status: { not: 'CANCELLED' }, OR: [{ trainerId }, { userId }] } });
+      if (existing) return null;
+      return tx.booking.create({
+        data: {
+          userId,
+          trainerId,
+          gymId: trainerGymId,
+          date,
+          time,
+          notes: notes || null,
+          status: 'PENDING',
+        },
+        include: {
+          trainer: { select: { username: true } },
+          gym: { select: { name: true } },
+        },
+      });
     });
-    if (existingTrainer) {
-      return res.status(409).json({ error: 'This time slot is already booked' });
-    }
-
-    const existingMember = await prisma.booking.findFirst({
-      where: { userId, date, time, status: { notIn: ['CANCELLED'] } },
-    });
-    if (existingMember) {
-      return res.status(409).json({ error: 'You already have a training session at this time' });
-    }
-
-    const booking = await prisma.booking.create({
-      data: {
-        userId,
-        trainerId,
-        gymId: trainer.trainerDetails.gymId,
-        date,
-        time,
-        notes: notes || null,
-        status: 'PENDING',
-      },
-      include: {
-        trainer: { select: { username: true } },
-        gym: { select: { name: true } },
-      },
-    });
+    if (!booking) return res.status(409).json({ error: 'This time slot is already booked for you or the trainer' });
 
     // Notify the trainer and the gym owner about the new booking request.
     await createNotification({
@@ -175,7 +192,7 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
       type: 'INFO',
       title: 'New booking request',
       message: `A member requested a PT session on ${date} at ${time}.`,
-      link: '/dashboard',
+      link: '/trainer/bookings',
     });
     const gym = await prisma.gym.findUnique({
       where: { id: trainer.trainerDetails.gymId },
@@ -328,9 +345,16 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const updated = await prisma.booking.update({
-      where: { id },
+    if (!['PENDING', 'CONFIRMED'].includes(booking.status)) {
+      return res.status(409).json({ error: 'This session is already cancelled or completed' });
+    }
+    const changed = await prisma.booking.updateMany({
+      where: { id, status: booking.status, date: booking.date, time: booking.time },
       data: { status },
+    });
+    if (!changed.count) return res.status(409).json({ error: 'This session changed. Refresh and try again' });
+    const updated = await prisma.booking.findUniqueOrThrow({
+      where: { id },
       include: {
         user: { select: { username: true } },
         trainer: { select: { username: true } },

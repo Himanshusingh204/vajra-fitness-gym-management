@@ -7,6 +7,7 @@ import EmptyState from '../components/ui/EmptyState';
 import SlotPicker from '../components/ui/SlotPicker';
 import { LineChart } from '../components/charts';
 import { CheckInButton, ReferralCard } from './member/SelfService';
+import OnlineOrders from './member/OnlineOrders';
 import { listTrainers, createBooking, getMyBookings, updateBookingStatus, rescheduleBooking } from '../api/booking.api';
 import { getMyNotifications, markAllNotificationsRead, markNotificationRead } from '../api/notification.api';
 import { getMyGymNotices } from '../api/notice.api';
@@ -22,6 +23,7 @@ import { Link, Navigate, useNavigate, useOutletContext } from 'react-router';
 import { GymDirectory } from '../components/GymDirectory';
 import { formatPrice, localDateString } from '../utils/format';
 import { downloadFile } from '../services/api';
+import { useNotificationStore } from '../store/useNotificationStore';
 
 const statusStyles: Record<string, string> = {
   PENDING: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
@@ -31,6 +33,7 @@ const statusStyles: Record<string, string> = {
   SUSPENDED: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
   CANCELLED: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
 };
+const isOutstandingFee = (status: string) => ['PENDING', 'OVERDUE', 'PARTIAL'].includes(status);
 
 // Lightweight inline SVG chart (no chart library installed). Renders bars with
 // a trend line overlay + value dots, scaled to the tallest value in `data`.
@@ -66,6 +69,7 @@ const ActivityChart = ({ data, color }: { data: { label: string; value: number }
 const MemberDashboard = () => {
   const user = useAuthStore(state => state.user);
   const queryClient = useQueryClient();
+  const addNotification = useNotificationStore((s) => s.addNotification);
   const activeTab = useOutletContext<string | undefined>();
   const navigate = useNavigate();
   const [profileMissing, setProfileMissing] = useState(false);
@@ -189,7 +193,7 @@ const MemberDashboard = () => {
   });
 
   // ---------- Group Classes ----------
-  const { data: gymClasses = [], isLoading: classesLoading } = useQuery({
+  const { data: gymClasses = [], isLoading: classesLoading, isError: classesError, refetch: refetchClasses } = useQuery({
     queryKey: ['memberClasses', profile?.gymId],
     queryFn: () => getClasses(profile?.gymId),
     enabled: !!profile?.gymId && activeTab === 'classes',
@@ -198,7 +202,10 @@ const MemberDashboard = () => {
 
   const bookClassMutation = useMutation({
     mutationFn: (classId: string) => bookClass(classId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['memberClasses'] })
+    onSuccess: (booking) => {
+      addNotification('success', booking.waitlist ? 'You joined the class waitlist.' : 'Your class booking is confirmed.');
+      queryClient.invalidateQueries({ queryKey: ['memberClasses'] });
+    }
   });
 
   const addProgressMutation = useMutation({
@@ -286,7 +293,7 @@ const MemberDashboard = () => {
   })();
 
   // Nearest upcoming/unpaid fee (fees arrive ordered dueDate desc, so scan all).
-  const nextFee = fees?.filter((f: any) => f.status !== 'PAID' && new Date(f.dueDate) >= new Date())
+  const nextFee = fees?.filter((f: any) => isOutstandingFee(f.status) && localDateString(new Date(f.dueDate)) >= localDateString())
     .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
 
   // Daily check-in series for the last N days (for the activity chart).
@@ -687,7 +694,7 @@ const MemberDashboard = () => {
                           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                           .map((l) => ({ label: new Date(l.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }), value: l.weight })),
                       }]}
-                      config={{ height: 240 }}
+                      config={{ height: 240, fitAxis: true }}
                     />
                   </div>
                 )}
@@ -900,7 +907,7 @@ const MemberDashboard = () => {
                       }`}>
                         {fee.status}
                       </span>
-                      {fee.status !== 'PAID' && payConfig?.enabled && (
+                      {isOutstandingFee(fee.status) && payConfig?.enabled && (
                         <button
                           onClick={() => payNow(fee)}
                           disabled={payingFeeId !== null}
@@ -923,6 +930,7 @@ const MemberDashboard = () => {
                 )}
               </div>
             )}
+            <OnlineOrders />
           </div>
         )}
 
@@ -992,6 +1000,8 @@ const MemberDashboard = () => {
 
             {classesLoading ? (
               <div className="text-[var(--color-muted)]">Loading classes...</div>
+            ) : classesError ? (
+              <div role="alert" className="text-[var(--color-muted)]">Could not load classes. <button type="button" className="underline" onClick={() => refetchClasses()}>Try again</button></div>
             ) : gymClasses.length === 0 ? (
               <div className="bg-[var(--color-surface)] rounded-lg border border-dashed border-[var(--color-border)]"><EmptyState icon={<CalendarDays className="h-8 w-8" />} title="No group classes yet" hint="Classes your gym schedules will appear here so you can book a spot." /></div>
             ) : (
@@ -1015,10 +1025,10 @@ const MemberDashboard = () => {
                     {cls.isActive && (
                       <button
                         onClick={() => bookClassMutation.mutate(cls.id)}
-                        disabled={bookClassMutation.isPending || (cls._count?.bookings || 0) >= cls.capacity}
+                        disabled={bookClassMutation.isPending}
                         className="btn-primary w-full py-2 text-sm"
                       >
-                        {bookClassMutation.isPending ? 'Booking…' : (cls._count?.bookings || 0) >= cls.capacity ? 'Class Full' : 'Book Class'}
+                        {bookClassMutation.isPending && bookClassMutation.variables === cls.id ? 'Booking…' : (cls._count?.bookings || 0) >= cls.capacity ? 'Join Waitlist' : 'Book Class'}
                       </button>
                     )}
                   </div>

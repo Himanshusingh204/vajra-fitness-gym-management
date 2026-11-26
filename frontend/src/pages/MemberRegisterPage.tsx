@@ -9,6 +9,7 @@ import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNotificationStore } from '../store/useNotificationStore';
 import { getPublicGyms, enrollMember } from '../api/gym.api';
+import { getMyGyms } from '../api/member.api';
 import { formatDuration, formatPrice } from '../utils/format';
 import { usePageMeta } from '../hooks/usePageMeta';
 import AuthSplitLayout from '../components/AuthSplitLayout';
@@ -32,14 +33,23 @@ const MemberRegisterPage = () => {
   const addNotification = useNotificationStore((s) => s.addNotification);
   const queryClient = useQueryClient();
 
-  const { data: gyms = [], isLoading: gymsLoading } = useQuery({
+  const { data: publicGyms = [], isLoading: gymsLoading, isError: gymsError, isFetching: gymsFetching, refetch: refetchGyms } = useQuery({
     queryKey: ['public-gyms'],
     queryFn: getPublicGyms,
     staleTime: 60_000,
   });
+  const isLoggedInMember = user?.role === 'MEMBER';
+  const { data: myGyms = [] } = useQuery({ queryKey: ['myGyms'], queryFn: getMyGyms, staleTime: 60_000, enabled: isLoggedInMember });
+  // Gyms the member already belongs to can't be joined again (the server answers 409).
+  const gyms = useMemo(() => {
+    const joined = new Set(
+      myGyms.filter((m) => m.activeMembership || ['ACTIVE', 'FROZEN', 'SUSPENDED'].includes(m.status)).map((m) => m.gymId),
+    );
+    return publicGyms.filter((g) => !joined.has(g.id));
+  }, [publicGyms, myGyms]);
 
   const [gymId, setGymId] = useState(searchParams.get('gym') || '');
-  const [planId, setPlanId] = useState('');
+  const [planId, setPlanId] = useState(searchParams.get('plan') || '');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [error, setError] = useState('');
   const [enrolling, setEnrolling] = useState(false);
@@ -52,12 +62,14 @@ const MemberRegisterPage = () => {
   } = useForm<FormValues, unknown, z.output<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { terms: false } });
 
   const gym = useMemo(() => gyms.find((g) => g.id === gymId), [gyms, gymId]);
-  const isLoggedInMember = user?.role === 'MEMBER';
 
   // A gym is optional at sign-up, but once one is picked it needs a plan.
   const gymProblem = () => {
+    if (gymsError && (isLoggedInMember || gymId)) return 'We could not load gyms. Try again before choosing a membership.';
+    if (gymId && !gym) return 'The selected gym is unavailable. Choose another gym.';
     if (isLoggedInMember && !gymId) return 'Choose the gym you want to join.';
     if (gymId && !planId) return 'Choose a membership plan.';
+    if (gym && planId && !gym.membershipPlans.some((plan) => plan.id === planId)) return 'The selected plan is unavailable. Choose another plan.';
     return '';
   };
 
@@ -113,7 +125,7 @@ const MemberRegisterPage = () => {
             setGymId(e.target.value);
             setPlanId('');
           }}
-          disabled={gymsLoading}
+          disabled={gymsLoading || gymsError}
           className="input-field"
         >
           <option value="">{gymsLoading ? 'Loading gyms...' : isLoggedInMember ? 'Choose a gym' : "I'll pick a gym later"}</option>
@@ -123,6 +135,7 @@ const MemberRegisterPage = () => {
             </option>
           ))}
         </select>
+        {gymsError && <p role="alert" className="mt-2 text-sm text-[var(--color-primary)]">We couldn't load gyms. <button type="button" className="font-semibold underline" disabled={gymsFetching} onClick={() => refetchGyms()}>Try again</button>{!isLoggedInMember && gymId && <> or <button type="button" className="font-semibold underline" onClick={() => { setGymId(''); setPlanId(''); }}>choose a gym later</button>.</>}{!isLoggedInMember && !gymId && ' You can still create an account and choose a gym later.'}</p>}
       </div>
 
       {gym && (
@@ -172,7 +185,7 @@ const MemberRegisterPage = () => {
 
   if (isLoggedInMember) {
     return (
-      <AuthSplitLayout role="member" title="Join a gym" subtitle={`Signed in as ${user.email}. Pick a gym and plan to send a membership request. Your other gym memberships stay as they are.`} wide>
+      <AuthSplitLayout role="member" variant="register" title="Join a gym" subtitle={`Signed in as ${user.email}. Pick a gym and plan to send a membership request. Your other gym memberships stay as they are.`} wide>
         {error && <Banner>{error}</Banner>}
         <form onSubmit={joinGym} className="space-y-5" noValidate>
           {gymPicker}
@@ -185,6 +198,7 @@ const MemberRegisterPage = () => {
   return (
     <AuthSplitLayout
       role="member"
+      variant="register"
       title="Create your account"
       subtitle="Join a gym now or pick one later from your dashboard."
       top={<><RegistrationProgress current={2} /><AuthRoleTabs active="member" mode="register" /></>}

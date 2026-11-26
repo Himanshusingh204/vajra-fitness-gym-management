@@ -169,6 +169,12 @@ async function seedCMS() {
     });
   }
 
+  // The facility list owners pick from in the gym application.
+  await prisma.facility.createMany({
+    data: ['Free weights', 'Cardio', 'Personal training', 'Group classes', 'Locker room', 'Showers', 'Steam / Sauna', 'Parking', 'Air conditioned', 'Drinking water'].map((name) => ({ name })),
+    skipDuplicates: true,
+  });
+
   // Testimonials are intentionally NOT seeded here — fabricated customer
   // quotes shown publicly as if real is misleading, not just placeholder
   // filler. Add real ones through the admin panel once you have them.

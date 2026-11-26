@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../src/app';
 import { prisma } from '../src/utils/prisma';
-import { seedAdmin, seedMember, seedTrainer, seedSuperAdmin, authToken, authGet } from './helpers';
+import { seedAdmin, seedMember, seedTrainer, seedSuperAdmin, authToken, authGet, authPost } from './helpers';
 
 const ymd = (daysAhead: number) => new Date(Date.now() + daysAhead * 864e5).toISOString().slice(0, 10);
 const patch = (token: string, path: string, body: object) =>
@@ -17,6 +17,41 @@ const setup = async () => {
 };
 
 describe('PT slots and reschedule', () => {
+  it('rejects impossible calendar dates and times outside advertised slots', async () => {
+    const { trainer, token } = await setup();
+    const base = { trainerId: trainer.user.id, date: ymd(4), time: '10:00' };
+    expect((await authPost(token, '/api/bookings', { ...base, date: '2030-02-30' })).status).toBe(400);
+    expect((await authPost(token, '/api/bookings', { ...base, time: '10:30' })).status).toBe(400);
+    expect((await authPost(token, '/api/bookings', { ...base, time: '21:00' })).status).toBe(400);
+  });
+
+  it('keeps internal trainer commission out of the public booking directory', async () => {
+    const { gym, trainer } = await setup();
+    await prisma.trainerDetails.update({ where: { userId: trainer.user.id }, data: { commissionRate: 25 } });
+    const response = await request(app).get(`/api/bookings/trainers?gymId=${gym.id}`);
+    expect(response.status).toBe(200);
+    const item = response.body.find((t: any) => t.userId === trainer.user.id);
+    expect(item).toBeDefined();
+    expect(item).not.toHaveProperty('commissionRate');
+  });
+
+  it('reserves a trainer slot only once under concurrent requests', async () => {
+    const { gym, trainer, token } = await setup();
+    const other = await seedMember(gym.id);
+    const tokens = [token, await authToken(other.user)];
+    const responses = await Promise.all(tokens.map((t) => authPost(t, '/api/bookings', { trainerId: trainer.user.id, date: ymd(4), time: '10:00' })));
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await prisma.booking.count({ where: { trainerId: trainer.user.id, date: ymd(4), time: '10:00' } })).toBe(1);
+  });
+
+  it('does not reopen a cancelled session after its slot was booked again', async () => {
+    const { gym, trainer, member } = await setup();
+    const cancelled = await prisma.booking.create({ data: { gymId: gym.id, trainerId: trainer.user.id, userId: member.user.id, date: ymd(4), time: '10:00', status: 'CANCELLED' } });
+    const response = await patch(await authToken(trainer.user), `/api/bookings/${cancelled.id}`, { status: 'CONFIRMED' });
+    expect(response.status).toBe(409);
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: cancelled.id } })).status).toBe('CANCELLED');
+  });
+
   it('hides taken slots and only offers trainers from the member gym', async () => {
     const { gym, member, trainer, token } = await setup();
     const date = ymd(3);
@@ -56,6 +91,19 @@ describe('PT slots and reschedule', () => {
 
     const strangerToken = await authToken(otherMember.user);
     expect((await patch(strangerToken, `/api/bookings/${mine.id}/reschedule`, { date, time: '13:00' })).status).toBe(404);
+  });
+});
+
+describe('Public classes', () => {
+  it('does not expose trainer compensation or allow booking a disabled class', async () => {
+    const { gym, trainer, token } = await setup();
+    const gymClass = await prisma.gymClass.create({ data: { gymId: gym.id, name: 'Strength', trainerId: trainer.details.id } });
+    const response = await request(app).get(`/api/classes/gym/${gym.id}`);
+    expect(response.status).toBe(200);
+    expect(response.body[0].trainer.user.username).toBe(trainer.user.username);
+    expect(response.body[0].trainer).not.toHaveProperty('commissionRate');
+    await prisma.gymClass.update({ where: { id: gymClass.id }, data: { isActive: false } });
+    expect((await authPost(token, `/api/classes/${gymClass.id}/book`, {})).status).toBe(404);
   });
 });
 
