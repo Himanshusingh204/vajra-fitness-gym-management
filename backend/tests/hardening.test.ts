@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import request from 'supertest';
 import app from '../src/app';
 import { prisma } from '../src/utils/prisma';
-import { startOfDayIn } from '../src/utils/time';
+import { startOfDayIn, startOfMonthIn, endOfMonthIn } from '../src/utils/time';
 import { hashToken } from '../src/utils/tokens';
 import { seedAdmin, seedMember, seedSuperAdmin, seedPlan, registerMember, login, authGet, authPost, authPut, authDelete, uniq, PASSWORD } from './helpers';
 
@@ -34,6 +34,26 @@ describe('Gym-local day boundaries', () => {
     expect(startOfDayIn(new Date('2026-10-25T18:29:59Z')).toISOString()).toBe('2026-10-24T18:30:00.000Z');
     expect(startOfDayIn(new Date('2026-10-26')).toISOString()).toBe('2026-10-25T18:30:00.000Z');
     expect(startOfDayIn(new Date('2026-10-25T12:00:00Z'), 'America/New_York').toISOString()).toBe('2026-10-25T04:00:00.000Z');
+  });
+
+  it('starts the month at midnight IST on the 1st', () => {
+    // 01:00 IST on 1 Nov is still October in UTC.
+    expect(startOfMonthIn(new Date('2026-10-31T19:30:00Z')).toISOString()).toBe('2026-10-31T18:30:00.000Z');
+    expect(startOfMonthIn(new Date('2026-01-15T00:00:00Z'), 1).toISOString()).toBe('2025-11-30T18:30:00.000Z');
+    expect(endOfMonthIn(new Date('2026-03-10T00:00:00Z')).toISOString()).toBe('2026-03-31T18:29:59.999Z');
+  });
+
+  it('counts an expense from the first IST hours of the month in this month', async () => {
+    const { user, gym } = await seedAdmin();
+    const monthStart = startOfMonthIn(new Date());
+    await prisma.expense.createMany({
+      data: [
+        { gymId: gym.id, category: 'RENT', description: 'This month', amount: 100, date: new Date(monthStart.getTime() + 60_000) },
+        { gymId: gym.id, category: 'RENT', description: 'Last month', amount: 7, date: new Date(monthStart.getTime() - 60_000) },
+      ],
+    });
+    const res = await authGet(await tokenFor(user.email), `/api/expenses/gym/${gym.id}/summary`);
+    expect(Number(res.body.monthTotal)).toBe(100);
   });
 });
 
@@ -83,6 +103,15 @@ describe('Signup with a referral code', () => {
 });
 
 describe('One-time tokens', () => {
+  it('invalidates other reset links when one is used', async () => {
+    const { user } = await seedMember((await seedAdmin()).gym.id);
+    const first = `first-${Date.now()}-${'x'.repeat(40)}`;
+    const second = `second-${Date.now()}-${'y'.repeat(40)}`;
+    await prisma.passwordResetToken.createMany({ data: [first, second].map((token) => ({ tokenHash: hashToken(token), userId: user.id, expiresAt: new Date(Date.now() + 60_000) })) });
+    const results = await Promise.all([first, second].map((token) => agent.post('/api/auth/reset-password').send({ token, newPassword: 'NewPassw0rd!1' })));
+    expect(statuses(results)).toEqual([200, 400]);
+  });
+
   it('a reset token works once even when submitted twice at the same moment', async () => {
     const { user } = await seedMember((await seedAdmin()).gym.id);
     const token = 'r'.repeat(40) + Date.now();
@@ -190,6 +219,74 @@ describe('Class waitlist', () => {
 
     expect((await authDelete(await tokenFor(b.user.email), `/api/classes/bookings/${waitB.id}`)).status).toBe(200);
     expect(await prisma.classBooking.count({ where: { classId: gymClass.id, status: 'BOOKED' } })).toBe(1);
+  });
+});
+
+describe('Class capacity', () => {
+  it('a burst of bookings fills the class and waitlists the rest', async () => {
+    const { gym } = await seedAdmin();
+    const gymClass = await prisma.gymClass.create({ data: { gymId: gym.id, name: 'Spin', capacity: 2 } });
+    const members = await Promise.all(Array.from({ length: 6 }, () => seedMember(gym.id)));
+    const tokens = await Promise.all(members.map((m) => tokenFor(m.user.email)));
+
+    const results = await Promise.all(tokens.map((t) => authPost(t, `/api/classes/${gymClass.id}/book`, {})));
+    expect(statuses(results)).toEqual([201, 201, 201, 201, 201, 201]);
+    expect(await prisma.classBooking.count({ where: { classId: gymClass.id, status: 'BOOKED' } })).toBe(2);
+    expect(await prisma.classBooking.count({ where: { classId: gymClass.id, status: 'WAITLISTED' } })).toBe(4);
+  });
+});
+
+describe('Deleting accounts with money records', () => {
+  const seedOrder = (memberUserId: string, gymId: string) =>
+    prisma.order.create({
+      data: {
+        memberUserId, gymId, idempotencyKey: `k${Date.now()}`, planSnapshot: { name: 'Monthly' }, status: 'PAID',
+        basePaise: 100000, gstPaise: 0, totalPaise: 100000, commissionBps: 1000, commissionPaise: 10000, commissionGstPaise: 1800, gymNetPaise: 88200,
+      },
+    });
+
+  it('suspends a gym with orders instead of deleting it, and hides it', async () => {
+    const { user: owner, gym } = await seedAdmin();
+    const { user: member } = await seedMember(gym.id);
+    await seedOrder(member.id, gym.id);
+    const admin = await seedSuperAdmin();
+
+    const res = await authDelete(await tokenFor(admin.email), `/api/admin/gyms/${gym.id}`);
+    expect(res.status).toBe(200);
+    expect(await prisma.gym.findUnique({ where: { id: gym.id } })).toMatchObject({ status: 'SUSPENDED', isApproved: false });
+    expect(await prisma.order.count({ where: { gymId: gym.id } })).toBe(1);
+    expect(await prisma.user.findUnique({ where: { id: owner.id } })).toMatchObject({ isActive: false, tokenVersion: 1 });
+
+    expect((await agent.get(`/api/public/gyms/${gym.id}`)).status).toBe(404);
+    const outsider = await seedMember((await seedAdmin()).gym.id);
+    expect((await authPost(await tokenFor(outsider.user.email), '/api/members/enroll', { gymId: gym.id })).status).toBe(404);
+  });
+
+  it('still hard-deletes a gym with no money records', async () => {
+    const { gym } = await seedAdmin();
+    const admin = await seedSuperAdmin();
+    expect((await authDelete(await tokenFor(admin.email), `/api/admin/gyms/${gym.id}`)).status).toBe(200);
+    expect(await prisma.gym.findUnique({ where: { id: gym.id } })).toBeNull();
+  });
+
+  it('deactivates a user with fees instead of deleting them', async () => {
+    const { gym } = await seedAdmin();
+    const { user, details } = await seedMember(gym.id);
+    await prisma.fee.create({ data: { memberId: details.id, gymId: gym.id, amount: 500, dueDate: new Date() } });
+    const memberToken = await tokenFor(user.email);
+    const admin = await seedSuperAdmin();
+
+    expect((await authDelete(await tokenFor(admin.email), `/api/admin/users/${user.id}`)).status).toBe(200);
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).toMatchObject({ isActive: false, tokenVersion: 1 });
+    expect(await prisma.fee.count({ where: { memberId: details.id } })).toBe(1);
+    expect((await authGet(memberToken, '/api/members/my-profile')).status).toBe(403);
+  });
+
+  it('still hard-deletes a user with no money records', async () => {
+    const { user } = await seedMember((await seedAdmin()).gym.id);
+    const admin = await seedSuperAdmin();
+    expect((await authDelete(await tokenFor(admin.email), `/api/admin/users/${user.id}`)).status).toBe(200);
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).toBeNull();
   });
 });
 

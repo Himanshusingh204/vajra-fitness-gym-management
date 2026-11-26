@@ -1,14 +1,16 @@
 import type { ReactElement, ReactNode } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
-import type { UseQueryResult } from '@tanstack/react-query';
 import { useTheme } from '../providers/ThemeProvider';
 import { maxContentWidth, space } from '../theme';
 import { EmptyState, ErrorState, Loading } from './States';
 import { Text } from './Text';
 
+// Satisfied by both useQuery and useInfiniteQuery results.
+type ListQuery = { isPending: boolean; isError: boolean; error: unknown; isRefetching: boolean; refetch: () => unknown };
+
 type Props<T> = {
-  query: UseQueryResult<unknown>;
+  query: ListQuery;
   items: T[] | undefined;
   renderItem: (item: T) => ReactElement;
   keyExtractor: (item: T) => string;
@@ -17,9 +19,11 @@ type Props<T> = {
   header?: ReactNode;
   empty: { title: string; body?: string };
   edges?: Edge[];
+  onEndReached?: () => void;
+  footer?: ReactElement;
 };
 
-export function QueryList<T>({ query, items, renderItem, keyExtractor, title, subtitle, header, empty, edges = ['top'] }: Props<T>) {
+export function QueryList<T>({ query, items, renderItem, keyExtractor, title, subtitle, header, empty, edges = ['top'], onEndReached, footer }: Props<T>) {
   const { colors } = useTheme();
 
   const top = (
@@ -47,6 +51,9 @@ export function QueryList<T>({ query, items, renderItem, keyExtractor, title, su
         renderItem={({ item }) => <View style={styles.item}>{renderItem(item)}</View>}
         ListHeaderComponent={top}
         ListEmptyComponent={fallback}
+        ListFooterComponent={footer}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.5}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={

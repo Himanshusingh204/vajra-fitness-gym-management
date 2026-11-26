@@ -7,7 +7,7 @@ import { Card, ListRow, StatusPill } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { ErrorState, Loading } from '@/components/States';
 import { Text } from '@/components/Text';
-import { formatDate, formatMoney, isOverdue } from '@/lib/format';
+import { formatDate, formatMoney, isOverdue, isOutstandingFee } from '@/lib/format';
 
 export default function MemberDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,7 +47,7 @@ export default function MemberDetail() {
           <ListRow
             key={f.id}
             title={formatMoney(f.amount)}
-            subtitle={f.status === 'PAID' ? `Paid ${formatDate(f.paymentDate)}` : `Due ${formatDate(f.dueDate)}`}
+            subtitle={f.status === 'PAID' ? `Paid ${formatDate(f.paymentDate)}` : isOutstandingFee(f) ? `Due ${formatDate(f.dueDate)}` : f.status.toLowerCase().replaceAll('_', ' ')}
             right={<StatusPill status={isOverdue(f) ? 'OVERDUE' : f.status} />}
           />
         ))

@@ -34,7 +34,7 @@ export const getClasses = async (req: AuthRequest, res: Response) => {
     const classes = await prisma.gymClass.findMany({
       where,
       include: {
-        trainer: { include: { user: { select: { id: true, username: true } } } },
+        trainer: { select: { id: true, user: { select: { id: true, username: true } } } },
         branch: { select: { id: true, name: true } },
         _count: { select: { bookings: { where: { status: 'BOOKED' } } } },
       },
@@ -94,7 +94,7 @@ export const createClass = async (req: AuthRequest, res: Response) => {
         branchId: branchId ?? null,
       },
       include: {
-        trainer: { include: { user: { select: { id: true, username: true } } } },
+        trainer: { select: { id: true, user: { select: { id: true, username: true } } } },
       },
     });
 
@@ -121,44 +121,40 @@ export const bookClass = async (req: AuthRequest, res: Response) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const gymClass = await prisma.gymClass.findUnique({ where: { id: classId } });
-    if (!gymClass) return res.status(404).json({ error: 'Class not found' });
+    if (!gymClass || !gymClass.isActive) return res.status(404).json({ error: 'Class not found' });
 
     const member = await prisma.memberDetails.findUnique({ where: { userId_gymId: { userId, gymId: gymClass.gymId } } });
     if (!member) return res.status(403).json({ error: 'You can only book classes at your gym' });
     if (member.status !== 'ACTIVE') return res.status(403).json({ error: 'Only active members can book classes' });
 
-    // Count current confirmed bookings.
-    const currentBookings = await prisma.classBooking.count({
-      where: { classId, status: 'BOOKED' },
+    const result = await prisma.$transaction(async (tx) => {
+      // Per-class lock: the count and the insert must see the same seats, or a burst overbooks.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`class:${classId}`}))`;
+      const existing = await tx.classBooking.findUnique({
+        where: { memberId_classId: { memberId: member.id, classId } },
+      });
+      if (existing && (existing.status === 'BOOKED' || existing.status === 'WAITLISTED')) return { existing };
+
+      const currentBookings = await tx.classBooking.count({ where: { classId, status: 'BOOKED' } });
+      // If capacity is reached, place the member on the waitlist instead of rejecting.
+      const status = currentBookings >= gymClass.capacity ? 'WAITLISTED' : 'BOOKED';
+      const booking = await tx.classBooking.upsert({
+        where: { memberId_classId: { memberId: member.id, classId } },
+        update: { status },
+        create: { memberId: member.id, classId, status },
+      });
+      return { booking, position: currentBookings - gymClass.capacity + 1 };
     });
 
-    // Check for an existing booking/waitlist entry for this member.
-    const existing = await prisma.classBooking.findUnique({
-      where: { memberId_classId: { memberId: member.id, classId } },
-    });
-    if (existing && (existing.status === 'BOOKED' || existing.status === 'WAITLISTED')) {
+    if ('existing' in result) {
+      const { existing } = result;
       return res.status(409).json({
         error: existing.status === 'BOOKED' ? 'You already have a booking for this class' : 'You are already on the waitlist for this class',
         waitlist: existing.status === 'WAITLISTED',
       });
     }
-
-    // If capacity is reached, place the member on the waitlist instead of rejecting.
-    if (currentBookings >= gymClass.capacity) {
-      const waitlisted = await prisma.classBooking.upsert({
-        where: { memberId_classId: { memberId: member.id, classId } },
-        update: { status: 'WAITLISTED' },
-        create: { memberId: member.id, classId, status: 'WAITLISTED' },
-      });
-      return res.status(201).json({ ...waitlisted, waitlist: true, position: currentBookings - gymClass.capacity + 1 });
-    }
-
-    // Capacity available: confirm the booking.
-    const booking = await prisma.classBooking.upsert({
-      where: { memberId_classId: { memberId: member.id, classId } },
-      update: { status: 'BOOKED' },
-      create: { memberId: member.id, classId, status: 'BOOKED' },
-    });
+    const { booking, position } = result;
+    if (booking.status === 'WAITLISTED') return res.status(201).json({ ...booking, waitlist: true, position });
 
     res.status(201).json(booking);
   } catch (error) {
@@ -188,24 +184,24 @@ export const cancelClassBooking = async (req: AuthRequest, res: Response) => {
     }
 
     // Cancel the booking; if it was a confirmed slot, promote the next waitlisted member.
-    const updated = await prisma.classBooking.update({
-      where: { id: bookingId },
-      data: { status: 'CANCELLED' },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      // Same lock as bookClass, so a new booking can't take the seat being handed to the waitlist.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`class:${booking.classId}`}))`;
+      const current = await tx.classBooking.findUniqueOrThrow({ where: { id: bookingId } });
+      const cancelled = await tx.classBooking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } });
 
-    // Only a confirmed seat frees capacity; cancelling a waitlist entry must not promote anyone.
-    if (booking.status === 'BOOKED') {
-      const nextWaitlisted = await prisma.classBooking.findFirst({
-        where: { classId: booking.classId, status: 'WAITLISTED' },
-        orderBy: { createdAt: 'asc' },
-      });
-      if (nextWaitlisted) {
-        await prisma.classBooking.update({
-          where: { id: nextWaitlisted.id },
-          data: { status: 'BOOKED' },
+      // Only a confirmed seat frees capacity; cancelling a waitlist entry must not promote anyone.
+      if (current.status === 'BOOKED') {
+        const nextWaitlisted = await tx.classBooking.findFirst({
+          where: { classId: booking.classId, status: 'WAITLISTED' },
+          orderBy: { createdAt: 'asc' },
         });
+        if (nextWaitlisted) {
+          await tx.classBooking.update({ where: { id: nextWaitlisted.id }, data: { status: 'BOOKED' } });
+        }
       }
-    }
+      return cancelled;
+    });
 
     res.json(updated);
   } catch (error) {
@@ -228,7 +224,7 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
 
     const { name, description, capacity, duration, dayOfWeek, startTime, endTime, location, trainerId, branchId, isActive } = req.body;
 
-    if (trainerId) {
+    if (trainerId && trainerId !== gymClass.trainerId) {
       const trainer = await prisma.trainerDetails.findFirst({ where: { id: trainerId, gymId: gymClass.gymId, status: 'ACTIVE' } });
       if (!trainer) return res.status(400).json({ error: 'Trainer does not belong to this gym' });
     }

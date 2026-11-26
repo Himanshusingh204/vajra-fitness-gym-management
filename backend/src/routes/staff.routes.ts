@@ -8,10 +8,12 @@ import {
   rejectTrainerApplication,
 } from '../controllers/staff.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { readLimiter } from '../middlewares/rateLimit.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { staffAddSchema, gymIdParams, idParams, trainerApplicationsQuery, trainerRejectSchema } from '../utils/validators';
 
 const router = Router();
+router.use(readLimiter);
 
 const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve(fn(req, res, next)).catch(next);

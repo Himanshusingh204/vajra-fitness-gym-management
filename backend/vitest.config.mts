@@ -6,6 +6,15 @@ process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING = 'true';
 
 const TEST_DB = process.env.TEST_DATABASE_URL || 'postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public';
 
+// Global setup pushes schema with data loss and workers truncate tables. Refuse
+// remote/shared or non-test targets before Prisma can make any connection.
+const testTarget = new URL(TEST_DB);
+if (!['localhost', '127.0.0.1', '[::1]', 'postgres'].includes(testTarget.hostname)
+  || !/^\/(?:[a-zA-Z0-9]+_)*test(?:_[a-zA-Z0-9]+)*$/.test(testTarget.pathname)
+  || !['postgres:', 'postgresql:'].includes(testTarget.protocol)) {
+  throw new Error('TEST_DATABASE_URL must point to a dedicated local PostgreSQL test database');
+}
+
 export default defineConfig({
   test: {
     environment: 'node',

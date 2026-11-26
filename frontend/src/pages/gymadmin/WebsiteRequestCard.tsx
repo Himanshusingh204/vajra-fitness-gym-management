@@ -21,7 +21,7 @@ export default function WebsiteRequestCard() {
   const [note, setNote] = useState('');
   const [sent, setSent] = useState(false);
 
-  const { data: requests = [], isLoading } = useQuery({ queryKey: ['website-requests', 'mine'], queryFn: getMyWebsiteRequests });
+  const { data: requests = [], isLoading, isError, refetch } = useQuery({ queryKey: ['website-requests', 'mine'], queryFn: getMyWebsiteRequests });
   const hasPending = requests.some((r) => r.status === 'PENDING');
 
   const submit = useMutation({
@@ -50,6 +50,7 @@ export default function WebsiteRequestCard() {
         }}
       >
         <input
+          aria-label="Desired gym website address"
           value={slug}
           onChange={(e) => { setSlug(e.target.value); setSent(false); }}
           placeholder="your-gym-name"
@@ -57,6 +58,7 @@ export default function WebsiteRequestCard() {
           className="input-field text-sm"
         />
         <input
+          aria-label="Additional notes"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Anything we should know (optional)"
@@ -65,7 +67,7 @@ export default function WebsiteRequestCard() {
         />
         <button
           type="submit"
-          disabled={submit.isPending || hasPending}
+          disabled={submit.isPending || hasPending || isLoading || isError}
           className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-bold text-white disabled:opacity-50 sm:col-span-2"
         >
           {hasPending ? 'Request pending' : 'Request website'}
@@ -80,6 +82,8 @@ export default function WebsiteRequestCard() {
 
       {isLoading ? (
         <div className="mt-4 h-10 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+      ) : isError ? (
+        <p role="alert" className="mt-4 text-sm">Could not load website requests. <button type="button" className="underline" onClick={() => refetch()}>Try again</button></p>
       ) : requests.length === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-5 text-center text-sm text-gray-500">
           No website requests yet. Choose the address you want above and send your first request.

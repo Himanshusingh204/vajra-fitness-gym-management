@@ -14,6 +14,7 @@ import { Banner, Field, FormFooter, SubmitButton } from './formParts';
 import { a11y, errorInput, footerLink } from './authForm';
 import { ROUTES, dashboardFor, loginPageFor } from '../../utils/routes';
 import type { LoginRole } from '../../utils/routes';
+import { getApplication } from '../../api/onboarding.api';
 
 const loginSchema = z.object({
   email: z.string().trim().email('Enter a valid email address'),
@@ -68,7 +69,18 @@ const RoleLoginForm = ({ role, allowedRoles, audience, title, subtitle, register
       }
 
       setAuth(user, token);
-      navigate(safeRedirect ?? dashboardFor(user.role), { replace: true });
+      let destination = safeRedirect ?? dashboardFor(user.role);
+      if (!safeRedirect && user.role === 'GYM_ADMIN') {
+        try {
+          const application = await getApplication();
+          if (application.gym.status === 'DRAFT' || application.gym.status === 'CHANGES_REQUESTED') destination = ROUTES.partnerApply;
+          else if (application.gym.status !== 'APPROVED') destination = ROUTES.partnerApplication;
+        } catch {
+          // Account sign-in succeeded; the owner console can show a retryable
+          // error if application status is temporarily unavailable.
+        }
+      }
+      navigate(destination, { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.error || 'Could not sign you in. Please try again.');
     }

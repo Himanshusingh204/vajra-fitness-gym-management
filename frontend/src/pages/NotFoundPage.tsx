@@ -1,41 +1,27 @@
 import { Link } from 'react-router';
-import { Dumbbell, Home } from 'lucide-react';
-import { Reveal } from '../components/Reveal';
+import { ArrowRight, Compass } from 'lucide-react';
+import { usePageMeta } from '../hooks/usePageMeta';
 
-const NotFoundPage = () => {
+export default function NotFoundPage() {
+  usePageMeta('Page not found', 'Find your way back to Kavach Fitness.');
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-6 relative overflow-hidden bg-[var(--color-base)] dark:bg-[var(--color-base)]">
-      <div className="absolute top-1/4 -left-24 w-96 h-96 bg-[var(--color-primary)]/10 rounded-full blur-3xl animate-blob" />
-      <div className="absolute bottom-1/4 -right-24 w-96 h-96 bg-[var(--color-accent)]/10 rounded-full blur-3xl animate-blob [animation-delay:-8s]" />
-
-      <div className="relative z-10">
-        <Reveal variant="scale">
-          <div className="w-24 h-24 rounded-3xl bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center mx-auto mb-8">
-            <Dumbbell className="w-12 h-12" />
+    <section className="bg-[var(--color-base)] px-6 pb-24 pt-36 sm:pt-44">
+      <div className="mx-auto grid min-h-[55vh] max-w-6xl items-center gap-12 md:grid-cols-[0.8fr_1fr] md:gap-20">
+        <div aria-hidden="true" className="border-y border-[var(--color-border)] py-6 md:py-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--color-muted)]">Kavach Fitness / 404</p>
+          <p className="display mt-4 text-[clamp(7rem,24vw,18rem)] leading-[0.8] text-[var(--color-primary)]">404</p>
+        </div>
+        <div className="max-w-lg">
+          <span className="eyebrow">Let's get you back</span>
+          <h1 className="mt-5 text-4xl font-bold tracking-tight text-[var(--color-deepgray)] dark:text-white sm:text-5xl">We couldn't find that page.</h1>
+          <p className="mt-5 text-lg leading-relaxed text-[var(--color-muted)]">The address may have changed, or the page may no longer be available. Choose where you'd like to go next.</p>
+          <div className="mt-9 flex flex-wrap gap-3">
+            <Link to="/" className="btn-primary">Go to homepage <ArrowRight className="h-4 w-4" /></Link>
+            <Link to="/gyms" className="btn-outline"><Compass className="h-4 w-4" /> Find a gym</Link>
           </div>
-        </Reveal>
-        <Reveal delay={100}>
-          <h1 className="display text-8xl md:text-9xl text-gradient leading-none">404</h1>
-        </Reveal>
-        <Reveal delay={200}>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-[var(--color-deepgray)] dark:text-white mt-4 mb-4">
-            Looks like you lifted too heavy!
-          </h2>
-        </Reveal>
-        <Reveal delay={300}>
-          <p className="text-[var(--color-muted)] max-w-md mx-auto mb-8">
-            We couldn't find the page you're looking for. It might have been moved, deleted, or you
-            may have typed the URL incorrectly.
-          </p>
-        </Reveal>
-        <Reveal delay={400}>
-          <Link to="/" className="btn-primary inline-flex">
-            <Home className="w-5 h-5" /> Return to Home Base
-          </Link>
-        </Reveal>
+          <p className="mt-8 text-sm text-[var(--color-muted)]">Need help? <Link to="/help" className="font-semibold text-[var(--color-primary)] underline underline-offset-4">Visit the help centre</Link>.</p>
+        </div>
       </div>
-    </div>
+    </section>
   );
-};
-
-export default NotFoundPage;
+}

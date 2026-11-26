@@ -3,7 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { logAudit } from '../utils/audit';
 import { prisma } from '../utils/prisma';
 import { createNotification } from '../services/notification.service';
-import { decideRequest, ApprovalError } from '../services/approval.service';
+import { decideRequest, ApprovalError, registrationKey } from '../services/approval.service';
 import { redis, isRedisAvailable } from '../utils/redis';
 
 const PLATFORM_ANALYTICS_CACHE_KEY = 'platform-analytics';
@@ -41,6 +41,21 @@ export const approveGym = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
 
+    // A gym with an open application is approved through it, so the request
+    // closes and the owner gets the same notice as from the approvals inbox.
+    const open = await prisma.approvalRequest.findUnique({ where: { openKey: registrationKey(gymId) } });
+    if (open) {
+      const request = await decideRequest(open.id, 'APPROVED', req.user!.userId);
+      await logAudit({
+        action: 'APPROVAL_APPROVED',
+        entity: 'ApprovalRequest',
+        entityId: request.id,
+        details: JSON.stringify({ ref: request.ref, gymId }),
+        userId: req.user!.userId,
+      });
+      return res.json({ message: 'Gym approved successfully', gym: await prisma.gym.findUnique({ where: { id: gymId } }) });
+    }
+
     const gym = await prisma.gym.update({
       where: { id: gymId },
       data: { isApproved: true, status: 'APPROVED' },
@@ -68,6 +83,7 @@ export const approveGym = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Gym approved successfully', gym });
   } catch (error) {
+    if (error instanceof ApprovalError) return res.status(error.status).json({ error: error.message, code: error.code });
     res.status(500).json({ error: 'Failed to approve gym' });
   }
 };
@@ -466,8 +482,9 @@ export const setUserActive = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Permanently delete a user account (Super Admin only) — for removing
-// fake/test/duplicate accounts. GYM_ADMIN accounts that still own a gym
+// Delete a user account (Super Admin only) — for removing fake/test/duplicate
+// accounts. An account with money records (orders, fees, payslips) is kept for
+// the books and only deactivated, with its sessions revoked. GYM_ADMIN accounts that still own a gym
 // can't be deleted here: the owner→gym foreign key isn't cascading, and
 // gym deletion already has its own dedicated flow (deleteGym) that handles
 // the owner-account nuance correctly — route them there instead of
@@ -492,17 +509,27 @@ export const deleteUserAccount = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'This user owns a gym — delete the gym instead, which handles the owner account correctly.' });
     }
 
-    await prisma.user.delete({ where: { id } });
+    const [orders, fees, payslips] = await Promise.all([
+      prisma.order.count({ where: { memberUserId: id } }),
+      prisma.fee.count({ where: { member: { userId: id } } }),
+      prisma.payslip.count({ where: { userId: id } }),
+    ]);
+    const keep = orders + fees + payslips > 0;
+    if (keep) {
+      await prisma.user.update({ where: { id }, data: { isActive: false, tokenVersion: { increment: 1 } } });
+    } else {
+      await prisma.user.delete({ where: { id } });
+    }
 
     await logAudit({
-      action: 'USER_DELETED',
+      action: keep ? 'USER_DEACTIVATED' : 'USER_DELETED',
       entity: 'User',
       entityId: id,
       details: JSON.stringify({ username: user.username, email: user.email, role: user.role }),
       userId: req.user?.userId ?? null,
     });
 
-    res.json({ message: 'User deleted' });
+    res.json({ message: keep ? 'User has payment records, so the account was deactivated instead' : 'User deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete user' });
   }
@@ -732,8 +759,9 @@ export const getAuditLogs = async (req: AuthRequest, res: Response) => {
 // directly, without needing the gym owner.
 // Permanently delete a gym and all of its tenant-scoped data (members, staff,
 // trainers, fees, bookings, subscriptions, etc. all cascade at the DB level).
-// The owner's account is preserved unless this was their only gym, in which
-// case it is deactivated the same way suspendGym does.
+// A gym with money records is suspended instead, so the books stay intact.
+// The owner's account is preserved unless this was their only live gym, in
+// which case it is deactivated the same way suspendGym does.
 export const deleteGym = async (req: AuthRequest, res: Response) => {
   if (!requireSuperAdmin(req, res)) return;
   try {
@@ -743,14 +771,22 @@ export const deleteGym = async (req: AuthRequest, res: Response) => {
       where: { id: gymId },
       include: {
         owner: { select: { id: true, username: true, email: true } },
-        _count: { select: { members: true, staff: true, trainers: true, subscriptions: true } },
+        _count: {
+          select: { members: true, staff: true, trainers: true, subscriptions: true, orders: true, ledgerEntries: true, fees: true, sales: true, invoices: true, payrollRecords: true },
+        },
       },
     });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
 
-    await prisma.gym.delete({ where: { id: gymId } });
+    const { orders, ledgerEntries, fees, sales, invoices, payrollRecords } = gym._count;
+    const keep = orders + ledgerEntries + fees + sales + invoices + payrollRecords > 0;
+    if (keep) {
+      await prisma.gym.update({ where: { id: gymId }, data: { isApproved: false, status: 'SUSPENDED' } });
+    } else {
+      await prisma.gym.delete({ where: { id: gymId } });
+    }
 
-    const remainingGyms = await prisma.gym.count({ where: { ownerId: gym.owner.id } });
+    const remainingGyms = await prisma.gym.count({ where: { ownerId: gym.owner.id, status: { not: 'SUSPENDED' } } });
     if (remainingGyms === 0) {
       await prisma.user.update({
         where: { id: gym.owner.id },
@@ -759,7 +795,7 @@ export const deleteGym = async (req: AuthRequest, res: Response) => {
     }
 
     await logAudit({
-      action: 'GYM_DELETED',
+      action: keep ? 'GYM_SUSPENDED' : 'GYM_DELETED',
       entity: 'Gym',
       entityId: gymId,
       details: JSON.stringify({
@@ -773,7 +809,11 @@ export const deleteGym = async (req: AuthRequest, res: Response) => {
       userId: req.user?.userId ?? null,
     });
 
-    res.json({ message: 'Gym and all associated data deleted permanently' });
+    res.json({
+      message: keep
+        ? 'Gym has payment records, so it was suspended and hidden instead of deleted'
+        : 'Gym and all associated data deleted permanently',
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete gym' });
   }
@@ -886,6 +926,7 @@ export const getApprovals = async (req: AuthRequest, res: Response) => {
     include: {
       gym: { select: { name: true, city: true } },
       requester: { select: { username: true, email: true } },
+      documents: { select: { document: { select: { id: true, kind: true, mime: true, sizeBytes: true } } } },
     },
   });
   res.json(requests);

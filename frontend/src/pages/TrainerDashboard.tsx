@@ -27,39 +27,39 @@ const TrainerDashboard = () => {
   const queryClient = useQueryClient();
   const activeTab = useOutletContext<string | undefined>() ?? '';
 
-  const { data: me } = useQuery({
+  const { data: me, isError: meError } = useQuery({
     queryKey: ['me'],
     queryFn: getMe,
   });
 
   const gymId = me?.trainerDetails?.gym?.id;
 
-  const { data: bookings, isLoading: bookingsLoading } = useQuery({
+  const { data: bookings, isLoading: bookingsLoading, isError: bookingsError } = useQuery({
     queryKey: ['trainerBookings'],
     queryFn: getTrainerBookings,
     refetchInterval: 30000,
   });
 
-  const { data: members, isLoading: membersLoading } = useQuery({
+  const { data: members, isLoading: membersLoading, isError: membersError } = useQuery({
     queryKey: ['gymMembers', gymId],
     queryFn: () => getGymMembers(gymId),
     enabled: !!gymId && ['clients', 'overview'].includes(activeTab),
   });
 
-  const { data: slips, isLoading: slipsLoading } = useQuery({
+  const { data: slips, isLoading: slipsLoading, isError: slipsError } = useQuery({
     queryKey: ['gymSlips', gymId],
     queryFn: () => getGymWorkoutSlips(gymId),
     enabled: !!gymId && (activeTab === 'workouts' || activeTab === 'overview'),
   });
 
-  const { data: payslips = [], isLoading: payslipsLoading } = useQuery({
+  const { data: payslips = [], isLoading: payslipsLoading, isError: payslipsError } = useQuery({
     queryKey: ['myPayslips'],
     queryFn: getMyPayslips,
     enabled: activeTab === 'overview' || activeTab === 'earnings',
     refetchInterval: 60000,
   });
 
-  const { data: gymClasses = [] } = useQuery({
+  const { data: gymClasses = [], isError: classesError } = useQuery({
     queryKey: ['gymClasses', gymId],
     queryFn: () => getClasses(gymId!),
     enabled: !!gymId && activeTab === 'schedule',
@@ -96,6 +96,9 @@ const TrainerDashboard = () => {
   const mySlipCount = slips?.filter((s: any) => s.trainer?.user?.username === user?.username).length ?? 0;
 
   if (!activeTab) return <Navigate to="/trainer" replace />;
+
+  const dashboardError = meError || bookingsError || membersError || slipsError || payslipsError || classesError;
+  if (dashboardError) return <div role="alert" className="max-w-7xl mx-auto p-6">Could not load your dashboard. <button type="button" className="underline" onClick={() => queryClient.refetchQueries({ type: 'active', stale: true })}>Try again</button></div>;
 
   return (
     <>

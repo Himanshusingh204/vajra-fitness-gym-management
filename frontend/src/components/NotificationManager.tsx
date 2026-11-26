@@ -5,7 +5,7 @@ export const NotificationManager = () => {
   const { notifications, removeNotification } = useNotificationStore();
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] space-y-2 flex flex-col items-end pointer-events-none">
+    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 lg:bottom-4 z-[60] space-y-2 flex flex-col items-end pointer-events-none">
       {notifications.map((notif) => (
         <div
           key={notif.id}

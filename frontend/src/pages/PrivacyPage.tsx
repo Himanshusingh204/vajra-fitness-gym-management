@@ -36,7 +36,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="4. Data Retention">
-        <p>Member records are retained for a minimum of 3 years in accordance with Indian GST regulations. You may request deletion of your account by contacting <a href="mailto:support@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">support@kavachfitness.in</a>. Financial transaction records will be retained as legally required.</p>
+        <p>Member records are retained for a minimum of 3 years in accordance with Indian GST regulations. You may request deletion of your account by contacting <a href="mailto:support@kavachfitness.in" className="text-[var(--color-primary)] underline underline-offset-2">support@kavachfitness.in</a>. Financial transaction records will be retained as legally required.</p>
       </Section>
 
       <Section title="5. Cookies">
@@ -48,7 +48,7 @@ const PrivacyPage = () => {
       </Section>
 
       <Section title="7. Contact">
-        <p>For any privacy-related queries, write to us at <a href="mailto:privacy@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">privacy@kavachfitness.in</a> or visit our <Link to="/contact" className="text-[var(--color-primary)] hover:underline">Contact page</Link>.</p>
+        <p>For any privacy-related queries, write to us at <a href="mailto:privacy@kavachfitness.in" className="text-[var(--color-primary)] underline underline-offset-2">privacy@kavachfitness.in</a> or visit our <Link to="/contact" className="text-[var(--color-primary)] underline underline-offset-2">Contact page</Link>.</p>
       </Section>
     </div>
   </div>

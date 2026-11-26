@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { joinGym } from '@/api/gym';
-import { setMemberGymId } from '@/api/session';
 import { Button } from '@/components/Button';
-import { Card, StatusPill } from '@/components/Card';
+import { Card, ListRow, StatusPill } from '@/components/Card';
 import { GymPicker } from '@/components/GymPicker';
 import { Screen } from '@/components/Screen';
 import { Segmented } from '@/components/Segmented';
 import { ErrorState, FormError, Loading } from '@/components/States';
 import { Text } from '@/components/Text';
 import { WorkoutCard } from '@/components/WorkoutCard';
-import { useMemberProfile, useMyFees, useMyGyms, useMyMemberships, useMyWorkouts } from '@/hooks/useMemberData';
+import { useMemberProfile, useMyFees, useMyGyms, useMyMemberships, useMyWorkouts, useSwitchGym } from '@/hooks/useMemberData';
 import { daysLeftLabel, daysUntil, formatDate, formatMoney, isOverdue, nextDueFee } from '@/lib/format';
 import { useUser } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -38,28 +38,23 @@ function JoinGym() {
 
 // shortcut: a segmented control gets cramped past three gyms; move to a picker sheet if members often have more.
 function GymSwitch({ current }: { current: string }) {
-  const queryClient = useQueryClient();
   const gyms = useMyGyms();
+  const switchGym = useSwitchGym();
   if (!gyms.data || gyms.data.length < 2) return null;
-
-  const choose = (gymId: string) => {
-    setMemberGymId(gymId);
-    // Everything else under 'member' belongs to one gym; the gym list itself stays.
-    queryClient.resetQueries({ queryKey: ['member'], predicate: (q) => q.queryKey[1] !== 'gyms' });
-  };
 
   return (
     <Segmented
       label="Gym"
       value={current}
       options={gyms.data.map((g) => ({ value: g.gymId, label: g.gym.name }))}
-      onChange={choose}
+      onChange={switchGym}
     />
   );
 }
 
 export default function MemberHome() {
   const user = useUser();
+  const router = useRouter();
   const { colors } = useTheme();
   const profile = useMemberProfile();
   const memberId = profile.data?.id;
@@ -140,6 +135,11 @@ export default function MemberHome() {
             <Text muted>Nothing due. You are all paid up.</Text>
           )}
         </Card>
+
+        <View style={styles.section}>
+          <ListRow title="My gyms" subtitle="Memberships and receipts for every gym" onPress={() => router.push('/my-gyms')} />
+          <ListRow title="Join another gym" subtitle="Find a gym and send a request" onPress={() => router.push('/member/gyms')} />
+        </View>
 
         <View style={styles.section}>
           <Text variant="heading">Today's workout</Text>

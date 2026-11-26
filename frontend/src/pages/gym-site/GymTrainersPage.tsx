@@ -10,10 +10,15 @@ export default function GymTrainersPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
-      <GymPageIntro eyebrow="Meet the team" title="Good coaching changes everything." description={`Meet the people behind your training at ${gym.name}. Find a coaching style that helps you feel confident and keep making progress.`} />
-      <Section title="Trainers">
+      <GymPageIntro
+        eyebrow="Coaching"
+        title="Trainers"
+        description={`The trainers at ${gym.name}${gym.classes.length > 0 ? ', and the weekly class timetable' : ''}.`}
+        photo={3}
+      />
+      <div className="mt-8 md:mt-12">
         <TrainerList trainers={gym.trainers} />
-      </Section>
+      </div>
       {gym.classes.length > 0 && (
         <Section title="Class timetable">
           <Timetable classes={gym.classes} />

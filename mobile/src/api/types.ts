@@ -56,7 +56,14 @@ export type PublicGym = {
   state: string;
   address: string;
   membershipPlans?: MembershipPlan[];
+  facilities?: string[];
+  tagline?: string | null;
+  distanceKm?: number | null;
 };
+
+export type GymPage = { items: PublicGym[]; total: number; page: number };
+
+export type GymSort = 'relevance' | 'price' | 'newest';
 
 // One row of /members/my-gyms: a gym the member belongs to, default gym first.
 export type MyGym = {
@@ -64,6 +71,7 @@ export type MyGym = {
   gymId: string;
   status: string;
   gym: { id: string; name: string; city: string };
+  activeMembership: { id: string; status: string; startDate: string; endDate: string; planId: string } | null;
 };
 
 export type MemberProfile = {
@@ -149,4 +157,15 @@ export type GymStats = {
   pendingFees: number;
   attendanceToday: number;
   revenueThisMonth: Money;
+};
+
+// What POST /orders hands back for the payment sheet.
+export type CheckoutOrder = {
+  id: string;
+  status: string;
+  totalPaise: number;
+  razorpayOrderId: string | null;
+  amount: number;
+  currency: string;
+  keyId: string | null;
 };

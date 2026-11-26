@@ -29,7 +29,12 @@ const detectType = (data: Buffer): FileType | null => {
 // its type in Content-Type.
 export const uploadFile = async (req: AuthRequest, res: Response) => {
   const userId = req.user!.userId;
-  const { kind, gymId } = req.query as { kind: string; gymId?: string };
+  // Query values can arrive as arrays (?kind=a&kind=b); accept only single strings.
+  const kind = typeof req.query.kind === 'string' ? req.query.kind : '';
+  const gymId = typeof req.query.gymId === 'string' ? req.query.gymId : undefined;
+  if (!kind || (req.query.gymId !== undefined && !gymId)) {
+    return res.status(400).json({ error: 'kind and gymId must be single values', code: 'INVALID_QUERY' });
+  }
   const data = req.body;
   if (!Buffer.isBuffer(data) || data.length === 0) {
     return res.status(400).json({ error: 'Send the file bytes as the request body', code: 'EMPTY_FILE' });

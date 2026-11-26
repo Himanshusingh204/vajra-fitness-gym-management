@@ -85,6 +85,11 @@ const fetchPublicGym = (where: { id: string } | { subdomain: string }) => {
         city: true,
         state: true,
         location: true,
+        lat: true,
+        lng: true,
+        parking: true,
+        accessibility: true,
+        rules: true,
         facilities: true,
         brandColor: true,
         imageUrl: true,
@@ -242,7 +247,7 @@ export const getGymBranding = async (req: Request, res: Response) => {
 
     if (!where) return res.status(404).json({ error: 'No branding configured for this host' });
 
-    const gym = await prisma.gym.findFirst({ where });
+    const gym = await prisma.gym.findFirst({ where: { ...where, status: { not: 'SUSPENDED' } } });
     if (!gym) return res.status(404).json({ error: 'No branding configured for this host' });
 
     res.json({

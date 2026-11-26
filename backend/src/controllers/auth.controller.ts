@@ -66,6 +66,9 @@ const allowedCookieOrigins = Array.from(
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:4173',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    'http://127.0.0.1:4173',
   ]),
 );
 
@@ -122,7 +125,8 @@ export const registerVendor = async (req: Request, res: Response) => {
             location,
             gstNumber,
             isApproved: false,
-            status: 'PENDING_REVIEW',
+            // The owner finishes the application (/partner/apply) and submits it for review.
+            status: 'DRAFT',
           },
         },
       },
@@ -135,12 +139,15 @@ export const registerVendor = async (req: Request, res: Response) => {
     const refreshRaw = await generateRefreshToken(vendor.id);
 
     res.status(201).json({
-      message: 'Vendor registered successfully, pending approval.',
+      message: 'Account created. Finish your gym application to send it for review.',
       token: issueAccessToken(vendor),
       ...handOverRefreshToken(req, res, refreshRaw),
       user: { id: vendor.id, username: vendor.username, email: vendor.email, role: vendor.role },
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Two sign-ups with one email at the same moment both pass the check above; the unique index stops the second.
+    if (error?.code === 'P2002') return res.status(409).json({ error: 'An account with this email already exists' });
+    logger.errorWith('vendor registration failed', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -575,15 +582,19 @@ export const activateAccount = async (req: Request, res: Response) => {
     }
     if (!password) return res.status(400).json({ error: 'Password is required' });
 
-    // Claim the token before using it so two concurrent requests can't both pass.
-    const claimed = await prisma.activationToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
-    if (claimed.count === 0) return res.status(400).json({ error: 'This activation link has already been used' });
-
     const hashed = await argon2.hash(password);
-    await prisma.user.update({
-      where: { id: record.userId },
-      data: { password: hashed, isActive: true, tokenVersion: { increment: 1 } },
+    const activatedUser = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`password-reset:${record.userId}`}))`;
+      const now = new Date();
+      const claimed = await tx.activationToken.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
+      if (!claimed.count) return null;
+      const user = await tx.user.update({ where: { id: record.userId }, data: { password: hashed, isActive: true, tokenVersion: { increment: 1 } } });
+      await tx.activationToken.updateMany({ where: { userId: record.userId, usedAt: null }, data: { usedAt: now } });
+      await tx.passwordResetToken.updateMany({ where: { userId: record.userId, usedAt: null }, data: { usedAt: now } });
+      await tx.refreshToken.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: now } });
+      return user;
     });
+    if (!activatedUser) return res.status(400).json({ error: 'This activation link has already been used or expired' });
 
     const refreshRaw = await generateRefreshToken(record.userId);
     setRefreshCookie(res, refreshRaw, true);
@@ -598,7 +609,7 @@ export const activateAccount = async (req: Request, res: Response) => {
 
     res.json({
       message: 'Account activated successfully.',
-      token: issueAccessToken(record.user),
+      token: issueAccessToken(activatedUser),
       user: { id: record.user.id, username: record.user.username, email: record.user.email, role: record.user.role },
     });
   } catch (error) {
@@ -660,19 +671,22 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
     if (!newPassword) return res.status(400).json({ error: 'New password is required' });
 
-    // Claim the token before using it so two concurrent requests can't both pass.
-    const claimed = await prisma.passwordResetToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
-    if (claimed.count === 0) return res.status(400).json({ error: 'Invalid or already used reset token' });
-
     const hashed = await argon2.hash(newPassword);
-    await prisma.user.update({
-      where: { id: record.userId },
-      data: { password: hashed, tokenVersion: { increment: 1 } },
+    // Serialize reset attempts per account, including attempts with different
+    // links. Mark every outstanding link used in the same transaction as the
+    // password change and session revocation.
+    const changed = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`password-reset:${record.userId}`}))`;
+      const now = new Date();
+      const claimed = await tx.passwordResetToken.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
+      if (!claimed.count) return false;
+      await tx.user.update({ where: { id: record.userId }, data: { password: hashed, tokenVersion: { increment: 1 } } });
+      await tx.passwordResetToken.updateMany({ where: { userId: record.userId, usedAt: null }, data: { usedAt: now } });
+      await tx.activationToken.deleteMany({ where: { userId: record.userId } });
+      await tx.refreshToken.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: now } });
+      return true;
     });
-    // Any pending activation tokens become invalid once the password is set.
-    await prisma.activationToken.deleteMany({ where: { userId: record.userId } });
-    // Revoke all outstanding refresh sessions so old sessions can't linger.
-    await revokeAllUserTokens(record.userId);
+    if (!changed) return res.status(400).json({ error: 'Invalid or already used reset token' });
 
     res.json({ message: 'Password reset successfully. Please log in.' });
   } catch (error) {

@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/errors';
+import { isKnownGym } from '../lib/gymChoice';
+import { getMemberGymId, setMemberGymId } from '../api/session';
 import { getMemberFees, getMemberWorkouts, getMyAttendance, getMyGyms, getMyMemberships, getMyProfile } from '../api/gym';
 
 // A member with no gym yet gets a 404 from /members/my-profile, which is a
@@ -9,6 +11,9 @@ export function useMemberProfile() {
     queryKey: ['member', 'profile'],
     queryFn: async () => {
       try {
+        // A saved gym the member has since left falls back to their default gym.
+        const saved = getMemberGymId();
+        if (saved && !isKnownGym(saved, await getMyGyms())) setMemberGymId(null);
         return await getMyProfile();
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) return null;
@@ -44,4 +49,13 @@ export function useMyAttendance(enabled: boolean) {
 
 export function useMyGyms() {
   return useQuery({ queryKey: ['member', 'gyms'], queryFn: getMyGyms });
+}
+
+export function useSwitchGym() {
+  const queryClient = useQueryClient();
+  return (gymId: string) => {
+    setMemberGymId(gymId);
+    // Everything else under 'member' belongs to one gym; the gym list itself stays.
+    queryClient.resetQueries({ queryKey: ['member'], predicate: (q) => q.queryKey[1] !== 'gyms' });
+  };
 }

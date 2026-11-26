@@ -9,6 +9,7 @@ export default function MemberLayout() {
         { name: 'workouts', title: 'Workouts', icon: 'barbell-outline' },
         { name: 'attendance', title: 'Attendance', icon: 'calendar-outline' },
         { name: 'payments', title: 'Payments', icon: 'card-outline' },
+        { name: 'gyms', title: 'Find gyms', icon: 'search-outline' },
         { name: 'profile', title: 'Profile', icon: 'person-circle-outline' },
       ]}
     />

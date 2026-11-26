@@ -23,7 +23,7 @@ const listQuery = z
     lng: num.min(-180).max(180).optional(),
     radiusKm: num.positive().max(500).default(25),
     sort: z.enum(['relevance', 'price', 'distance', 'newest']).default('relevance'),
-    page: z.coerce.number().int().min(1).default(1),
+    page: z.coerce.number().int().min(1).max(1000000).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(12),
     paged: z.enum(['1']).optional(),
   })
@@ -32,7 +32,7 @@ const listQuery = z
 const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
   const rad = (d: number) => (d * Math.PI) / 180;
   const a = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
-  return 12742 * Math.asin(Math.sqrt(a));
+  return 12742 * Math.asin(Math.sqrt(Math.min(1, a)));
 };
 
 export const listPublicGyms = async (req: Request, res: Response) => {
@@ -57,15 +57,21 @@ export const listPublicGyms = async (req: Request, res: Response) => {
       if (geo) {
         const dLat = f.radiusKm / 111;
         const dLng = f.radiusKm / (111 * Math.max(Math.cos((f.lat! * Math.PI) / 180), 0.01));
-        where.lat = { gte: f.lat! - dLat, lte: f.lat! + dLat };
-        where.lng = { gte: f.lng! - dLng, lte: f.lng! + dLng };
+        where.lat = { gte: Math.max(-90, f.lat! - dLat), lte: Math.min(90, f.lat! + dLat) };
+        // A search near ±180° crosses the international date line. A single
+        // bounded range would silently omit nearby gyms on the other side.
+        if (dLng < 180) {
+          const west = f.lng! - dLng;
+          const east = f.lng! + dLng;
+          if (west < -180) where.OR = [{ lng: { gte: west + 360 } }, { lng: { lte: east } }];
+          else if (east > 180) where.OR = [{ lng: { gte: west } }, { lng: { lte: east - 360 } }];
+          else where.lng = { gte: west, lte: east };
+        }
       }
 
       // Public endpoint: an explicit allow-list so owner ids, GSTIN and domain
       // settings never leave the server.
-      const rows = await prisma.gym.findMany({
-        where,
-        select: {
+      const select = {
           id: true,
           name: true,
           address: true,
@@ -77,6 +83,7 @@ export const listPublicGyms = async (req: Request, res: Response) => {
           facilities: true,
           tagline: true,
           brandColor: true,
+          openingHours: true,
           isApproved: true,
           category: true,
           lat: true,
@@ -87,7 +94,22 @@ export const listPublicGyms = async (req: Request, res: Response) => {
             orderBy: { price: 'asc' },
             select: { id: true, name: true, description: true, duration: true, price: true, isActive: true },
           },
-        },
+        } satisfies Prisma.GymSelect;
+
+      // The common unfiltered directory request can be paginated by Postgres.
+      // Fetching every approved gym before slicing makes even the first page
+      // consume memory and database bandwidth proportional to the entire site.
+      if (f.paged && !geo && !f.q && f.minPrice === undefined && f.maxPrice === undefined && (f.sort === 'relevance' || f.sort === 'newest')) {
+        const [rows, total] = await Promise.all([
+          prisma.gym.findMany({ where, select, orderBy: [{ createdAt: f.sort === 'newest' ? 'desc' : 'asc' }, { id: 'asc' }], skip: (f.page - 1) * f.limit, take: f.limit }),
+          prisma.gym.count({ where }),
+        ]);
+        return { items: rows.map(({ lat, lng, createdAt, ...gym }) => ({ ...gym, distanceKm: null })), total, page: f.page };
+      }
+
+      const rows = await prisma.gym.findMany({
+        where,
+        select,
         orderBy: { createdAt: 'asc' },
       });
 
@@ -98,7 +120,7 @@ export const listPublicGyms = async (req: Request, res: Response) => {
       let list = rows
         .map((g) => ({
           ...g,
-          distanceKm: geo && g.lat !== null && g.lng !== null ? Math.round(haversineKm(f.lat!, f.lng!, g.lat, g.lng) * 10) / 10 : null,
+          distanceKm: geo && g.lat !== null && g.lng !== null ? haversineKm(f.lat!, f.lng!, g.lat, g.lng) : null,
         }))
         .filter((g) => {
           if (q && ![g.name, g.city, g.location ?? '', ...g.facilities].some((t) => t.toLowerCase().includes(q))) return false;
@@ -113,7 +135,7 @@ export const listPublicGyms = async (req: Request, res: Response) => {
       else if (f.sort === 'newest') list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       else if (q) list.sort((a, b) => rank(a.name) - rank(b.name));
 
-      const slim = list.map(({ lat, lng, createdAt, ...g }) => g);
+      const slim = list.map(({ lat, lng, createdAt, ...g }) => ({ ...g, distanceKm: g.distanceKm === null ? null : Math.round(g.distanceKm * 10) / 10 }));
       const start = (f.page - 1) * f.limit;
       return f.paged ? { items: slim.slice(start, start + f.limit), total: slim.length, page: f.page } : slim;
     });
@@ -155,7 +177,7 @@ export const updateGym = async (req: AuthRequest, res: Response) => {
   try {
     const {
       name, address, city, state, location, gstNumber, logoUrl, imageUrl, facilities, brandColor, tagline, subdomain, customDomain,
-      description, openingHours, phone, email, galleryUrls,
+      description, openingHours, phone, email, galleryUrls, lat, lng, parking, accessibility, rules,
     } = req.body;
     const gym = await prisma.gym.findFirst({ where: { ownerId: userId } });
     if (!gym) return res.status(404).json({ error: 'Gym not found' });
@@ -179,6 +201,11 @@ export const updateGym = async (req: AuthRequest, res: Response) => {
         tagline,
         description,
         openingHours,
+        lat,
+        lng,
+        parking,
+        accessibility,
+        rules,
         galleryUrls,
         ...(subdomain !== undefined ? { subdomain: subdomain || null } : {}),
         ...(customDomain !== undefined ? { customDomain: customDomain || null } : {}),

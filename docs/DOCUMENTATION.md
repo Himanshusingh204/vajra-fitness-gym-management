@@ -388,6 +388,7 @@ Security vulnerabilities should be reported privately:
 | `CRON_SECRET` | Required on Vercel | Bearer secret for `/api/internal/cron`. Vercel Cron calls it daily at 03:00 UTC (see `vercel.json`) |
 | `RAZORPAY_WEBHOOK_SECRET`| Optional | Secret for verifying incoming Razorpay webhooks |
 | `SMTP_*` | Optional | SMTP mail credentials for activation & password emails |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Required on Vercel for uploads | Cloudflare R2 storage for uploaded documents and photos. When all four are set, files are stored in the bucket over the S3 API; when unset, they stay on local disk (`UPLOAD_DIR`), which Vercel does not keep. Downloads still go through the API's 5-minute signed links |
 
 ### Database Migrations Workflow
 Prisma schema migrations are located in `backend/prisma/migrations/`.

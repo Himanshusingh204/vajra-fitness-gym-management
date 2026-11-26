@@ -8,7 +8,7 @@ export function ThemeSelector() {
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="p-2 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-deepgray)] hover:bg-[var(--color-border)]/40 transition-all"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-[var(--color-muted)] hover:text-[var(--color-deepgray)] hover:bg-[var(--color-border)]/40 transition-all"
       aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
       title={isDark ? 'Light theme' : 'Dark theme'}
     >

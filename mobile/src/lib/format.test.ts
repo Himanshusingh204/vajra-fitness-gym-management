@@ -4,6 +4,7 @@ import {
   daysUntil,
   formatMoney,
   isOverdue,
+  isOutstandingFee,
   localDateKey,
   nextDueFee,
   parseExercises,
@@ -43,6 +44,14 @@ describe('daysUntil', () => {
 });
 
 describe('fees', () => {
+  it('never treats refunded or cancelled fees as outstanding or overdue', () => {
+    for (const status of ['REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED']) {
+      const fee = { status, dueDate: '2020-01-01' };
+      expect(isOutstandingFee(fee)).toBe(false);
+      expect(isOverdue(fee)).toBe(false);
+      expect(nextDueFee([fee])).toBeUndefined();
+    }
+  });
   const fees = [
     { id: 'a', status: 'PAID', dueDate: '2026-09-01' },
     { id: 'b', status: 'PENDING', dueDate: '2026-11-05' },

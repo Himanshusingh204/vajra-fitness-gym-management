@@ -35,6 +35,7 @@ const LineChartImpl: React.FC<LineChartProps> = ({
     showArea = false,
     animate = true,
     colors = DEFAULT_COLORS,
+    fitAxis = false,
   } = config;
 
   const pad = useMemo(
@@ -54,8 +55,11 @@ const LineChartImpl: React.FC<LineChartProps> = ({
     const chartHeight = height - pad.top - pad.bottom;
 
     const allValues = series.flatMap((s) => s.data.map((d) => d.value));
-    const maxValue = Math.max(...allValues, 1);
-    const minValue = Math.min(...allValues, 0);
+    const dataMax = Math.max(...allValues);
+    const dataMin = Math.min(...allValues);
+    const margin = (dataMax - dataMin || 1) * 0.15;
+    const maxValue = fitAxis ? dataMax + margin : Math.max(...allValues, 1);
+    const minValue = fitAxis ? dataMin - margin : Math.min(...allValues, 0);
 
     const xScale = (index: number) =>
       pad.left + (index / Math.max(1, series[0].data.length - 1)) * chartWidth;
@@ -179,7 +183,7 @@ const LineChartImpl: React.FC<LineChartProps> = ({
       }
     `;
     svg.appendChild(style);
-  }, [series, width, height, pad, showGrid, showLabels, showPoints, showArea, animate, colors]);
+  }, [series, width, height, pad, showGrid, showLabels, showPoints, showArea, animate, colors, fitAxis]);
 
   return (
     <svg

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { readLimiter } from '../middlewares/rateLimit.middleware';
 import { gymIdParams, idParams, referralCreateSchema, referralStatusSchema } from '../utils/validators';
 import { getReferrals, createReferral, updateReferralStatus, getReferralStats, getMyReferrals } from '../controllers/referral.controller';
 
@@ -10,6 +11,7 @@ import { getReferrals, createReferral, updateReferralStatus, getReferralStats, g
 // =====================================================================
 
 const router = Router();
+router.use(readLimiter);
 
 router.use(authenticate);
 

@@ -1,10 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getWorkoutSlips, createWorkoutSlip, getGymWorkoutSlips, getWorkoutSlipPDF } from '../controllers/workout.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { readLimiter } from '../middlewares/rateLimit.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { workoutSlipSchema, idParams, gymIdParams, memberIdParams } from '../utils/validators';
 
 const router = Router();
+router.use(readLimiter);
 
 const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve(fn(req, res, next)).catch(next);
