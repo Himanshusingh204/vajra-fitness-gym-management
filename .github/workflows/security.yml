@@ -89,7 +89,7 @@ jobs:
       # No licence key is needed for repositories owned by a personal account.
       # Organization-owned repositories must add a GITLEAKS_LICENSE secret.
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
