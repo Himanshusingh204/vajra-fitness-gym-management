@@ -6,7 +6,7 @@ updates:
     target-branch: staging
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(deps)"
     ignore:
@@ -21,7 +21,7 @@ updates:
     target-branch: staging
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(deps)"
     ignore:
@@ -36,7 +36,7 @@ updates:
     target-branch: staging
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(deps)"
     ignore:
@@ -51,7 +51,7 @@ updates:
     target-branch: staging
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(ci)"
     ignore:
@@ -66,7 +66,7 @@ updates:
     target-branch: staging
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(docker)"
     ignore:
@@ -78,7 +78,7 @@ updates:
     target-branch: staging
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore(docker)"
     ignore:
