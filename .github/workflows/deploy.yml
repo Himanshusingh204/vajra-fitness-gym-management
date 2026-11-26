@@ -43,7 +43,7 @@ jobs:
       JWT_SECRET: test_jwt_secret_for_ci_pipeline_at_least_32_chars
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
