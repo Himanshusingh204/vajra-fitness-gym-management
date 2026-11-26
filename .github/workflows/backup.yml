@@ -54,7 +54,7 @@ jobs:
       # globs *.gpg so an unencrypted dump can never be picked up by mistake.
       - name: Upload encrypted backup as workflow artifact
         if: steps.backup.outputs.has_encrypted == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: db-backup-${{ github.run_id }}
           path: backend/backups/*.sql.gz.gpg
