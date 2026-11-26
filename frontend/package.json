@@ -12,7 +12,7 @@
     "audit:a11y": "playwright test e2e/a11y.spec.ts"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.7.1",
+    "@hookform/resolvers": "^7.0.8",
     "@tanstack/react-query": "^5.101.4",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
