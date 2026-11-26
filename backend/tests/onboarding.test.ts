@@ -7,6 +7,7 @@ import { activateSubscription } from '../src/services/subscription.service';
 import { readFile } from '../src/services/storage.service';
 
 const agent = request(app);
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]);
 const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(64, 2)]);
 
 const patch = (token: string, body: Record<string, any>) =>
@@ -65,8 +66,9 @@ describe('Gym onboarding', () => {
     expect(second.body.plans[0]).toMatchObject({ id: planId, price: 1300 });
 
     expect((await patch(token, { postalCode: '12' })).status).toBe(400);
-    // Fields outside the schema, like status, are dropped.
-    expect((await patch(token, { status: 'APPROVED' })).body.gym.status).toBe('DRAFT');
+    // status is not an onboarding field, so it must never change here.
+    await patch(token, { status: 'APPROVED' });
+    expect((await prisma.gym.findFirst({ where: { name: 'Plan Place' } }))?.status).toBe('DRAFT');
   });
 
   it('goes to review, back for changes, and is approved', async () => {
