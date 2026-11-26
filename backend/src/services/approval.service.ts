@@ -53,7 +53,7 @@ const gymChangeKey = (gymId: string) => `GYM_PROFILE_CHANGE:Gym:${gymId}`;
 // One open change request per gym: a second edit while one is waiting is
 // merged into it instead of opening another.
 export const submitGymChange = async (gym: { id: string } & Record<string, unknown>, changes: Prisma.InputJsonObject, userId: string) => {
-  const current: Prisma.InputJsonObject = Object.fromEntries(Object.keys(changes).map((k) => [k, gym[k] ?? null]));
+  const current: Prisma.InputJsonObject = Object.fromEntries(Object.keys(changes).map((k) => [k, (gym[k] ?? null) as Prisma.InputJsonValue]));
   const open = await prisma.approvalRequest.findUnique({ where: { openKey: gymChangeKey(gym.id) } });
 
   if (open) {
