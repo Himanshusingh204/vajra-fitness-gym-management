@@ -50,7 +50,7 @@ const CookiesPage = () => {
           <p>
             Essential cookies cannot be disabled without breaking sign-in and core functionality.
             You can clear cookies anytime through your browser settings. See our{' '}
-            <Link to="/privacy" className="text-[var(--color-primary)] hover:underline">Privacy Policy</Link>{' '}
+            <Link to="/privacy" className="text-[var(--color-primary)] underline underline-offset-2">Privacy Policy</Link>{' '}
             for more information about how we handle your data.
           </p>
         </Section>
@@ -58,7 +58,7 @@ const CookiesPage = () => {
         <Section title="5. Contact">
           <p>
             Questions about cookies? Write to us at{' '}
-            <a href="mailto:privacy@kavachfitness.in" className="text-[var(--color-primary)] hover:underline">privacy@kavachfitness.in</a>.
+            <a href="mailto:privacy@kavachfitness.in" className="text-[var(--color-primary)] underline underline-offset-2">privacy@kavachfitness.in</a>.
           </p>
         </Section>
       </div>

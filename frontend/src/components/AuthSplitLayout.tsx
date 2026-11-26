@@ -9,6 +9,15 @@ const AUTH_IMAGES: Record<AuthRole, string> = {
   admin: '/images/auth-admin-pexels.jpg',
 };
 
+// Keep the role-specific sign-in portraits distinct from registration imagery.
+// These optimized assets are already bundled with the site.
+const REGISTER_IMAGES: Record<AuthRole, { src: string; alt: string }> = {
+  member: { src: '/gym/2.webp', alt: 'Athlete preparing to lift a barbell' },
+  trainer: { src: '/gym/1.webp', alt: 'A rack of weights inside a gym' },
+  owner: { src: '/gym/4.webp', alt: 'A bright gym with strength training equipment' },
+  admin: { src: AUTH_IMAGES.admin, alt: 'Athletes participating in a coached indoor gym workout' },
+};
+
 const PANELS: Record<AuthRole, { alt: string; tag: string; headline: string; copy: string }> = {
   member: {
     alt: 'Athlete lifting a barbell in a brick-walled gym',
@@ -38,6 +47,7 @@ const PANELS: Record<AuthRole, { alt: string; tag: string; headline: string; cop
 
 interface AuthSplitLayoutProps {
   role: AuthRole;
+  variant?: 'login' | 'register' | 'chooser';
   title: string;
   subtitle?: string;
   /** Sits above the title, e.g. the role tabs. */
@@ -50,16 +60,15 @@ interface AuthSplitLayoutProps {
   children: ReactNode;
 }
 
-const AuthSplitLayout = ({ role, title, subtitle, top, wide = false, eyebrow, bare = false, children }: AuthSplitLayoutProps) => {
+const AuthSplitLayout = ({ role, variant = 'login', title, subtitle, top, wide = false, eyebrow, bare = false, children }: AuthSplitLayoutProps) => {
   const panel = PANELS[role];
+  const photo = variant === 'chooser'
+    ? { src: '/gym/5.webp', alt: 'Strength training equipment in a gym' }
+    : variant === 'register' ? REGISTER_IMAGES[role] : { src: AUTH_IMAGES[role], alt: panel.alt };
   return (
     <div className="relative grid min-h-[calc(100dvh-5rem)] overflow-hidden bg-[var(--color-base)] md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:grid-cols-[minmax(0,7fr)_minmax(0,6fr)]">
-      <div className="pointer-events-none absolute inset-0 -z-0" aria-hidden="true">
-        <img src="/images/auth-atmosphere.webp" alt="" className="h-full w-full object-cover opacity-25" />
-        <div className="absolute inset-0 bg-[var(--color-base)]/80" />
-      </div>
       <aside className="relative z-10 block h-40 overflow-hidden bg-[var(--color-section-dark)] md:sticky md:top-[88px] md:h-[calc(100dvh-88px)] md:min-h-[560px] md:rounded-tr-[2.5rem]">
-        <img src={AUTH_IMAGES[role]} alt={panel.alt} className="absolute inset-0 h-full w-full object-cover object-center md:object-[center_35%]" fetchPriority="high" />
+        <img src={photo.src} alt={photo.alt} className="absolute inset-0 h-full w-full object-cover object-center md:object-[center_35%]" fetchPriority="high" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
         <div className="absolute inset-x-0 bottom-0 max-w-xl p-5 md:p-8 lg:p-10 xl:p-14">
           <p className="mb-2 inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/75 md:mb-4 md:text-xs">

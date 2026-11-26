@@ -480,6 +480,11 @@ export const gymUpdateSchema = z.object({
   facilities: z.array(sanitize(60)).max(40).optional(),
   description: sanitize(2000).optional().nullable(),
   openingHours: sanitize(200).optional().nullable(),
+  lat: z.number().finite().min(-90).max(90).optional().nullable(),
+  lng: z.number().finite().min(-180).max(180).optional().nullable(),
+  parking: sanitize(200).optional().nullable(),
+  accessibility: sanitize(200).optional().nullable(),
+  rules: sanitize(2000).optional().nullable(),
   phone: z
     .string()
     .trim()
@@ -509,7 +514,7 @@ export const gymUpdateSchema = z.object({
     .regex(/^(?=.{4,253}$)([a-z0-9-]+\.)+[a-z]{2,}$/, 'Custom domain must be a valid domain like gym.example.com')
     .optional()
     .nullable(),
-});
+}).refine((v) => (v.lat === undefined && v.lng === undefined) || (v.lat == null && v.lng == null && v.lat !== undefined && v.lng !== undefined) || (typeof v.lat === 'number' && typeof v.lng === 'number'), { message: 'Provide both latitude and longitude, or clear both', path: ['lat'] });
 
 export const trainerApplicationsQuery = z.object({
   status: z.enum(['PENDING', 'REJECTED']).optional(),
@@ -595,11 +600,14 @@ export const updateSiteContentSchema = siteContentSchema.partial();
 // ---- Personal trainer bookings ----
 const bookingTime = z
   .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Invalid time (HH:mm)');
+  .regex(/^(0[6-9]|1\d|20):00$/, 'Choose an available hourly slot between 06:00 and 20:00');
 const bookingDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date (YYYY-MM-DD)')
-  .refine((s) => !Number.isNaN(Date.parse(s)), { message: 'Invalid date' });
+  .refine((s) => {
+    const date = new Date(`${s}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === s;
+  }, { message: 'Invalid date' });
 
 export const createBookingSchema = z.object({
   trainerId: uuid,
@@ -613,7 +621,7 @@ export const rescheduleBookingSchema = z.object({ date: bookingDate, time: booki
 export const slotsQuery = z.object({ trainerId: uuid, date: bookingDate });
 
 export const updateBookingSchema = z.object({
-  status: z.enum(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']).optional(),
+  status: z.enum(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']),
 });
 
 // ---- Progress logging ----
@@ -719,4 +727,54 @@ export const payslipStatusSchema = z.object({
   status: z.enum(['PENDING', 'PAID']),
   paymentMethod,
   transactionId: z.string().trim().max(120).optional().nullable(),
+});
+
+// ---- Gym onboarding ----
+// Drafts save whatever the owner has typed so far; blanks are stored as null.
+// The full checks run on submit (onboardingSubmitSchema).
+const draftText = (max: number) => sanitize(max).transform((v) => v || null).optional().nullable();
+
+export const onboardingPlanSchema = z.object({
+  id: uuid.optional(),
+  name: sanitize(100).pipe(z.string().min(2, 'Plan name must be at least 2 characters')),
+  duration: z.number().int().positive().max(3650),
+  price: z.number().positive().max(1e7),
+  description: draftText(500),
+});
+
+export const onboardingDraftSchema = z.object({
+  name: sanitize(120).optional(),
+  category: draftText(60),
+  description: draftText(2000),
+  establishedYear: z.number().int().min(1900).max(new Date().getFullYear()).optional().nullable(),
+  phone: z.union([indianPhone(), z.literal('').transform(() => null)]).optional().nullable(),
+  email: z.union([email, z.literal('').transform(() => null)]).optional().nullable(),
+  gstNumber: z.union([gstNumber, z.literal('').transform(() => null)]).optional().nullable(),
+  address: sanitize(300).optional(),
+  city: sanitize(80).optional(),
+  state: sanitize(80).optional(),
+  postalCode: z.union([pincode, z.literal('').transform(() => null)]).optional().nullable(),
+  location: draftText(300),
+  lat: z.number().min(-90).max(90).optional().nullable(),
+  lng: z.number().min(-180).max(180).optional().nullable(),
+  facilities: z.array(sanitize(60)).max(40).optional(),
+  openingHours: draftText(200),
+  parking: draftText(200),
+  accessibility: draftText(200),
+  rules: draftText(2000),
+  imageUrl: imageRef.optional().nullable(),
+  galleryUrls: z.array(imageRef).max(12, 'Up to 12 gallery photos').optional(),
+  plans: z.array(onboardingPlanSchema).max(20, 'Up to 20 plans').optional(),
+});
+
+export const onboardingSubmitSchema = z.object({
+  name: z.string().trim().min(2, 'Add your gym name'),
+  phone: z.string({ message: 'Add a phone number' }).refine((v) => normalizeIndianMobile(v) !== null, 'Enter a valid 10-digit mobile number'),
+  address: z.string().trim().min(3, 'Add the street address'),
+  city: z.string().trim().min(2, 'Add the city'),
+  state: z.string().trim().min(2, 'Add the state'),
+  postalCode: z.string({ message: 'Add the pincode' }).regex(/^[1-9][0-9]{5}$/, 'Pincode must be exactly 6 digits'),
+  facilities: z.array(z.string()).min(1, 'Pick at least one facility'),
+  galleryUrls: z.array(z.string()).min(1, 'Add at least one photo'),
+  plans: z.array(z.unknown()).min(1, 'Add at least one membership plan'),
 });

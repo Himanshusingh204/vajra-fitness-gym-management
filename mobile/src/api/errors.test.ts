@@ -28,6 +28,12 @@ describe('errorFromResponse', () => {
 });
 
 describe('friendlyMessage', () => {
+  it('says to pay at the gym when online payments are off', () => {
+    expect(friendlyMessage(new ApiError(503, 'ONLINE_PAYMENTS_DISABLED', 'PAYMENTS_DISABLED'))).toBe(
+      "Online payment isn't available yet. Pay at the gym.",
+    );
+  });
+
   it('explains network failures', () => {
     expect(friendlyMessage(networkError())).toMatch(/connection/);
   });

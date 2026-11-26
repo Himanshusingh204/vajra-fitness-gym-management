@@ -1,8 +1,11 @@
 import { Prisma, type Order } from '@prisma/client';
 import { prisma } from '../utils/prisma';
-import { getRazorpay, getPaymentConfig } from './payment.service';
+import { getRazorpay, getPaymentConfig, checkoutSignatureValid } from './payment.service';
 import { splitOrder, commissionBpsForGym, GST_BPS } from './commission';
-import { createMembership } from './membership.service';
+import { DAY_MS } from './membership.service';
+import { createNotification, notifyGymOwner } from './notification.service';
+import { listRefunds } from './refund.service';
+import { availableForPayout, listPayouts, MIN_PAYOUT_PAISE } from './payout.service';
 
 const isUniqueViolation = (err: unknown) =>
   err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
@@ -82,42 +85,126 @@ const ledgerRows = (order: Order) =>
     gymId: order.gymId,
   }));
 
-// Webhook side of a marketplace order. The CREATED -> PAID claim and the ledger
-// rows commit together, so a redelivered or racing event credits the gym once.
-export const settleMarketplaceOrder = async (order: Order, paymentId: string, amountPaise?: number) => {
+// The platform absorbs the Razorpay fee: it comes out of the commission, not the gym's share.
+const gatewayFeeRows = (order: Order, feePaise: number) =>
+  [
+    ['GATEWAY_FEE', feePaise],
+    ['PLATFORM_COMMISSION', -feePaise],
+  ].map(([account, amountPaise]) => ({
+    account: account as string,
+    amountPaise: amountPaise as number,
+    sourceType: 'GATEWAY_FEE',
+    sourceId: order.id,
+    orderId: order.id,
+    gymId: order.gymId,
+  }));
+
+// A purchase at a gym where the member is already active adds the plan's days
+// to that membership; otherwise it starts a new one today.
+const activateMembership = async (tx: Prisma.TransactionClient, order: Order, paymentId: string) => {
+  const { duration } = order.planSnapshot as { duration: number };
+  const now = new Date();
+  const member = await tx.memberDetails.upsert({
+    where: { userId_gymId: { userId: order.memberUserId, gymId: order.gymId } },
+    create: { userId: order.memberUserId, gymId: order.gymId, planId: order.planId, status: 'ACTIVE' },
+    update: { planId: order.planId, status: 'ACTIVE' },
+  });
+  const active = await tx.membership.findFirst({
+    where: { memberId: member.id, status: 'ACTIVE', endDate: { gt: now } },
+    orderBy: { endDate: 'desc' },
+  });
+  const price = order.basePaise / 100;
+  const membership = active
+    ? await tx.membership.update({ where: { id: active.id }, data: { endDate: new Date(active.endDate.getTime() + duration * DAY_MS) } })
+    : await tx.membership.create({
+        data: {
+          memberId: member.id,
+          gymId: order.gymId,
+          planId: order.planId,
+          startDate: now,
+          endDate: new Date(now.getTime() + duration * DAY_MS),
+          originalAmount: price,
+          finalAmount: price,
+          paymentStatus: 'PAID',
+          status: 'ACTIVE',
+          paymentMethod: 'ONLINE',
+          transactionId: paymentId,
+        },
+      });
+  await tx.fee.create({
+    data: {
+      memberId: member.id,
+      gymId: order.gymId,
+      membershipId: membership.id,
+      amount: price,
+      paymentDate: now,
+      dueDate: membership.endDate,
+      status: 'PAID',
+      paymentMethod: 'ONLINE',
+      transactionId: paymentId,
+    },
+  });
+  await tx.order.update({ where: { id: order.id }, data: { membershipId: membership.id } });
+  return { membership, extended: Boolean(active) };
+};
+
+// Shared by the checkout verify call and the webhook; whichever comes first
+// settles. The CREATED -> PAID claim, the ledger rows and the membership commit
+// together, so a second call or a second event for the same payment does nothing.
+export const settleMarketplaceOrder = async (order: Order, paymentId: string, amountPaise?: number, feePaise?: number) => {
   if (amountPaise != null && amountPaise !== order.totalPaise) {
     console.error('[Orders] captured amount does not match order', { orderId: order.id, amountPaise });
     return null;
   }
 
-  await prisma.$transaction(async (tx) => {
+  const activated = await prisma.$transaction(async (tx) => {
     const claimed = await tx.order.updateMany({
       // FAILED too: a member can retry a failed card on the same Razorpay order.
       where: { id: order.id, status: { in: ['CREATED', 'FAILED'] } },
       data: { status: 'PAID', razorpayPaymentId: paymentId, paidAt: new Date() },
     });
-    if (claimed.count) await tx.ledgerEntry.createMany({ data: ledgerRows(order) });
+    if (!claimed.count) return null;
+    await tx.ledgerEntry.createMany({ data: ledgerRows(order) });
+    return activateMembership(tx, order, paymentId);
   });
 
-  // Activation runs after the money commit. If it throws, the webhook event is
-  // released and Razorpay's retry lands here again with membershipId still null.
   const paid = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
-  if (paid.status !== 'PAID' || paid.membershipId) return paid;
+  // The fee may only be known to the second caller, so it is written apart from the claim.
+  if (feePaise && paid.razorpayPaymentId === paymentId) {
+    await prisma.ledgerEntry.createMany({ data: gatewayFeeRows(order, feePaise), skipDuplicates: true });
+  }
 
-  const member = await prisma.memberDetails.upsert({
-    where: { userId_gymId: { userId: paid.memberUserId, gymId: paid.gymId } },
-    create: { userId: paid.memberUserId, gymId: paid.gymId, status: 'ACTIVE' },
-    update: {},
-  });
-  const membership = await createMembership({
-    memberId: member.id,
-    gymId: paid.gymId,
-    planId: paid.planId,
-    paymentStatus: 'PAID',
-    paymentMethod: 'ONLINE',
-    transactionId: paymentId,
-  });
-  return prisma.order.update({ where: { id: paid.id }, data: { membershipId: membership.id } });
+  if (activated) {
+    const until = activated.membership.endDate.toLocaleDateString('en-IN');
+    const { name } = order.planSnapshot as { name: string };
+    await createNotification({
+      userId: order.memberUserId,
+      type: 'SUCCESS',
+      title: activated.extended ? 'Membership extended' : 'Membership activated',
+      message: `Your ${name} is active until ${until}.`,
+      link: '/dashboard',
+    });
+    await notifyGymOwner({ gymId: order.gymId, type: 'INFO', title: 'Plan bought online', message: `A member bought ${name} online.` });
+  }
+  return paid;
+};
+
+// Fast path from Razorpay Checkout's success handler. A valid signature proves
+// the payment belongs to this Razorpay order; the webhook may still arrive first.
+export const verifyOrderPayment = async (input: { userId: string; orderId: string; paymentId: string; signature: string }) => {
+  const rzp = getRazorpay();
+  if (!checkoutSignatureValid(input.orderId, input.paymentId, input.signature)) throw new Error('INVALID_SIGNATURE');
+
+  const order = await prisma.order.findUnique({ where: { razorpayOrderId: input.orderId } });
+  if (!order) throw new Error('ORDER_NOT_FOUND');
+  if (order.memberUserId !== input.userId) throw new Error('ORDER_NOT_OWNED');
+
+  // For the amount check and the fee. If Razorpay can't be reached, settle anyway
+  // and let the webhook add the fee row.
+  const payment = await rzp.payments.fetch(input.paymentId).catch(() => null);
+  const settled = await settleMarketplaceOrder(order, input.paymentId, payment ? Number(payment.amount) : undefined, payment?.fee);
+  if (!settled) throw new Error('AMOUNT_MISMATCH');
+  return { id: settled.id, status: settled.status, membershipId: settled.membershipId };
 };
 
 export const markOrderFailed = (razorpayOrderId: string) =>
@@ -141,7 +228,12 @@ const orderListSelect = {
 } satisfies Prisma.OrderSelect;
 
 export const listMyOrders = (userId: string) =>
-  prisma.order.findMany({ where: { memberUserId: userId }, select: orderListSelect, orderBy: { createdAt: 'desc' }, take: 50 });
+  prisma.order.findMany({
+    where: { memberUserId: userId },
+    select: { ...orderListSelect, refunds: { select: { id: true, status: true, amountPaise: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
 
 export const listOrders = (filter: { status?: string | undefined; gymId?: string | undefined }) =>
   prisma.order.findMany({
@@ -152,15 +244,28 @@ export const listOrders = (filter: { status?: string | undefined; gymId?: string
   });
 
 // Owner earnings come straight from the ledger; there is no stored balance.
+// The Razorpay fee rows are the platform's own cost and stay out of it.
 export const getEarnings = async (gymIds: string[]) => {
-  const [sums, recentOrders] = await Promise.all([
-    prisma.ledgerEntry.groupBy({ by: ['account'], where: { gymId: { in: gymIds } }, _sum: { amountPaise: true }, _count: true }),
+  const gymFilter = { gymId: { in: gymIds } };
+  const [sums, paidOrders, recentOrders, ledger, refunds, payouts, available] = await Promise.all([
+    prisma.ledgerEntry.groupBy({ by: ['account'], where: { ...gymFilter, sourceType: { not: 'GATEWAY_FEE' } }, _sum: { amountPaise: true } }),
+    prisma.order.count({ where: { ...gymFilter, paidAt: { not: null } } }),
     prisma.order.findMany({
-      where: { gymId: { in: gymIds }, status: { in: ['PAID', 'REFUNDED'] } },
+      where: { ...gymFilter, status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
       select: orderListSelect,
       orderBy: { paidAt: 'desc' },
       take: 20,
     }),
+    prisma.ledgerEntry.findMany({
+      // The gym's own account: its share of each sale, refunds taken back, payouts sent.
+      where: { ...gymFilter, account: { in: ['GYM_PAYABLE', 'PAYOUT', 'ADJUSTMENT'] } },
+      select: { id: true, account: true, amountPaise: true, sourceType: true, sourceId: true, createdAt: true, gym: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
+    listRefunds({ order: gymFilter }),
+    listPayouts(gymFilter),
+    Promise.all(gymIds.map((id) => availableForPayout(id))),
   ]);
   const total = (account: string) => sums.find((s) => s.account === account)?._sum.amountPaise ?? 0;
   return {
@@ -168,7 +273,14 @@ export const getEarnings = async (gymIds: string[]) => {
     commissionPaise: total('PLATFORM_COMMISSION'),
     commissionGstPaise: total('GST_PAYABLE'),
     payablePaise: total('GYM_PAYABLE'),
-    paidOrders: sums.find((s) => s.account === 'MEMBER_PAID')?._count ?? 0,
+    balancePaise: total('GYM_PAYABLE') + total('PAYOUT') + total('ADJUSTMENT'),
+    // Past the 7-day hold and not already on its way; paid out weekly once it reaches the minimum.
+    availablePaise: available.reduce((sum, n) => sum + Math.max(0, n), 0),
+    minPayoutPaise: MIN_PAYOUT_PAISE,
+    paidOrders,
     recentOrders,
+    ledger,
+    refunds,
+    payouts,
   };
 };

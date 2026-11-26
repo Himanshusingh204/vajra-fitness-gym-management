@@ -25,4 +25,6 @@ export interface ChartConfig {
   showArea?: boolean;
   animate?: boolean;
   colors?: string[];
+  // Fit the Y axis to the data instead of starting at zero.
+  fitAxis?: boolean;
 }

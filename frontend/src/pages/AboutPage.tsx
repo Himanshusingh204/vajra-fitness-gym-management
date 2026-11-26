@@ -39,7 +39,7 @@ const FAQS = [
   },
   {
     q: 'Is my data secure?',
-    a: 'All data is encrypted in transit (TLS 1.3), stored in Indian data centers, and never sold to third parties. See our Privacy Policy for full details.',
+    a: 'Connections use encryption in transit. See our Privacy Policy for details about how personal information is handled.',
   },
 ];
 
@@ -159,7 +159,7 @@ const AboutPage = () => {
               </p>
               <ul className="mt-8 space-y-3">
                 {[
-                  'Passwords hashed with argon2, data encrypted in transit (TLS 1.3)',
+                  'Passwords hashed with argon2, data encrypted in transit',
                   'Purpose-built for the Indian fitness market',
                   'Multi-branch management with role-based access',
                 ].map((item) => (
@@ -178,7 +178,7 @@ const AboutPage = () => {
                 loading="lazy"
                 className="relative z-10 rounded-3xl shadow-2xl border border-[var(--color-border)] aspect-[4/3] object-cover"
               />
-              <div className="glass-strong absolute -bottom-6 -left-6 rounded-2xl px-6 py-4 hidden sm:block">
+              <div className="glass-strong absolute bottom-4 left-4 z-20 rounded-2xl px-6 py-4 hidden sm:block">
                 <p className="text-3xl font-extrabold text-[var(--color-primary)]">{gymCount !== null ? gymCount : '—'}</p>
                 <p className="text-sm font-semibold text-[var(--color-muted)]">Partner gyms and growing</p>
               </div>
@@ -277,7 +277,11 @@ const AboutPage = () => {
       {/* FAQ */}
       <section id="faq" className="section-pad scroll-mt-24">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="FAQ" title="Frequently Asked Questions" lead="Everything you need to know about memberships, training, and the platform." />
+          <Reveal className="max-w-2xl mx-auto text-center mb-14">
+            <span className="eyebrow text-sm! px-5! py-2!">FAQ</span>
+            <h2 className="section-title mt-4">Frequently Asked Questions</h2>
+            <p className="section-lead">Everything you need to know about memberships, training, and the platform.</p>
+          </Reveal>
           <div className="space-y-4">
             {FAQS.map((faq, i) => (
               <Reveal key={faq.q} delay={i * 60}>

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../src/app';
 import { prisma } from '../src/utils/prisma';
-import { seedAdmin, seedTrainer, seedPlan } from './helpers';
+import { seedAdmin, seedTrainer, seedPlan, authGet, login } from './helpers';
 
 const agent = request(app);
 
@@ -31,6 +31,14 @@ const seedPublicGym = async () => {
 };
 
 describe('Public gym page', () => {
+  it('allows discovery for a signed-in owner whose subscription is suspended', async () => {
+    const { user, gym } = await seedAdmin();
+    await prisma.gymSubscription.updateMany({ where: { gymId: gym.id }, data: { status: 'SUSPENDED' } });
+    const token = (await login(user.email)).body.token as string;
+    expect((await authGet(token, '/api/gym?paged=1')).status).toBe(200);
+    expect((await authGet(token, '/api/gym/cities')).status).toBe(200);
+    expect((await authGet(token, '/api/gym/my-branch')).status).toBe(403);
+  });
   it('returns the approved gym with plans, active trainers and branches', async () => {
     const { gym } = await seedPublicGym();
     const res = await agent.get(`/api/public/gyms/${gym.id}`);
@@ -163,6 +171,7 @@ describe('Gym discovery filters', () => {
     expect(res.body).toMatchObject({ total: 3, page: 2 });
     expect(names(res)).toEqual(['Gym C']);
     expect((await agent.get('/api/gym?limit=51&paged=1')).status).toBe(400);
+    expect((await agent.get('/api/gym?page=1000001&paged=1')).status).toBe(400);
     expect(Array.isArray((await agent.get('/api/gym')).body)).toBe(true);
   });
 
@@ -176,5 +185,14 @@ describe('Gym discovery filters', () => {
     expect(res.body.items[0].distanceKm).toBe(0);
     expect(res.body.items[1].distanceKm).toBeGreaterThan(20);
     expect(names(await agent.get('/api/gym?paged=1&lat=19.0&lng=72.85&radiusKm=5'))).toEqual(['Near']);
+  });
+
+  it('finds nearby gyms across the date line and excludes gyms just outside the radius', async () => {
+    await seedGym({ name: 'Across date line', lat: 0, lng: -179.99 });
+    await seedGym({ name: 'Just outside', lat: 0, lng: 0.0092 });
+    const across = await agent.get('/api/gym?paged=1&lat=0&lng=179.99&radiusKm=5&sort=distance');
+    expect(names(across)).toEqual(['Across date line']);
+    const boundary = await agent.get('/api/gym?paged=1&lat=0&lng=0&radiusKm=1');
+    expect(names(boundary)).not.toContain('Just outside');
   });
 });

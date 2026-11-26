@@ -15,7 +15,7 @@ const StaffDashboard = () => {
   const [search, setSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { data: me } = useQuery({
+  const { data: me, isLoading: meLoading, isError: meError, refetch: refetchMe } = useQuery({
     queryKey: ['me'],
     queryFn: getMe,
   });
@@ -25,13 +25,18 @@ const StaffDashboard = () => {
   const today = localDateString();
   const todayFormatted = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const { data: attendance, isLoading: attendanceLoading } = useQuery({
+  const { data: attendance, isLoading: attendanceLoading, isError: attendanceError, refetch: refetchAttendance } = useQuery({
     queryKey: ['todayAttendance', gymId, today],
-    queryFn: () => getGymAttendance(gymId, { date: today, limit: 100 }),
-    enabled: !!gymId && activeTab === 'attendance',
+    queryFn: async () => {
+      const first = await getGymAttendance(gymId, { date: today, limit: 100, page: 1 });
+      const pages = Math.ceil(first.total / first.pageSize);
+      const remaining = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) => getGymAttendance(gymId, { date: today, limit: 100, page: i + 2 })));
+      return { ...first, records: [ ...first.records, ...remaining.flatMap((page) => page.records) ] };
+    },
+    enabled: !!gymId && (activeTab === 'attendance' || activeTab === 'checkin'),
   });
 
-  const { data: members } = useQuery({
+  const { data: members, isLoading: membersLoading, isError: membersError, refetch: refetchMembers } = useQuery({
     queryKey: ['gymMembers', gymId],
     queryFn: () => getGymMembers(gymId),
     enabled: !!gymId,
@@ -132,6 +137,11 @@ const StaffDashboard = () => {
       <div className="flex-1 min-w-0">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <div aria-live="polite" className="sr-only">{checkinAnnouncement}</div>
+        {meLoading && <p>Loading your staff profile…</p>}
+        {meError && <p role="alert">Could not load your staff profile. <button type="button" className="underline" onClick={() => refetchMe()}>Try again</button></p>}
+        {!meLoading && !meError && !gymId && <p role="alert">No gym is assigned to your staff account. Contact your gym owner.</p>}
+        {gymId && membersError && <p role="alert" className="mb-4 text-red-600">Could not load members. <button type="button" className="underline" onClick={() => refetchMembers()}>Try again</button></p>}
+        {gymId && attendanceError && activeTab !== 'members' && <p role="alert" className="mb-4 text-red-600">Could not load attendance. <button type="button" className="underline" onClick={() => refetchAttendance()}>Try again</button></p>}
 
         {activeTab === 'checkin' && (
           <div className="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] overflow-hidden">
@@ -171,7 +181,7 @@ const StaffDashboard = () => {
                       ) : (
                         <button
                           onClick={() => checkinMutation.mutate(m.id)}
-                          disabled={checkinMutation.isPending}
+                          disabled={checkinMutation.isPending || attendanceLoading || attendanceError}
                           className="btn-primary text-sm px-4 py-2 flex shrink-0 items-center gap-1.5 whitespace-nowrap"
                         >
                           {checkinMutation.isPending && checkinMutation.variables === m.id ? (
@@ -184,7 +194,7 @@ const StaffDashboard = () => {
                     </div>
                   );
                 })}
-                {(!filteredMembers || filteredMembers.length === 0) && (
+                {!membersLoading && !membersError && gymId && filteredMembers.length === 0 && (
                   <div className="py-10 text-center text-gray-500">No members found.</div>
                 )}
               </div>
@@ -200,7 +210,7 @@ const StaffDashboard = () => {
             </div>
             {attendanceLoading ? (
               <div className="p-10 text-center text-gray-500">Loading attendance…</div>
-            ) : (
+            ) : attendanceError ? null : (
               <div className="divide-y divide-gray-100 dark:divide-white/5">
                 {(attendance?.records || []).map((r: any) => (
                   <div key={r.id} className="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
@@ -260,7 +270,7 @@ const StaffDashboard = () => {
                     </div>
                   </div>
                 ))}
-                {(!filteredMembers || filteredMembers.length === 0) && (
+                {!membersLoading && !membersError && gymId && filteredMembers.length === 0 && (
                   <div className="py-10 text-center text-gray-500">No members found.</div>
                 )}
               </div>

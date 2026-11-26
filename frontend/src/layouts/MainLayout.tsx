@@ -13,7 +13,7 @@ const FOOTER_LINKS = {
     ['Membership', '/membership'],
     ['Help Center', '/help'],
     ['Contact', '/contact'],
-    ['Register Your Gym', ROUTES.partnerRegister],
+    ['List Your Gym', ROUTES.listYourGym],
   ],
   Legal: [
     ['Terms & Conditions', '/terms'],

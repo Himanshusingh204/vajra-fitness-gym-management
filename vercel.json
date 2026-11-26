@@ -27,7 +27,7 @@
   ],
   "headers": [
     {"source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]},
-    {"source": "/(admin-login|login|forgot-password|reset-password|activate|accept-invite|partner/(?:login|register)|trainer(?:/.*)?|register/(?:.*)|dashboard(?:/.*)?|admin(?:/.*)?|owner(?:/.*)?|staff(?:/.*)?|bookings(?:/.*)?|profile|notifications)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]},
+    {"source": "/(admin-login|login|forgot-password|reset-password|activate|accept-invite|partner/(?:login|register|apply(?:/.*)?|application)|trainer(?:/.*)?|register/(?:.*)|dashboard(?:/.*)?|admin(?:/.*)?|owner(?:/.*)?|staff(?:/.*)?|bookings(?:/.*)?|profile|notifications)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]},
     {
       "source": "/(.*)",
       "headers": [
@@ -45,7 +45,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
+          "value": "camera=(), microphone=(), geolocation=(self)"
         },
         {
           "key": "Strict-Transport-Security",
@@ -53,7 +53,7 @@
         },
         {
           "key": "Content-Security-Policy-Report-Only",
-          "value": "default-src 'self'; script-src 'self' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         }
       ]
     }

@@ -10,6 +10,7 @@ import {
   getSitemap,
 } from '../controllers/content.controller';
 import { validate } from '../middlewares/validate.middleware';
+import { prisma } from '../utils/prisma';
 import { gymIdParams } from '../utils/validators';
 
 const router = Router();
@@ -30,6 +31,10 @@ router.get('/site-content', asyncHandler(getPublicSiteContent));
 router.get('/stats', asyncHandler(getPublicStats));
 router.get('/gyms/:gymId', validate(gymIdParams, ['params']), asyncHandler(getPublicGym));
 router.get('/sites/:slug', asyncHandler(getPublicSite));
+// The platform facility list the gym application offers.
+router.get('/facilities', asyncHandler(async (_req: Request, res: Response) => {
+  res.json(await prisma.facility.findMany({ orderBy: { name: 'asc' }, select: { name: true, icon: true } }));
+}));
 // Served to crawlers as /sitemap.xml through a rewrite in vercel.json.
 router.get('/sitemap.xml', asyncHandler(getSitemap));
 

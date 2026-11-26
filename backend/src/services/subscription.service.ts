@@ -15,7 +15,7 @@ const TRIAL_PLAN_CODE = 'PROFESSIONAL';
 
 /**
  * Activate a pending subscription after payment verification.
- * Updates subscription status to ACTIVE, approves the gym, re-activates the owner, creates notification, and logs audit.
+ * Updates subscription status to ACTIVE, re-activates the owner, creates notification, and logs audit.
  */
 // activateSubscription — activates pending subscription after verified payment
 export const activateSubscription = async (subscriptionId: string) => {
@@ -29,12 +29,6 @@ export const activateSubscription = async (subscriptionId: string) => {
   const updated = await prisma.gymSubscription.update({
     where: { id: subscriptionId },
     data: { status: 'ACTIVE', paidAt: new Date() },
-  });
-
-  // Ensure gym is approved when subscription is activated
-  await prisma.gym.update({
-    where: { id: sub.gymId },
-    data: { isApproved: true, status: 'APPROVED' },
   });
 
   // Re-activate gym owner if they were suspended

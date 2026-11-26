@@ -103,7 +103,7 @@ async function main() {
       },
     });
 
-    console.log(`Seeded ${gym.name} with ${plans.length} plans (owner: ${owner.email} / ${owner.password}).`);
+    console.log(`Seeded ${gym.name} with ${plans.length} plans (owner: ${owner.email}).`);
   }
 }
 

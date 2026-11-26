@@ -15,7 +15,7 @@ const DAY_LABELS_FULL: Record<string, string> = {
   MONDAY: 'Monday', TUESDAY: 'Tuesday', WEDNESDAY: 'Wednesday', THURSDAY: 'Thursday', FRIDAY: 'Friday', SATURDAY: 'Saturday', SUNDAY: 'Sunday',
 };
 
-const TIME_RE = /^\d{2}:\d{2}$/;
+const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 type TrainerOption = { id: string; user: { id: string; username: string } };
 
@@ -70,7 +70,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: classes = [], isLoading: classesLoading } = useQuery<GymClass[]>({
+  const { data: classes = [], isLoading: classesLoading, isError: classesError, refetch: refetchClasses } = useQuery<GymClass[]>({
     queryKey: ['classes', gymId, dayFilter],
     queryFn: () => getClasses(gymId, dayFilter !== 'ALL' ? { day: dayFilter } : undefined),
     enabled: !!gymId,
@@ -78,14 +78,14 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
 
   // Reuses the same /staff/gym/:gymId endpoint the Team tab already relies on,
   // just to populate a friendly trainer picker instead of a raw UUID field.
-  const { data: staffData } = useQuery<{ trainers: TrainerOption[] }>({
+  const { data: staffData, isLoading: trainersLoading, isError: trainersError, refetch: refetchTrainers } = useQuery<{ trainers: TrainerOption[] }>({
     queryKey: ['staff', gymId],
     queryFn: () => api.get(`/staff/gym/${gymId}`).then((r) => r.data),
     enabled: !!gymId,
   });
   const trainers = staffData?.trainers || [];
 
-  const { data: bookings = [], isLoading: bookingsLoading } = useQuery<ClassBooking[]>({
+  const { data: bookings = [], isLoading: bookingsLoading, isError: bookingsError, refetch: refetchBookings } = useQuery<ClassBooking[]>({
     queryKey: ['class-bookings', expandedId],
     queryFn: () => getClassBookings(expandedId as string),
     enabled: !!expandedId,
@@ -156,7 +156,7 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
       startTime: cls.startTime || '',
       endTime: cls.endTime || '',
       location: cls.location || '',
-      trainerId: matchedTrainer?.id || '',
+      trainerId: cls.trainerId || matchedTrainer?.id || '',
     });
     setFormError(null);
   };
@@ -181,20 +181,20 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
   return (
     <div className="space-y-6">
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {!classesLoading && !classesError && <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Active Classes</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">{dayFilter === 'ALL' ? 'Active classes' : `${DAY_LABELS_FULL[dayFilter]} classes`}</p>
           <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{totalClasses}</p>
         </div>
         <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Capacity</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">{dayFilter === 'ALL' ? 'Total capacity' : 'Filtered capacity'}</p>
           <p className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)] dark:text-white">{totalCapacity}</p>
         </div>
         <div className="bg-[var(--color-surface)] rounded-lg p-5 border border-[var(--color-border)]">
-          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">Total Bookings</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-1">{dayFilter === 'ALL' ? 'Total bookings' : 'Filtered bookings'}</p>
           <p className="text-2xl font-extrabold tabular-nums text-[var(--color-primary)]">{totalBookings}</p>
         </div>
-      </div>
+      </div>}
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Create / Edit form */}
@@ -240,15 +240,16 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-[var(--color-deepgray)] dark:text-gray-300 mb-1.5">Trainer</label>
-              {trainers.length > 0 ? (
+              {trainersLoading ? <p className="text-sm text-[var(--color-muted)]">Loading trainers…</p> : trainersError ? (
+                <p role="alert" className="text-sm text-red-600">Could not load trainers. <button type="button" className="underline" onClick={() => refetchTrainers()}>Try again</button></p>
+              ) : (
                 <select className="input-field bg-white! dark:bg-[#1a1a1a]!" value={form.trainerId} onChange={(e) => setForm({ ...form, trainerId: e.target.value })}>
                   <option value="">Unassigned</option>
+                  {form.trainerId && !trainers.some((t) => t.id === form.trainerId) && <option value={form.trainerId}>Current trainer (unavailable)</option>}
                   {trainers.map((t) => (
                     <option key={t.id} value={t.id}>{t.user.username}</option>
                   ))}
                 </select>
-              ) : (
-                <input className="input-field" value={form.trainerId} onChange={(e) => setForm({ ...form, trainerId: e.target.value })} placeholder="Trainer ID (optional)" />
               )}
             </div>
 
@@ -311,6 +312,8 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                 <div key={i} className="h-16 bg-[var(--color-muted)]/10 rounded-lg animate-pulse" />
               ))}
             </div>
+          ) : classesError ? (
+            <div role="alert" className="p-6 text-sm text-red-600">Could not load classes. <button type="button" className="underline" onClick={() => refetchClasses()}>Try again</button></div>
           ) : classes.length === 0 ? (
             <div className="p-8 text-center text-[var(--color-muted)]">
               {dayFilter === 'ALL' ? 'No classes yet. Create one to get started.' : 'No classes scheduled for this day.'}
@@ -404,6 +407,8 @@ export default function ClassesTab({ gymId }: { gymId: string }) {
                               </div>
                               {bookingsLoading ? (
                                 <div className="text-sm text-[var(--color-muted)]">Loading…</div>
+                              ) : bookingsError ? (
+                                <div role="alert" className="text-sm text-red-600">Could not load bookings. <button type="button" className="underline" onClick={() => refetchBookings()}>Try again</button></div>
                               ) : bookings.length === 0 ? (
                                 <div className="text-sm text-[var(--color-muted)]">No bookings yet.</div>
                               ) : (
