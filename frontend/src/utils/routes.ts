@@ -6,6 +6,9 @@ export const ROUTES = {
   memberRegister: '/register/member',
   partnerLogin: '/partner/login',
   partnerRegister: '/partner/register',
+  listYourGym: '/list-your-gym',
+  partnerApply: '/partner/apply/details',
+  partnerApplication: '/partner/application',
   trainerLogin: '/trainer/login',
   trainerRegister: '/trainer/register',
 } as const;

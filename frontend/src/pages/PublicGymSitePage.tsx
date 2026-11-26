@@ -1,10 +1,12 @@
 import { Link, NavLink, Outlet, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { Phone } from 'lucide-react';
 import { getPublicGym, getPublicSite } from '../api/gym.api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { SITE_URL } from '../utils/constants';
 import NotFoundPage from './NotFoundPage';
-import { buildImages, useGymJsonLd, type GymSite } from './gym-site/gymData';
+import { formatDuration, formatPrice } from '../utils/format';
+import { buildImages, cheapestPlan, gymAccent, useGymJsonLd, type GymSite } from './gym-site/gymData';
 
 // Shell for every page of one gym's public site: slim sticky nav plus the routed page
 export default function PublicGymSitePage() {
@@ -22,14 +24,13 @@ export default function PublicGymSitePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[var(--color-base)] pt-32" aria-busy>
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-2">
-          <div className="space-y-4">
-            <div className="h-5 w-32 animate-pulse rounded bg-[var(--color-border)]" />
-            <div className="h-14 w-4/5 animate-pulse rounded bg-[var(--color-border)]" />
-            <div className="h-5 w-3/5 animate-pulse rounded bg-[var(--color-border)]" />
+      <main className="min-h-screen bg-[var(--color-base)]" aria-busy>
+        <div className="h-12 border-b border-[var(--color-border)]" />
+        <div className="flex h-[60svh] animate-pulse items-end bg-[var(--color-base-dark)]">
+          <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-12 sm:px-6">
+            <div className="h-4 w-40 rounded bg-[var(--color-border)]" />
+            <div className="h-16 w-4/5 max-w-xl rounded bg-[var(--color-border)]" />
           </div>
-          <div className="aspect-[4/3] animate-pulse rounded-xl bg-[var(--color-border)]" />
         </div>
       </main>
     );
@@ -62,13 +63,11 @@ export default function PublicGymSitePage() {
     { to: `${base}/contact`, label: 'Contact' },
   ].filter((l): l is { to: string; label: string; end?: boolean } => Boolean(l));
 
+  const from = cheapestPlan(gym.plans);
+
   return (
-    <main className="relative isolate min-h-screen overflow-x-hidden bg-[var(--color-base)] pb-24">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[34rem] overflow-hidden" aria-hidden="true">
-        <img src="/gym/hero.webp" alt="" className="h-full w-full object-cover opacity-10" />
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--color-base)]/70 via-[var(--color-base)]/85 to-[var(--color-base)]" />
-      </div>
-      <div className="sticky top-0 z-40 border-y border-[var(--color-border)] bg-[var(--color-base)]/95 backdrop-blur">
+    <main style={gymAccent(gym.brandColor)} className="relative isolate min-h-screen overflow-x-hidden bg-[var(--color-base)] pb-28 sm:pb-24">
+      <div className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-base)]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <nav aria-label={`${gym.name} pages`} className="gym-site-tabs -mx-1 flex min-w-0 flex-1 overflow-x-auto overscroll-x-contain" tabIndex={0}>
             {links.map((l) => (
@@ -77,9 +76,9 @@ export default function PublicGymSitePage() {
                 to={l.to}
                 end={l.end}
                 className={({ isActive }) =>
-                  `shrink-0 border-b-2 px-3 py-3.5 text-sm font-semibold transition-colors ${
+                  `flex min-h-12 shrink-0 items-center border-b-2 px-3 text-sm font-semibold transition-colors ${
                     isActive
-                      ? 'border-[var(--color-primary)] text-[var(--color-deepgray)]'
+                      ? 'border-[var(--gym-accent)] text-[var(--color-deepgray)]'
                       : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-deepgray)]'
                   }`
                 }
@@ -88,12 +87,32 @@ export default function PublicGymSitePage() {
               </NavLink>
             ))}
           </nav>
-          <Link to={site.joinUrl} className="btn-primary shrink-0 py-2!">
+          <Link to={site.joinUrl} className="btn-primary hidden shrink-0 py-2! sm:inline-flex">
             Join now
           </Link>
         </div>
       </div>
       <div className="relative z-10"><Outlet context={site} /></div>
+
+      {/* Phones get the join button at thumb reach on every page of the gym */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:hidden">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-[var(--color-deepgray)]">{gym.name}</p>
+            <p className="truncate text-xs text-[var(--color-muted)]">
+              {from ? `From ${formatPrice(from.price)} / ${formatDuration(from.duration)}` : gym.city}
+            </p>
+          </div>
+          {phone && (
+            <a href={`tel:${phone}`} aria-label={`Call ${gym.name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border-strong)] text-[var(--color-charcoal)]">
+              <Phone className="h-5 w-5" />
+            </a>
+          )}
+          <Link to={site.joinUrl} className="btn-primary min-h-11 shrink-0 px-6!">
+            Join
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

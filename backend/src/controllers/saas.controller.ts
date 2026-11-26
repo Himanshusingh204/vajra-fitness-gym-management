@@ -198,8 +198,6 @@ export const createSubscription = async (req: AuthRequest, res: Response) => {
       include: { plan: { select: { name: true } }, gym: { select: { name: true } } },
     });
 
-    await prisma.gym.update({ where: { id: gymId }, data: { isApproved: true } });
-
     await createNotification({
       userId: gym.ownerId,
       type: 'SUCCESS',

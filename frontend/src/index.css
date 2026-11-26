@@ -131,11 +131,12 @@
 @layer components {
   /* ---------- Buttons ---------- */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-150 cursor-pointer bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white dark:text-[#0d0d0d] transition-colors duration-150 cursor-pointer bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] dark:hover:bg-[var(--color-primary-light)] disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)];
   }
 
+  /* The accent orange is too light for white text (3.4:1), so light mode darkens it and dark mode uses dark text. */
   .btn-accent {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-150 cursor-pointer bg-[var(--color-accent)] hover:brightness-95 disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white dark:text-[#0d0d0d] transition-colors duration-150 cursor-pointer bg-[color-mix(in_srgb,var(--color-accent)_80%,black)] dark:bg-[var(--color-accent)] hover:brightness-95 disabled:opacity-60 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40;
   }
 
   .btn-outline {
@@ -421,6 +422,21 @@
 }
 .gym-site-tabs::-webkit-scrollbar {
   display: none;
+}
+
+/* Gym cover photo settles from a slight zoom as the page scrolls past it. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .gym-hero-photo {
+      animation: gym-hero-settle linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 600px;
+    }
+  }
+}
+@keyframes gym-hero-settle {
+  from { transform: scale(1.08); }
+  to { transform: scale(1); }
 }
 
 /* Auth pages: fields rise in one after another. */

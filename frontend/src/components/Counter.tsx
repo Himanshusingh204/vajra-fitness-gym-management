@@ -19,17 +19,18 @@ export function Counter({
 }: CounterProps) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [value, setValue] = useState(0);
-  const started = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let started = false;
+    let frame = 0;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const run = () => {
-      if (started.current) return;
-      started.current = true;
+      if (started) return;
+      started = true;
 
       if (reduced) {
         setValue(end);
@@ -41,14 +42,14 @@ export function Counter({
         const progress = Math.min((now - startTime) / duration, 1);
         const eased = 1 - Math.pow(1 - progress, 4);
         setValue(end * eased);
-        if (progress < 1) requestAnimationFrame(tick);
+        if (progress < 1) frame = requestAnimationFrame(tick);
       };
-      requestAnimationFrame(tick);
+      frame = requestAnimationFrame(tick);
     };
 
     if (typeof IntersectionObserver === 'undefined') {
       run();
-      return;
+      return () => cancelAnimationFrame(frame);
     }
 
     const observer = new IntersectionObserver(
@@ -64,7 +65,10 @@ export function Counter({
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [end, duration]);
 
   const formatted = value.toLocaleString('en-IN', {

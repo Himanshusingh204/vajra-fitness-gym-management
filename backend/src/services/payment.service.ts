@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma';
 import { logAudit } from '../utils/audit';
 import { createNotification, notifyGymOwner } from './notification.service';
 import { settleMarketplaceOrder, markOrderFailed } from './order.service';
+import { markPayoutPaid, markPayoutFailed } from './payout.service';
 
 // Razorpay credentials. Online payments are fully disabled (UI + API) until a
 // key pair is configured — this keeps the app functional without an API key.
@@ -43,6 +44,9 @@ export const verifyRazorpaySignature = (payload: string, signature: string, secr
   if (expected.length !== received.length) return false;
   return crypto.timingSafeEqual(expected, received);
 };
+
+export const checkoutSignatureValid = (orderId: string, paymentId: string, signature: string) =>
+  verifyRazorpaySignature(`${orderId}|${paymentId}`, signature, keySecret());
 
 // Fetches a fee and checks it belongs to the authenticated user.
 const getOwnedPendingFee = async (feeId: string, userId: string) => {
@@ -177,7 +181,10 @@ export const verifyPayment = async (input: {
 
 type WebhookEvent = {
   event?: string;
-  payload?: { payment?: { entity?: { id?: string; order_id?: string; amount?: number } } };
+  payload?: {
+    payment?: { entity?: { id?: string; order_id?: string; amount?: number; fee?: number } };
+    transfer?: { entity?: { id?: string; error?: { description?: string } } };
+  };
 };
 
 // Validates + processes Razorpay webhook events. Returns a plain object so the
@@ -211,6 +218,12 @@ export const handleWebhook = async (rawBody: string, signature: string, eventId?
 };
 
 const processWebhookEvent = async (event: WebhookEvent) => {
+  const transferId = event.payload?.transfer?.entity?.id;
+  if (event.event === 'transfer.processed' && transferId) await markPayoutPaid(transferId);
+  if (event.event === 'transfer.failed' && transferId) {
+    await markPayoutFailed(transferId, event.payload?.transfer?.entity?.error?.description ?? 'Transfer failed');
+  }
+
   if (event.event === 'payment.failed' && event.payload?.payment?.entity?.order_id) {
     await markOrderFailed(event.payload.payment.entity.order_id);
   }
@@ -241,7 +254,7 @@ const processWebhookEvent = async (event: WebhookEvent) => {
       } else if (!order) {
         // Not a fee: a marketplace plan order, or an online SaaS subscription payment.
         const marketplaceOrder = await prisma.order.findUnique({ where: { razorpayOrderId: orderId } });
-        if (marketplaceOrder) await settleMarketplaceOrder(marketplaceOrder, paymentId, entity?.amount);
+        if (marketplaceOrder) await settleMarketplaceOrder(marketplaceOrder, paymentId, entity?.amount, entity?.fee);
         else await settleSaaSOrderByRazorpayOrder(orderId, paymentId);
       }
     }

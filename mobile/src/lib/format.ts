@@ -2,6 +2,10 @@ import type { Tone } from '../theme';
 
 type FeeLike = { status: string; dueDate: string };
 
+// Refunded and cancelled records are history, not money the member still owes.
+export const isOutstandingFee = (fee: Pick<FeeLike, 'status'>): boolean =>
+  ['PENDING', 'OVERDUE', 'PARTIAL'].includes(fee.status);
+
 const DAY = 24 * 60 * 60 * 1000;
 
 export function formatDate(value: string | Date | null | undefined): string {
@@ -48,12 +52,12 @@ export function daysLeftLabel(days: number): string {
 // The unpaid fee due soonest. Overdue fees count, since those need paying first.
 export function nextDueFee<T extends FeeLike>(fees: T[] | undefined): T | undefined {
   return (fees ?? [])
-    .filter((f) => f.status !== 'PAID')
+    .filter(isOutstandingFee)
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
 }
 
 export function isOverdue(fee: FeeLike, now: Date = new Date()): boolean {
-  return fee.status === 'OVERDUE' || (fee.status !== 'PAID' && daysUntil(fee.dueDate, now) < 0);
+  return isOutstandingFee(fee) && (fee.status === 'OVERDUE' || daysUntil(fee.dueDate, now) < 0);
 }
 
 // YYYY-MM-DD in local time, the format the attendance API filters on.

@@ -5,6 +5,7 @@ import { prisma } from '../src/utils/prisma';
 
 const TABLES = [
   'PaymentEvent',
+  'ReconciliationIssue',
   'Job',
   'Document',
   'NutritionPlan',

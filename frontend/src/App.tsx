@@ -20,6 +20,9 @@ const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const ActivateAccountPage = lazy(() => import('./pages/ActivateAccountPage'));
 const VendorRegisterPage = lazy(() => import('./pages/VendorRegisterPage'));
+const ListYourGymPage = lazy(() => import('./pages/ListYourGymPage'));
+const ApplyPage = lazy(() => import('./pages/partner/ApplyPage'));
+const ApplicationStatusPage = lazy(() => import('./pages/partner/ApplicationStatusPage'));
 const PartnerLoginPage = lazy(() => import('./pages/auth/PartnerLoginPage'));
 const TrainerLoginPage = lazy(() => import('./pages/auth/TrainerLoginPage'));
 const TrainerRegisterPage = lazy(() => import('./pages/auth/TrainerRegisterPage'));
@@ -129,6 +132,10 @@ function App() {
             <Route path="register/member" element={<MemberRegisterPage />} />
             <Route path="partner/login" element={<PartnerLoginPage />} />
             <Route path="partner/register" element={<VendorRegisterPage />} />
+            <Route path="list-your-gym" element={<ListYourGymPage />} />
+            <Route path="partner/apply" element={<Navigate to="/partner/apply/details" replace />} />
+            <Route path="partner/apply/:step" element={<ProtectedRoute roles={['GYM_ADMIN']}><ApplyPage /></ProtectedRoute>} />
+            <Route path="partner/application" element={<ProtectedRoute roles={['GYM_ADMIN']}><ApplicationStatusPage /></ProtectedRoute>} />
             <Route path="trainer/login" element={<TrainerLoginPage />} />
             <Route path="trainer/register" element={<TrainerRegisterPage />} />
             <Route path="admin/login" element={<AdminLoginPage />} />

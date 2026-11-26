@@ -51,6 +51,16 @@ export const userWriteLimiter = isTest ? bypass : rateLimit({
   message: { error: 'Too many requests, please slow down.' },
 });
 
+// Every authenticated route file mounts this, so reads are capped too (CodeQL "missing rate limiting").
+export const readLimiter = isTest ? bypass : rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisRateLimitStore('read'),
+  message: { error: 'Too many requests, please slow down.' },
+});
+
 // File uploads: each one is up to 5 MB written to storage.
 export const uploadLimiter = isTest ? bypass : rateLimit({
   windowMs: 15 * 60 * 1000,

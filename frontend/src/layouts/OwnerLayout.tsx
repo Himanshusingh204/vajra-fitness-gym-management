@@ -35,6 +35,7 @@ export default function OwnerLayout() {
           { to: '/owner/reports', id: 'reports', label: 'Reports', icon: BarChart3 },
         ] },
         { label: 'Your gym', links: [
+          ...(branch && branch.status !== 'APPROVED' ? [{ to: '/partner/application', id: 'application', label: 'Gym application', icon: ClipboardCheck }] : []),
           { to: '/owner/profile', id: 'profile', label: 'Gym profile', icon: Store },
           { to: '/owner/plans', id: 'plans', label: 'Plans & pricing', icon: Diamond },
           { to: '/owner/equipment', id: 'equipment', label: 'Equipment', icon: Wrench },

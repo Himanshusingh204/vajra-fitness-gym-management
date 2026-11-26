@@ -6,6 +6,7 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://vajra-fitness
 export const SITE_URL = process.env.EXPO_PUBLIC_SITE_URL || 'https://vajra-fitness-gym-management.vercel.app';
 
 const REFRESH_KEY = 'vf.refreshToken';
+const GYM_KEY = 'vf.memberGymId';
 
 // The access token only ever lives in memory. The refresh token goes to the
 // keychain/keystore. SecureStore has no web implementation, so the web build
@@ -37,10 +38,20 @@ export const onSessionEnded = (listener: (() => void) | null) => {
   sessionEndedListener = listener;
 };
 
-// Kept in memory only: after a restart the backend picks the member's default gym again.
+// The member's chosen gym. It is kept in the keychain so the choice survives a restart (memory only on web).
 let memberGymId: string | null = null;
 export const setMemberGymId = (gymId: string | null) => {
   memberGymId = gymId;
+  if (Platform.OS === 'web') return;
+  const saved = gymId ? SecureStore.setItemAsync(GYM_KEY, gymId) : SecureStore.deleteItemAsync(GYM_KEY);
+  saved.catch(() => {});
+};
+
+export const getMemberGymId = () => memberGymId;
+
+export const loadMemberGymId = async () => {
+  if (Platform.OS === 'web') return;
+  memberGymId = await SecureStore.getItemAsync(GYM_KEY).catch(() => null);
 };
 
 export const api = createApiClient({
@@ -48,7 +59,7 @@ export const api = createApiClient({
   tokens,
   getGymId: () => memberGymId,
   onSessionEnded: () => {
-    memberGymId = null;
+    setMemberGymId(null);
     sessionEndedListener?.();
   },
 });
@@ -59,7 +70,7 @@ export const saveSession = async (token: string, refreshToken: string) => {
 };
 
 export const clearSession = async () => {
-  memberGymId = null;
+  setMemberGymId(null);
   tokens.setAccess(null);
   await tokens.setRefresh(null);
 };

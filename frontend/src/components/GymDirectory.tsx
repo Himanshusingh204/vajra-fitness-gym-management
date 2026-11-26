@@ -1,30 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { ArrowRight, BadgeCheck, ChevronLeft, ChevronRight, Dumbbell, Image as ImageIcon, LocateFixed, MapPin, RefreshCw, Search, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, ChevronLeft, ChevronRight, Clock, LocateFixed, MapPin, RefreshCw, Search, X } from 'lucide-react';
 import { getGymCities, searchGyms, type Gym } from '../api/gym.api';
 import { useTableQuery } from './ui/useTableQuery';
 import { formatDuration, formatPrice } from '../utils/format';
 import { Reveal } from './Reveal';
+import { cheapestPlan, gymAccent, splitList } from '../pages/gym-site/gymData';
 
 const MAX_FACILITIES = 4;
 const PAGE_SIZE = 12;
 const TABLE_OPTS = { pageSize: PAGE_SIZE, sort: { key: 'relevance', dir: 'asc' as const }, filterKeys: ['city', 'facility', 'minPrice', 'maxPrice', 'lat', 'lng'] };
 
-const splitList = (value?: string | string[] | null) =>
-  String(value ?? '')
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
-
 function GymCover({ gym, className }: { gym: Gym; className: string }) {
   if (gym.imageUrl) {
     return <img src={gym.imageUrl} alt={`${gym.name} training floor`} loading="lazy" className={`object-cover ${className}`} />;
   }
+  // No photo yet: the gym's name set large on its own colour, so the card still looks like that gym
   return (
-    /* USER MANUAL IMAGE: cover photo of the gym's training floor, /gym/<gym-slug>-cover.webp, 1200x900 (4:3) */
-    <div aria-hidden className={`flex items-center justify-center bg-[var(--color-base-dark)] text-[var(--color-muted)] ${className}`}>
-      <ImageIcon className="h-10 w-10" />
+    <div aria-hidden className={`flex items-end bg-[color-mix(in_srgb,var(--gym-accent)_22%,var(--color-base-dark))] p-5 ${className}`}>
+      <span className="font-display text-5xl uppercase leading-[0.9] tracking-wide text-[var(--color-deepgray)]">{gym.name}</span>
     </div>
   );
 }
@@ -32,80 +27,87 @@ function GymCover({ gym, className }: { gym: Gym; className: string }) {
 function GymCard({ gym, featured, index }: { gym: Gym; featured: boolean; index: number }) {
   const facilities = splitList(gym.facilities);
   const plans = gym.membershipPlans.filter((p) => p.isActive !== false);
-  const cheapest = plans.length ? plans.reduce((a, b) => (b.price < a.price ? b : a)) : null;
-  const place = [gym.city, gym.state].filter(Boolean).join(', ');
+  const cheapest = cheapestPlan(plans);
+  const place = gym.location || [gym.city, gym.state].filter(Boolean).join(', ');
 
   return (
     <Reveal delay={(index % 3) * 80} className={featured ? 'md:col-span-2' : ''}>
       <article
-        className={`group relative flex h-full overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_14px_40px_-34px_rgba(0,0,0,0.45)] transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[var(--color-border-strong)] hover:shadow-[0_24px_54px_-34px_rgba(0,0,0,0.5)] ${
+        style={gymAccent(gym.brandColor)}
+        className={`group relative flex h-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] transition-[border-color,box-shadow] duration-300 hover:border-[var(--color-border-strong)] hover:shadow-[0_20px_45px_-32px_rgba(0,0,0,0.45)] ${
           featured ? 'flex-col md:flex-row' : 'flex-col'
         }`}
       >
         <div className={`relative shrink-0 overflow-hidden ${featured ? 'md:w-[48%]' : ''}`}>
           <GymCover
             gym={gym}
-            className={`w-full transition-transform duration-500 group-hover:scale-105 ${
-              featured ? 'h-56 md:h-full md:min-h-[23rem]' : 'h-52'
+            className={`w-full transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none ${
+              featured ? 'h-64 md:h-full md:min-h-[23rem]' : 'h-60'
             }`}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/5" />
-          {featured && <span className="absolute left-4 top-4 rounded-full border border-white/25 bg-black/45 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur">Featured gym</span>}
-          <span className="absolute bottom-4 left-4 inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">
-            <MapPin className="h-3.5 w-3.5" />{gym.location || place}
-            {gym.distanceKm != null && ` - ${gym.distanceKm} km`}
-          </span>
+          <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1 bg-[var(--gym-accent)]" />
+          {gym.distanceKm != null && (
+            <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-md bg-black/60 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
+              <LocateFixed className="h-3.5 w-3.5" />
+              {gym.distanceKm} km away
+            </span>
+          )}
         </div>
 
         <div className={`flex min-w-0 flex-1 flex-col p-5 sm:p-6 ${featured ? 'md:justify-center md:p-8' : ''}`}>
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="break-words text-xl font-extrabold leading-tight tracking-tight text-[var(--color-deepgray)] sm:text-2xl">
-                <Link to={`/gyms/${gym.id}`} className="hover:text-[var(--color-primary)]">
-                  {gym.name}
-                </Link>
-              </h3>
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-[var(--color-muted)]">
-                <MapPin className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
-                <span className="truncate">{place || gym.location}</span>
-              </p>
-            </div>
+            <h3 className="min-w-0 break-words text-xl font-extrabold leading-tight tracking-tight text-[var(--color-deepgray)] sm:text-2xl">
+              <Link to={`/gyms/${gym.id}`} className="hover:text-[var(--color-primary)]">
+                {gym.name}
+              </Link>
+            </h3>
             {gym.isApproved && (
-              <span className="chip shrink-0 bg-[var(--color-secondary)]/10 text-[var(--color-secondary)]">
-                <BadgeCheck className="h-3.5 w-3.5" />
-                Verified
-              </span>
+              <BadgeCheck aria-label="Verified gym" className="mt-1 h-5 w-5 shrink-0 text-[var(--color-secondary)]" />
             )}
           </div>
 
-          {gym.tagline && <p className="mt-4 line-clamp-2 text-sm leading-relaxed text-[var(--color-muted)]">{gym.tagline}</p>}
+          <ul className="mt-3 space-y-1.5 text-sm text-[var(--color-muted)]">
+            <li className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+              <span className="truncate">{place}</span>
+            </li>
+            {gym.openingHours && (
+              <li className="flex items-start gap-2">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary)]" />
+                <span className="line-clamp-2">{gym.openingHours}</span>
+              </li>
+            )}
+          </ul>
+
+          {gym.tagline && <p className="mt-4 line-clamp-2 text-sm leading-relaxed text-[var(--color-charcoal)]">{gym.tagline}</p>}
 
           {facilities.length > 0 && (
-            <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Gym facilities">
-              {facilities.slice(0, MAX_FACILITIES).map((facility) => (
-                <li key={facility} className="rounded-full border border-[var(--color-border)] bg-[var(--color-base)] px-2.5 py-1 text-xs font-medium text-[var(--color-charcoal)]">{facility}</li>
-              ))}
-              {facilities.length > MAX_FACILITIES && <li className="px-1 py-1 text-xs font-semibold text-[var(--color-muted)]">+{facilities.length - MAX_FACILITIES} more</li>}
-            </ul>
+            <p className="mt-3 text-sm text-[var(--color-muted)]">
+              {facilities.slice(0, MAX_FACILITIES).join(' · ')}
+              {facilities.length > MAX_FACILITIES && ` · +${facilities.length - MAX_FACILITIES} more`}
+            </p>
           )}
 
-          {cheapest && (
-            <div className="mt-5 border-t border-[var(--color-border)] pt-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--color-muted)]">Memberships from</p>
-              <p className="mt-1 text-2xl font-extrabold text-[var(--color-deepgray)]">
-                {formatPrice(cheapest.price)} <span className="text-sm font-medium text-[var(--color-muted)]">/ {formatDuration(cheapest.duration)}</span>
-              </p>
+          <div className="mt-auto pt-5">
+            <div className="border-t border-[var(--color-border)] pt-4">
+              {cheapest ? (
+                <p>
+                  <span className="block text-xs font-semibold text-[var(--color-muted)]">From</span>
+                  <span className="text-2xl font-extrabold tabular-nums text-[var(--color-deepgray)]">{formatPrice(cheapest.price)}</span>
+                  <span className="text-sm text-[var(--color-muted)]"> / {formatDuration(cheapest.duration)}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-[var(--color-muted)]">Ask the gym for prices</p>
+              )}
             </div>
-          )}
+          </div>
 
-          <div className="mt-auto flex flex-col gap-2 pt-6 sm:flex-row">
-            <Link to={`/register/member?gym=${gym.id}`} className="btn-primary min-h-11 flex-1 justify-center">
-              <Dumbbell className="h-4 w-4" />
-              Join this gym
+          <div className="mt-5 flex flex-wrap items-center gap-4">
+            <Link to={`/gyms/${gym.id}`} className="btn-primary min-h-11 flex-1 justify-center">
+              Explore gym <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link to={`/gyms/${gym.id}`} className="btn-outline min-h-11 flex-1 justify-center">
-              Explore gym
-              <ArrowRight className="h-4 w-4" />
+            <Link to={`/register/member?gym=${gym.id}`} className="inline-flex min-h-11 items-center px-2 text-sm font-bold text-[var(--color-primary)] underline-offset-4 hover:underline">
+              Join
             </Link>
           </div>
         </div>
@@ -152,6 +154,11 @@ export const GymDirectory = ({ showSearch = true }: { showSearch?: boolean }) =>
 
   // Search text is typed locally and pushed to the URL after a short pause.
   const [text, setText] = useState(state.search);
+  const [seenSearch, setSeenSearch] = useState(state.search);
+  if (state.search !== seenSearch) {
+    setSeenSearch(state.search);
+    if (text.trim() !== state.search) setText(state.search);
+  }
   useEffect(() => {
     if (text.trim() === state.search) return;
     const t = setTimeout(() => update({ search: text }), 350);
@@ -190,7 +197,14 @@ export const GymDirectory = ({ showSearch = true }: { showSearch?: boolean }) =>
   return (
     <div>
       {showSearch && (
-        <div className="mb-8 space-y-4">
+        <div className="mb-10 space-y-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-bold text-[var(--color-deepgray)]">Find your fit</h3>
+              <p className="mt-1 text-sm text-[var(--color-muted)]">Search by name or narrow down your options.</p>
+            </div>
+            {filtering && <button type="button" onClick={() => { setText(''); clearFilters(); }} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-[var(--color-primary)] hover:underline"><X className="h-4 w-4" /> Clear filters</button>}
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--color-muted)]" />
             <input
@@ -253,7 +267,7 @@ export const GymDirectory = ({ showSearch = true }: { showSearch?: boolean }) =>
             </div>
           )}
           {!isLoading && !isError && (
-            <p className="text-sm text-[var(--color-muted)]" aria-live="polite">
+            <p className="border-t border-[var(--color-border)] pt-4 text-sm font-semibold text-[var(--color-muted)]" aria-live="polite">
               {total} {total === 1 ? 'gym' : 'gyms'}
               {filters.city && ` in ${filters.city}`}
             </p>

@@ -16,6 +16,11 @@ export interface Gym {
   city: string;
   state: string;
   location?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  parking?: string | null;
+  accessibility?: string | null;
+  rules?: string | null;
   gstNumber?: string | null;
   logoUrl?: string | null;
   imageUrl?: string | null;
@@ -66,6 +71,11 @@ export interface PublicGym {
   city: string;
   state: string;
   location: string | null;
+  lat: number | null;
+  lng: number | null;
+  parking: string | null;
+  accessibility: string | null;
+  rules: string | null;
   facilities: string[] | null;
   brandColor: string | null;
   imageUrl: string | null;
@@ -122,7 +132,8 @@ export const updateMyGym = async (data: GymProfileInput) => {
 export interface ChangeRequest {
   id: string;
   ref: string;
-  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  type?: 'GYM_PROFILE_CHANGE' | 'GYM_REGISTRATION';
+  status: 'PENDING_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   currentValue: Record<string, string | null> | null;
   proposedValue: Record<string, string | null> | null;
   reviewNote?: string | null;
@@ -130,6 +141,7 @@ export interface ChangeRequest {
   decidedAt?: string | null;
   gym?: { name: string; city: string } | null;
   requester?: { username: string; email: string };
+  documents?: { document: { id: string; kind: string; mime: string; sizeBytes: number } }[];
 }
 
 export const getMyChangeRequests = async () => {

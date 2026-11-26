@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { canAccessGym } from '../utils/tenant';
 import { logAudit } from '../utils/audit';
+import { startOfDayIn, endOfDayIn, startOfMonthIn } from '../utils/time';
 
 // List expenses for a gym
 export const getExpenses = async (req: AuthRequest, res: Response) => {
@@ -20,8 +21,8 @@ export const getExpenses = async (req: AuthRequest, res: Response) => {
     if (category) where.category = category;
     if (from || to) {
       where.date = {};
-      if (from) where.date.gte = new Date(from);
-      if (to) where.date.lte = new Date(to);
+      if (from) where.date.gte = startOfDayIn(new Date(from));
+      if (to) where.date.lte = endOfDayIn(new Date(to));
     }
 
     const expenses = await prisma.expense.findMany({
@@ -104,9 +105,7 @@ export const getExpenseSummary = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
+    const monthStart = startOfMonthIn(new Date());
 
     const [monthExpenses, totalExpenses, byCategory] = await Promise.all([
       prisma.expense.aggregate({ where: { gymId, date: { gte: monthStart } }, _sum: { amount: true } }),

@@ -43,6 +43,7 @@ export function friendlyMessage(error: unknown): string {
 
   if (error.code === 'NETWORK') return "Can't reach Kavach Fitness right now. Check your connection and try again.";
   if (error.code === 'DB_UNREACHABLE') return "Can't reach the database right now. Try again in a minute.";
+  if (error.code === 'PAYMENTS_DISABLED') return "Online payment isn't available yet. Pay at the gym.";
   if (error.code === 'SUBSCRIPTION_READONLY') {
     return "This gym's subscription has expired, so changes are paused. You can still view everything.";
   }

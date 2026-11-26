@@ -68,6 +68,7 @@ const TrainerRegisterPage = () => {
 
   return (
     <AuthSplitLayout
+      variant="register"
       role="trainer"
       title="Apply as a trainer"
       subtitle="The gym owner reviews your application before you get access."

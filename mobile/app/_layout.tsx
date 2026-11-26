@@ -43,6 +43,8 @@ function Navigator() {
         }}
       >
         <Stack.Screen name="members/[id]" options={{ headerShown: true, title: 'Member' }} />
+        <Stack.Screen name="gyms/[id]" options={{ headerShown: true, title: 'Gym' }} />
+        <Stack.Screen name="my-gyms" options={{ headerShown: true, title: 'My gyms' }} />
         <Stack.Screen name="clients/[id]" options={{ headerShown: true, title: 'Client' }} />
         <Stack.Screen name="new-workout" options={{ headerShown: true, title: 'New workout', presentation: 'modal' }} />
         <Stack.Screen name="change-password" options={{ headerShown: true, title: 'Change password' }} />

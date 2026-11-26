@@ -11,6 +11,7 @@ export interface GymClass {
   endTime?: string | null;
   location?: string | null;
   isActive: boolean;
+  trainerId?: string | null;
   trainer?: { user: { id: string; username: string } } | null;
   branch?: { id: string; name: string } | null;
   branchId?: string | null;

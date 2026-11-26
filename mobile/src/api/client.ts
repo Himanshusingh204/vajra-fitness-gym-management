@@ -21,6 +21,9 @@ type RequestOptions = {
   body?: unknown;
   query?: Record<string, string | number | undefined>;
   auth?: boolean;
+  headers?: Record<string, string>;
+  // Return the body bytes instead of parsing JSON (receipt PDFs).
+  raw?: boolean;
 };
 
 export type ApiClient = ReturnType<typeof createApiClient>;
@@ -41,7 +44,7 @@ export function createApiClient({ baseUrl, tokens, onSessionEnded, getGymId, fet
   };
 
   const send = async (method: string, path: string, opts: RequestOptions, accessToken: string | null) => {
-    const headers: Record<string, string> = { Accept: 'application/json', 'X-Client': 'mobile' };
+    const headers: Record<string, string> = { Accept: 'application/json', 'X-Client': 'mobile', ...opts.headers };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     const gymId = getGymId?.();
@@ -113,6 +116,7 @@ export function createApiClient({ baseUrl, tokens, onSessionEnded, getGymId, fet
       }
     }
 
+    if (opts.raw && res.ok) return (await res.arrayBuffer()) as T;
     const data = await readJson(res);
     if (!res.ok) throw errorFromResponse(res.status, data);
     return data as T;
@@ -122,7 +126,9 @@ export function createApiClient({ baseUrl, tokens, onSessionEnded, getGymId, fet
     request,
     refreshAccessToken,
     get: <T>(path: string, query?: RequestOptions['query']) => request<T>('GET', path, { query }),
-    post: <T>(path: string, body?: unknown, auth = true) => request<T>('POST', path, { body, auth }),
+    post: <T>(path: string, body?: unknown, auth = true, headers?: Record<string, string>) =>
+      request<T>('POST', path, { body, auth, headers }),
+    getBytes: (path: string) => request<ArrayBuffer>('GET', path, { raw: true }),
     put: <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
     patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body }),
   };

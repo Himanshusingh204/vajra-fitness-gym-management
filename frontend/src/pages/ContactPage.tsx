@@ -60,7 +60,7 @@ const ContactPage = () => {
 
   const contactDetails = [
     { icon: MapPin, label: 'Address', value: 'Kavach Fitness HQ, India' },
-    { icon: Phone, label: 'Phone', value: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE}` },
+    ...(import.meta.env.VITE_SUPPORT_PHONE ? [{ icon: Phone, label: 'Phone', value: SUPPORT_PHONE_DISPLAY, href: `tel:${SUPPORT_PHONE}` }] : []),
     { icon: Mail, label: 'Email', value: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` },
     { icon: Clock, label: 'Working Hours', value: WORKING_HOURS },
   ];
@@ -108,9 +108,9 @@ const ContactPage = () => {
                 </Reveal>
               ))}
 
-              <Reveal delay={320}>
+              {import.meta.env.VITE_SUPPORT_WHATSAPP && <Reveal delay={320}>
                 <a
-                  href="https://wa.me/919876543210"
+                  href={`https://wa.me/${String(import.meta.env.VITE_SUPPORT_WHATSAPP).replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noreferrer"
                   className="card-hover flex items-center gap-4 p-5! group"
@@ -125,7 +125,7 @@ const ContactPage = () => {
                     </p>
                   </div>
                 </a>
-              </Reveal>
+              </Reveal>}
             </div>
 
             <Reveal variant="right" className="lg:col-span-3">
@@ -136,7 +136,7 @@ const ContactPage = () => {
                       <CheckCircle className="w-10 h-10" />
                     </div>
                     <h3 className="text-2xl font-extrabold text-[var(--color-deepgray)] dark:text-white mb-2">Message Sent!</h3>
-                    <p className="text-[var(--color-muted)]">We'll get back to you within 24 hours.</p>
+                    <p className="text-[var(--color-muted)]">Your message has been received. Our team will review it.</p>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-5">
@@ -151,7 +151,7 @@ const ContactPage = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div>
                         <label htmlFor="name" className="block text-sm font-semibold text-[var(--color-charcoal)] mb-1.5">Full Name</label>
-                        <input id="name" name="name" type="text" required className="input-field" placeholder="Ramesh Sharma" value={form.name} onChange={handleChange} />
+                        <input id="name" name="name" type="text" required minLength={2} maxLength={100} className="input-field" placeholder="Ramesh Sharma" value={form.name} onChange={handleChange} />
                       </div>
                       <div>
                         <label htmlFor="phone" className="block text-sm font-semibold text-[var(--color-charcoal)] mb-1.5">Phone</label>
@@ -183,6 +183,8 @@ const ContactPage = () => {
                         name="message"
                         rows={5}
                         required
+                        minLength={5}
+                        maxLength={6000}
                         className="input-field resize-none"
                         placeholder="Describe your query…"
                         value={form.message}

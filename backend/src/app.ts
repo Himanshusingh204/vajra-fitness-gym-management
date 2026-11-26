@@ -48,6 +48,7 @@ import workoutRoutes from './routes/workout.routes';
 import enquiryRoutes from './routes/enquiry.routes';
 import adminRoutes from './routes/admin.routes';
 import gymRoutes from './routes/gym.routes';
+import { listPublicGyms, listGymCities } from './controllers/gym.controller';
 import websiteRequestRoutes from './routes/websiteRequest.routes';
 import publicRoutes from './routes/public.routes';
 import supportRoutes from './routes/support.routes';
@@ -69,6 +70,8 @@ import payslipRoutes from './routes/payslip.routes';
 import referralRoutes from './routes/referral.routes';
 import branchRoutes from './routes/branch.routes';
 import uploadRoutes from './routes/upload.routes';
+import onboardingRoutes from './routes/onboarding.routes';
+import exportRoutes from './routes/export.routes';
 import { serveFile, servePublicImage } from './controllers/upload.controller';
 
 // /api/v1/* is the same API as /api/*. The shipped mobile app keeps using /api.
@@ -110,7 +113,7 @@ app.use(helmet({
 }));
 
 app.use((_req, res, next) => {
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=(), payment=()');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self), usb=(), payment=()');
   next();
 });
 
@@ -179,6 +182,13 @@ app.use(cors({
 app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// CSRF: browsers always send Origin on cross-site writes, so reject any write from an unlisted origin.
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || !origin || allowedOrigins.includes(origin)) return next();
+  res.status(403).json({ error: 'Cross-site request blocked', code: 'CSRF_ORIGIN' });
+});
 
 const isTest = process.env.NODE_ENV === 'test';
 
@@ -272,6 +282,8 @@ app.use('/api/saas', saasRoutes);
 
 // Private documents and photos. Files are only reachable through short-lived signed links.
 app.use('/api/uploads', uploadRoutes);
+// A gym owner's application. Not subscription-checked: the gym isn't live yet.
+app.use('/api/onboarding', onboardingRoutes);
 app.get('/api/files/:token', serveFile);
 app.get('/api/images/:id', servePublicImage);
 
@@ -292,6 +304,10 @@ app.use('/api/fees', ...tenant, feeRoutes);
 app.use('/api/attendance', ...tenant, attendanceRoutes);
 app.use('/api/workouts', ...tenant, workoutRoutes);
 app.use('/api/enquiries', ...tenant, enquiryRoutes);
+// Public discovery must stay available to every visitor, including a signed-in
+// owner whose own subscription is suspended. Private gym routes remain gated.
+app.get('/api/gym', listPublicGyms);
+app.get('/api/gym/cities', listGymCities);
 app.use('/api/gym', ...tenant, gymRoutes);
 app.use('/api/website-requests', ...tenant, websiteRequestRoutes);
 app.use('/api/support', ...tenantAlwaysWritable, supportRoutes);
@@ -309,6 +325,7 @@ app.use('/api/classes', ...tenant, classRoutes);
 app.use('/api/payslips', ...tenant, payslipRoutes);
 app.use('/api/referrals', ...tenant, referralRoutes);
 app.use('/api/branches', ...tenant, branchRoutes);
+app.use('/api/exports', ...tenant, exportRoutes);
 
 // Browser-friendly entry points for direct visits to the API origin.
 app.get('/', (_req, res) => {

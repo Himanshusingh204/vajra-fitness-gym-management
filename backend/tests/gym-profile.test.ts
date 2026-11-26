@@ -53,6 +53,19 @@ describe('Gym profile update', () => {
     expect(audit?.userId).toBe(user.id);
   });
 
+  it('publishes visitor details and a paired map location, and allows clearing the pin', async () => {
+    const { user, gym } = await seedAdmin();
+    const token = await authToken(user);
+    const details = { lat: 19.076, lng: 72.8777, parking: 'Parking behind the gym', accessibility: 'Step-free entrance', rules: 'Bring indoor shoes' };
+    expect((await authPut(token, '/api/gym/my-branch', details)).status).toBe(200);
+    const pub = await request(app).get(`/api/public/gyms/${gym.id}`);
+    expect(pub.body).toMatchObject(details);
+    expect((await authPut(token, '/api/gym/my-branch', { lat: 10 })).status).toBe(400);
+    expect((await authPut(token, '/api/gym/my-branch', { lat: 91, lng: 72 })).status).toBe(400);
+    expect((await authPut(token, '/api/gym/my-branch', { lat: null, lng: null })).status).toBe(200);
+    expect(await prisma.gym.findUnique({ where: { id: gym.id } })).toMatchObject({ lat: null, lng: null });
+  });
+
   it('never touches another owner\'s gym', async () => {
     const { gym: other } = await seedAdmin();
     const { user: owner, gym: mine } = await seedAdmin();

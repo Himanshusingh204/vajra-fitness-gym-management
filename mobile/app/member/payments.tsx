@@ -1,15 +1,19 @@
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Card, ListRow, StatusPill } from '@/components/Card';
+import { FormError } from '@/components/States';
 import { QueryList } from '@/components/QueryList';
 import { Text } from '@/components/Text';
 import { useMemberProfile, useMyFees } from '@/hooks/useMemberData';
-import { formatDate, formatMoney, isOverdue } from '@/lib/format';
+import { formatDate, formatMoney, isOverdue, isOutstandingFee } from '@/lib/format';
+import { openReceipt } from '@/lib/receipt';
 import { space } from '@/theme';
 
 export default function MemberPayments() {
   const profile = useMemberProfile();
   const fees = useMyFees(profile.data?.id);
-  const outstanding = (fees.data ?? []).filter((f) => f.status !== 'PAID').reduce((sum, f) => sum + Number(f.amount), 0);
+  const [receiptError, setReceiptError] = useState<unknown>(null);
+  const outstanding = (fees.data ?? []).filter(isOutstandingFee).reduce((sum, f) => sum + Number(f.amount), 0);
 
   return (
     <QueryList
@@ -19,15 +23,18 @@ export default function MemberPayments() {
       keyExtractor={(f) => f.id}
       header={
         fees.data?.length ? (
-          <Card>
-            <Text variant="label" muted>
-              Outstanding
-            </Text>
-            <Text variant="title">{formatMoney(outstanding)}</Text>
-            <Text variant="small" muted>
-              Pay at the front desk or online from the website.
-            </Text>
-          </Card>
+          <>
+            <FormError error={receiptError} />
+            <Card>
+              <Text variant="label" muted>
+                Outstanding
+              </Text>
+              <Text variant="title">{formatMoney(outstanding)}</Text>
+              <Text variant="small" muted>
+                Pay at the front desk or online from the website.
+              </Text>
+            </Card>
+          </>
         ) : null
       }
       renderItem={(f) => (
@@ -36,7 +43,18 @@ export default function MemberPayments() {
           subtitle={
             f.status === 'PAID'
               ? `Paid ${formatDate(f.paymentDate)}${f.paymentMethod ? `, ${f.paymentMethod.toLowerCase().replace('_', ' ')}` : ''}`
-              : `Due ${formatDate(f.dueDate)}`
+              : isOutstandingFee(f) ? `Due ${formatDate(f.dueDate)}` : f.status.toLowerCase().replaceAll('_', ' ')
+          }
+          accessibilityHint={f.status === 'PAID' ? 'Opens the receipt' : undefined}
+          onPress={
+            f.status === 'PAID'
+              ? () => {
+                  setReceiptError(null);
+                  openReceipt(f.id)
+                    .then((opened) => !opened && setReceiptError('Receipts open from the Kavach Fitness website on the web version.'))
+                    .catch(setReceiptError);
+                }
+              : undefined
           }
           right={
             <View style={styles.pill}>

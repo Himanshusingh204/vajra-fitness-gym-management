@@ -2,12 +2,15 @@ import { Job, Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { sendMail } from '../utils/email';
 import { logger } from '../utils/logger';
+import { runPayouts, runReconciliation } from '../services/payout.service';
 
 // Work that should not hold up a request (emails, later exports and payouts)
 // goes in the Job table and runs on the next scheduler tick or cron call.
 // Don't put one-time tokens in a payload: payloads are stored in plain text.
 const handlers: Record<string, (payload: any) => Promise<unknown>> = {
   EMAIL: (p: { to: string; subject: string; html: string }) => sendMail(p.to, p.subject, p.html),
+  PAYOUTS: () => runPayouts(),
+  RECONCILE: () => runReconciliation(),
 };
 
 const BATCH_SIZE = 20;

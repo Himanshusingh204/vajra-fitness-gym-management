@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 // Test database: separate from the dev DB so tests never touch real data.
 // Override with TEST_DATABASE_URL if your local Postgres credentials differ.
 const TEST_DB = process.env.TEST_DATABASE_URL || 'postgresql://vajra_admin:vajra_secure_pass@localhost:5432/vajra_fitness_test?schema=public';
-const dbName = (TEST_DB.match(/\/([^/?#]+)\?/) || [])[1] ?? 'vajra_fitness_test';
+const dbName = new URL(TEST_DB).pathname.slice(1);
 // Connect to the shared "postgres" maintenance DB with the same credentials.
 const maintenance = new URL(TEST_DB);
 maintenance.pathname = '/postgres';

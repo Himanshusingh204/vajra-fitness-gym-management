@@ -68,36 +68,99 @@ export const submitGymChange = async (gym: { id: string } & Record<string, unkno
     });
   }
 
-  return prisma.$transaction(async (tx) => {
-    const created = await tx.approvalRequest.create({
-      data: {
-        ref: `tmp-${gym.id}-${Date.now()}`,
-        type: 'GYM_PROFILE_CHANGE',
-        resourceType: 'Gym',
-        resourceId: gym.id,
-        gymId: gym.id,
-        status: 'PENDING_REVIEW',
-        openKey: gymChangeKey(gym.id),
-        currentValue: current,
-        proposedValue: changes,
-        requesterId: userId,
-        requesterRole: 'GYM_ADMIN',
-        submittedAt: new Date(),
-        events: { create: { toStatus: 'PENDING_REVIEW', actorId: userId } },
-      },
-    });
-    return tx.approvalRequest.update({
-      where: { id: created.id },
-      data: { ref: `APR-${new Date().getFullYear()}-${String(created.seq).padStart(6, '0')}` },
-    });
+  return prisma.$transaction((tx) =>
+    createRequest(tx, {
+      ref: `tmp-${gym.id}-${Date.now()}`,
+      type: 'GYM_PROFILE_CHANGE',
+      resourceType: 'Gym',
+      resourceId: gym.id,
+      gymId: gym.id,
+      status: 'PENDING_REVIEW',
+      openKey: gymChangeKey(gym.id),
+      currentValue: current,
+      proposedValue: changes,
+      requesterId: userId,
+      requesterRole: 'GYM_ADMIN',
+      submittedAt: new Date(),
+      events: { create: { toStatus: 'PENDING_REVIEW', actorId: userId } },
+    }),
+  );
+};
+
+// The ref comes from the row's sequence number, so it is set right after the insert.
+const createRequest = async (tx: Prisma.TransactionClient, data: Prisma.ApprovalRequestUncheckedCreateInput) => {
+  const created = await tx.approvalRequest.create({ data });
+  return tx.approvalRequest.update({
+    where: { id: created.id },
+    data: { ref: `APR-${new Date().getFullYear()}-${String(created.seq).padStart(6, '0')}` },
   });
 };
 
-export const decideRequest = async (id: string, decision: 'APPROVED' | 'REJECTED', reviewerId: string, note?: string) => {
+export const registrationKey = (gymId: string) => `GYM_REGISTRATION:Gym:${gymId}`;
+
+// A new gym's application. The first submit opens the request; a resubmit after
+// CHANGES_REQUESTED moves the same request back to review, keeping the last
+// submission as currentValue so the admin sees what changed.
+export const submitGymRegistration = async (gymId: string, proposed: Prisma.InputJsonObject, documentIds: string[], userId: string) =>
+  prisma.$transaction(async (tx) => {
+    const open = await tx.approvalRequest.findUnique({ where: { openKey: registrationKey(gymId) } });
+    assertTransition(open?.status ?? 'DRAFT', 'PENDING_REVIEW');
+    const documents = { create: documentIds.map((documentId) => ({ documentId })) };
+
+    const request = open
+      ? await tx.approvalRequest.update({
+          where: { id: open.id },
+          data: {
+            status: 'PENDING_REVIEW',
+            currentValue: open.proposedValue ?? Prisma.DbNull,
+            proposedValue: proposed,
+            submittedAt: new Date(),
+            documents: { deleteMany: {}, ...documents },
+            events: { create: { fromStatus: open.status, toStatus: 'PENDING_REVIEW', actorId: userId } },
+          },
+        })
+      : await createRequest(tx, {
+          ref: `tmp-${gymId}-${Date.now()}`,
+          type: 'GYM_REGISTRATION',
+          resourceType: 'Gym',
+          resourceId: gymId,
+          gymId,
+          status: 'PENDING_REVIEW',
+          openKey: registrationKey(gymId),
+          proposedValue: proposed,
+          requesterId: userId,
+          requesterRole: 'GYM_ADMIN',
+          submittedAt: new Date(),
+          documents,
+          events: { create: { fromStatus: 'DRAFT', toStatus: 'PENDING_REVIEW', actorId: userId } },
+        });
+
+    await tx.gym.update({ where: { id: gymId }, data: { status: 'PENDING_REVIEW', isApproved: false } });
+    return request;
+  });
+
+export type Decision = 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED';
+
+export const decideRequest = async (id: string, decision: Decision, reviewerId: string, note?: string) => {
   const result = await prisma.$transaction(async (tx) => {
+    // Serialize competing reviewers before reading the current transition state.
+    await tx.$queryRaw`SELECT id FROM "ApprovalRequest" WHERE id = ${id} FOR UPDATE`;
     const request = await tx.approvalRequest.findUnique({ where: { id } });
     if (!request) throw new ApprovalError(404, 'NOT_FOUND', 'Request not found');
+    // Only an application goes back to the owner; a profile change is approved or rejected.
+    if (decision === 'CHANGES_REQUESTED' && request.type !== 'GYM_REGISTRATION') {
+      throw new ApprovalError(409, 'INVALID_TRANSITION', 'Only gym applications can be sent back for changes');
+    }
     assertTransition(request.status, decision);
+
+    if (request.type === 'GYM_REGISTRATION') {
+      if (decision === 'APPROVED') {
+        const gym = await tx.gym.findUnique({ where: { id: request.resourceId } });
+        const duplicate = gym && (await findDuplicateGym(gym, gym.id));
+        if (duplicate) throw new ApprovalError(409, 'DUPLICATE_GYM', duplicate.message);
+      }
+      await tx.gym.update({ where: { id: request.resourceId }, data: { status: decision, isApproved: decision === 'APPROVED' } });
+    }
 
     if (decision === 'APPROVED' && request.type === 'GYM_PROFILE_CHANGE') {
       const proposed = request.proposedValue as Record<string, unknown>;
@@ -115,22 +178,29 @@ export const decideRequest = async (id: string, decision: 'APPROVED' | 'REJECTED
         decidedAt: new Date(),
         reviewerId,
         reviewNote: note || null,
-        openKey: null,
+        // Sent back for changes, the request stays open for the resubmit.
+        openKey: decision === 'CHANGES_REQUESTED' ? request.openKey : null,
         events: { create: { fromStatus: request.status, toStatus: decision, note: note || null, actorId: reviewerId } },
       },
     });
   });
 
   if (result.gymId) {
-    await notifyGymOwner({
-      gymId: result.gymId,
-      type: decision === 'APPROVED' ? 'SUCCESS' : 'WARNING',
-      title: decision === 'APPROVED' ? 'Profile change approved' : 'Profile change rejected',
-      message: decision === 'APPROVED'
-        ? `Your change request ${result.ref} was approved and is now live.`
-        : `Your change request ${result.ref} was rejected${note ? `: ${note}` : '.'}`,
-      link: '/owner/profile',
-    });
+    await notifyGymOwner({ gymId: result.gymId, ...ownerMessage(result.type, decision, result.ref, note) });
   }
   return result;
+};
+
+const ownerMessage = (type: string, decision: Decision, ref: string, note?: string) => {
+  const reason = note ? `: ${note}` : '.';
+  if (type === 'GYM_REGISTRATION') {
+    return {
+      APPROVED: { type: 'SUCCESS' as const, title: 'Your gym is approved', message: 'Your gym is now listed on Kavach Fitness.', link: '/owner' },
+      CHANGES_REQUESTED: { type: 'WARNING' as const, title: 'Changes needed on your application', message: `Please update application ${ref}${reason}`, link: '/partner/application' },
+      REJECTED: { type: 'ERROR' as const, title: 'Your application was not approved', message: `Application ${ref} was rejected${reason}`, link: '/partner/application' },
+    }[decision];
+  }
+  return decision === 'APPROVED'
+    ? { type: 'SUCCESS' as const, title: 'Profile change approved', message: `Your change request ${ref} was approved and is now live.`, link: '/owner/profile' }
+    : { type: 'WARNING' as const, title: 'Profile change rejected', message: `Your change request ${ref} was rejected${reason}`, link: '/owner/profile' };
 };

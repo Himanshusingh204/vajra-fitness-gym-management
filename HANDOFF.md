@@ -5,16 +5,42 @@ Branch: `staging` (`main` is production). Main reference: [docs/DOCUMENTATION.md
 
 ## Start here (next session)
 
-Rules: never touch the Neon DB in `backend/.env`; use only local Postgres (`vajra_admin:vajra_secure_pass@localhost:5432`, db `vajra_fitness_qa`, tests on `vajra_fitness_test`). Run the API with `npm run dev:local` in `backend/` (port 5000) and the web with `npm run dev -- --port 5173` in `frontend/`. No git commits; the user pushes. Check with backend `npx tsc --noEmit`, frontend `npx tsc -b`, `npm run lint`, `npm run build`.
+Rules: never touch the Neon DB in `backend/.env`; use only local Postgres (`vajra_admin:vajra_secure_pass@localhost:5432`, db `vajra_fitness_qa`, tests on `vajra_fitness_test`). Run the API with `npm run dev:local` in `backend/` (port 5000) and the web with `npm run dev -- --port 5173` in `frontend/`. Commit and push only when the user asks, to `staging`, with no Claude co-author line. Check with backend `npx tsc --noEmit`, frontend `npx tsc -b`, `npm run lint`, `npm run build`.
 
 Logins (local QA): admin `admin@kavachfitness.com` / `admin123`; owners `owner@ironvalley.com`, `owner@powerhouse.com` / `gym123`; trainer `suresh.nair0@demo.in`, staff `vikram.kamble2@demo.in`, member `radhika.menon4@demo.in` / `Demo@1234`.
 
-2026-11-03 (planning only, nothing pushed):
+### 2026-11-06: phase 3 built, NOT committed, NOT pushed
 
-- Decided: GST stays added on top, only for gyms with a GSTIN (no change to `commission.ts`). Gyms and users with money rows are soft-deleted (deactivated or suspended), not deleted. Web refresh with no cookie returns 401. Features that need outside keys (Razorpay Route, R2, SMS) are built in test mode behind env flags and mocked in tests.
-- Changed: `refresh` in `auth.controller.ts` returns 401 again when there is no refresh token, so the mobile-auth test should pass. The web client treats 401 and 204 the same. The test has not been re-run yet.
-- Next: the five workstreams in the local `PLAN.md` (Phase 3): money, hardening, onboarding, storage + exports, mobile. Then Playwright QA, `PROJECT_CONTEXT.md` and final checks. Give each agent its own `TEST_DATABASE_URL` so vitest runs don't clash. Only the money workstream edits `schema.prisma`.
-- `frontend/test-results/`, `frontend/playwright-report/` and `/playwright/` (QA screenshots) are now in `.gitignore`. The `.env.example` changes only add empty or public values (`CRON_SECRET=""`, `METRICS_TOKEN=""`, `VITE_SITE_URL`). gitleaks isn't installed locally, so CI's security workflow is the only secret scan. Typecheck was clean for backend and frontend at the start of the session.
+Last push: `1c9311f` on `staging` (2026-11-03). CI/CD and Security passed on it; E2E failed at "Seed demo data" (fixed locally below). Everything listed here is in the working tree only (about 113 changed files). The user stopped the session mid-way, so three workstreams were cut off during their follow-ups (marked "unfinished").
+
+Decisions (from the user): GST is added on top, only for gyms with a GSTIN. Gyms and users with money records are soft-deleted (suspended or deactivated), never deleted. Web `/auth/refresh` without a cookie returns 401. Anything needing outside keys (Razorpay, Route, R2, SMS) is built in test mode behind env flags and stays off without keys. Old commit `edba077` keeps its Claude co-author line (user chose not to rewrite history); new commits must not add one.
+
+Done and checked:
+
+- CI fix: `backend/scripts/seedGyms.ts` passes `facilities` as an array. Local `migrate reset` + `npm run seed` works. Playwright passes 26/26 locally (`e2e/smoke`, `e2e/a11y`).
+- Contrast: `.btn-accent` and `.btn-primary` in `index.css` darken in light mode and use dark text in dark mode. Inline links on the privacy, refund and cookies pages are always underlined.
+- Gym page redesign (`/gyms`, `/gyms/:id`, `/g/:slug` and sub-pages): built from each gym's own photos and data; quick-info panel (timings, lowest price, directions, call), price list for plans with a monthly equivalent, sticky join bar on phones, optional `Gym.brandColor` for accents. tsc, lint and screenshots at 360/1280 light and dark were clean. Files: `pages/gym-site/*`, `PublicGymSitePage.tsx`, `GymDirectory.tsx`, `GymsPage.tsx`, gym-site part of `index.css`.
+- Hardening (39/39 in `cross-gym`, `hardening`, `multi-gym-member`): admin delete of a gym or user with money records suspends or deactivates instead (sessions revoked); owner delete of a member with fees or orders sets INACTIVE. A sweep of about 90 gym routes with another gym's ids finds no leak. Class booking count and insert happen under a lock (6 bookings for 2 seats give 2 booked, 4 waitlisted). Report and expense months use `APP_TIMEZONE`. Owners can add a member who already has an account elsewhere (manual and CSV), 409 `ALREADY_MEMBER` for a second add (P2002 mapped). Re-enrolling while active gives 409, and the join page hides those gyms.
+- Storage and exports: Cloudflare R2 in `storage.service.ts` when all of `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` are set, local disk otherwise, no new dependency. CSV exports under `/api/exports` (owner: members, payments, attendance, expenses, bookings; super admin: users, gyms), tenant-checked, 50k-row cap, formula-injection safe, audited. Export buttons on the owner and admin dashboards. Tests passed 13/13 before the last type fixes; the re-run after them is not confirmed.
+- Mobile member flow (tsc clean, 32/32 unit tests, never run on a device): Find gyms tab, gym detail with plans and "Buy online" (shows "pay at the gym" while payments are off), My gyms, receipts, saved gym choice that falls back when stale, clearer DB-outage message. New deps: `expo-file-system`, `expo-sharing`.
+
+Done, follow-up unfinished:
+
+- Money (40 tests passed before the follow-up): migration `20261106000000_refunds_payouts` (multiple orders per membership, refund decision fields, `GymPayoutAccount`, `Payout`, `ReconciliationIssue`). `POST /api/orders/verify` and the webhook settle through one function in one transaction, so a payment creates one membership even with repeated or different events. Buying while active extends the membership. Refunds (`POST /api/orders/:id/refund-request`, `POST /api/refunds/:id/decide`) reverse ledger lines proportionally. Gateway fee is absorbed by the platform. Weekly payouts and daily reconciliation run as jobs, off unless `RAZORPAY_ROUTE_ENABLED=true` and keys are set. Owner Earnings tab rewritten; admin page `/admin/finance`. Unfinished, state unknown (check `git diff` on `refund.service.ts`, `EarningsTab.tsx`, member order views): lock so two refund approvals can't exceed the order total, full refund ending or shortening the membership, member "Request refund" button. Not started: payout-account admin UI (API exists: `PUT /api/admin/gyms/:gymId/payout-account`), notification when a transfer fails.
+- Onboarding (7/7 in `onboarding.test.ts` when run alone): `/list-your-gym`, `/partner/apply/:step` (7-step wizard with autosave and documents), `/partner/application`, gym applications in Admin > Approvals with "Ask for changes". Vendor registration now creates the gym as DRAFT and sends the owner to the wizard. API under `/api/onboarding`. Unfinished, state unknown: activating a subscription still approves a gym directly (skips review), the old Approve button on the admin Gyms tab doesn't close the open application, the sidebar badge doesn't count applications, and `register/vendor` returned a 500 once under parallel test load (cause not found). Not started: public Facility list API for the wizard, deleting the stored file when a photo is removed.
+- UI polish: started, stopped early, may have partial edits. Toasts covering the phone bottom bar, `ThemeSelector`/`DashboardSignOut` under 44px, weight chart Y axis from 0, dark-mode table edge fade, `openingHours` missing from the `GET /api/gym` list (directory cards hide timings), a test for adding the same member twice.
+
+Next session, in order:
+
+1. `git status` / `git diff` to see what the stopped agents left; finish or revert their partial edits. Shared files several agents touched: `backend/src/app.ts`, `admin.routes.ts`, `admin.controller.ts`, `auth.controller.ts`, `frontend/src/App.tsx`, `utils/routes.ts`, `index.css`, `SuperAdminDashboard.tsx`, `GymAdminDashboard.tsx`, `MemberRegisterPage.tsx`, `gym-site/shared.tsx`.
+2. Finish the unfinished items above (the subscription approval bypass and the refund race come first).
+3. Full checks: backend `npx tsc --noEmit`, frontend `npx tsc -b`, `npm run lint`, `npm run build`, the full backend vitest run on its own, Playwright, and in `mobile/` `npx tsc --noEmit` + `npm test`.
+4. Browser pass at 360/1280 light and dark: wizard, application status, admin approvals, Finance, Earnings, export buttons, gym pages.
+5. Update README, DOCUMENTATION, DESIGN, SECURITY, mobile README and write `PROJECT_CONTEXT.md` (outline in local `MASTER_PLAN.md` section 10). Then commit and push to `staging` without a Claude line, leaving out `docs/PROJECT_DELIVERY_MASTER_PLAN.md` (local AI plan).
+
+Testing note: give every parallel vitest run its own `TEST_DATABASE_URL`. Two runs on one database deadlock on `TRUNCATE ... CASCADE`. The full suite takes 10 to 20 minutes on this machine. Leftover test databases `vajra_fitness_test_{m,h,o,s,l,push}`, `vajra_fitness_e2e_local` and `vajra_fitness_shadow_m` can be dropped.
+
+`frontend/test-results/`, `frontend/playwright-report/` and `/playwright/` are in `.gitignore`. gitleaks isn't installed locally; CI's security workflow is the only secret scan.
 
 Done (2026-10-29 to 2026-11-01), tasks 1-6 from the last list:
 
@@ -140,7 +166,7 @@ Next steps:
 
 Needs the owner:
 
-- Apply migrations on Neon: `20261022191554_trainer_signup`, `20261025000000_fee_expense_date_indexes`, `20261026000000_gym_website_request`, `20261026120000_gym_public_profile`, `20261027000000_foundations_multi_gym`, `20261028000000_approvals_onboarding`, `20261102000000_marketplace_orders`. Check Neon after the earlier accidental `prisma db push`.
+- Apply migrations on Neon: `20261022191554_trainer_signup`, `20261025000000_fee_expense_date_indexes`, `20261026000000_gym_website_request`, `20261026120000_gym_public_profile`, `20261027000000_foundations_multi_gym`, `20261028000000_approvals_onboarding`, `20261102000000_marketplace_orders`, `20261106000000_refunds_payouts` (not pushed yet). Check Neon after the earlier accidental `prisma db push`.
 - Domain, Razorpay keys and plan prices, a WhatsApp/SMS provider, OAuth keys if social login is wanted, image storage if uploads are wanted, real photos, app store accounts.
 
 ## Brand

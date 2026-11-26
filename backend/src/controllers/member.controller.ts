@@ -60,7 +60,8 @@ const parseCsvRows = (input: string): string[][] => {
 
 // Bulk CSV member import (Gym Admin / Super Admin). Expects a header row of
 // username,email,phone — imports transactionally, sends activation links, and
-// returns a per-row summary. Duplicate emails (in-file or existing) are skipped.
+// returns a per-row summary. Duplicate emails in the file are skipped; members
+// of other gyms are linked to this gym without a new account.
 export const importMembers = async (req: AuthRequest, res: Response) => {
   try {
     const gymId = req.params.gymId as string;
@@ -120,24 +121,25 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
 
     const validRows = rows.filter((r) => !r.error);
 
-    // Skip emails that already exist in the platform.
     const existing = await prisma.user.findMany({
       where: { email: { in: validRows.map((r) => r.email) } },
-      select: { email: true },
+      select: { id: true, email: true, role: true, memberProfiles: { where: { gymId }, select: { id: true } } },
     });
-    const existingEmails = new Set(existing.map((u) => u.email));
+    const existingByEmail = new Map(existing.map((u) => [u.email, u]));
+    const toLink: Array<{ userId: string; row: (typeof rows)[number] }> = [];
     const toImport = validRows.filter((r) => {
-      if (existingEmails.has(r.email)) {
-        r.error = 'Email already registered';
-        return false;
-      }
-      return true;
+      const user = existingByEmail.get(r.email);
+      if (!user) return true;
+      if (user.role !== 'MEMBER') r.error = 'Email already registered';
+      else if (user.memberProfiles.length) r.error = 'Already a member of this gym';
+      else toLink.push({ userId: user.id, row: r });
+      return false;
     });
 
     // Enforce the SaaS plan's member capacity for the whole batch up-front.
-    if (req.user?.role !== 'SUPER_ADMIN' && toImport.length > 0) {
+    if (req.user?.role !== 'SUPER_ADMIN' && toImport.length + toLink.length > 0) {
       try {
-        await assertGymCapacity(gymId, { addMembers: toImport.length });
+        await assertGymCapacity(gymId, { addMembers: toImport.length + toLink.length });
       } catch (err: any) {
         if (err?.name === 'EntitlementError') {
           return res.status(402).json({ error: err.message.split(':')[2] });
@@ -148,8 +150,20 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
 
     // Transactional insert of the valid, new members.
     const created: Array<{ username: string; email: string; token: string }> = [];
-    if (toImport.length > 0) {
+    let linked = 0;
+    if (toImport.length + toLink.length > 0) {
       await prisma.$transaction(async (tx) => {
+        // skipDuplicates: a row added here since the check above is reported, not a 500.
+        const linkedRows = await tx.memberDetails.createManyAndReturn({
+          data: toLink.map(({ userId }) => ({ userId, gymId, planId: planId ?? null, status: 'PENDING' })),
+          skipDuplicates: true,
+          select: { userId: true },
+        });
+        const linkedIds = new Set(linkedRows.map((m) => m.userId));
+        for (const { userId, row } of toLink) {
+          if (!linkedIds.has(userId)) row.error = 'Already a member of this gym';
+        }
+        linked = linkedIds.size;
         for (const r of toImport) {
           const user = await tx.user.create({
             data: {
@@ -187,7 +201,7 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
       action: 'MEMBERS_IMPORTED',
       entity: 'MemberDetails',
       entityId: gymId,
-      details: JSON.stringify({ imported: created.length, total: rows.length }),
+      details: JSON.stringify({ imported: created.length + linked, total: rows.length }),
       userId: req.user?.userId ?? null,
     });
 
@@ -195,12 +209,12 @@ export const importMembers = async (req: AuthRequest, res: Response) => {
       gymId,
       type: 'INFO',
       title: 'Members imported',
-      message: `${created.length} member(s) imported from CSV.`,
+      message: `${created.length + linked} member(s) imported from CSV.`,
     });
 
     res.status(201).json({
-      imported: created.length,
-      skipped: rows.length - created.length,
+      imported: created.length + linked,
+      skipped: rows.length - created.length - linked,
       errors: rows.filter((r) => r.error).map((r) => ({ row: r.row, email: r.email || null, error: r.error })),
     });
   } catch (error) {
@@ -266,8 +280,14 @@ export const addMember = async (req: AuthRequest, res: Response) => {
 
     if (!(await canAccessGym(req.user, gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) return res.status(400).json({ error: 'Email already exists' });
+    // A member of another gym gets a row here too. Staff, trainer and owner
+    // accounts can't be members, and nothing about their other gyms is returned.
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, username: true, email: true, role: true, memberProfiles: { where: { gymId }, select: { id: true } } },
+    });
+    if (existingUser && existingUser.role !== 'MEMBER') return res.status(400).json({ error: 'Email already exists' });
+    if (existingUser?.memberProfiles.length) return res.status(409).json({ error: 'Already a member of this gym', code: 'ALREADY_MEMBER' });
 
     if (branchId) {
       const branch = await prisma.branch.findFirst({ where: { id: branchId, gymId } });
@@ -287,6 +307,21 @@ export const addMember = async (req: AuthRequest, res: Response) => {
         if (err?.name === 'EntitlementError') return res.status(402).json({ error: err.message.split(':')[2] });
         throw err;
       }
+    }
+
+    if (existingUser) {
+      const memberDetails = await prisma.memberDetails
+        .create({ data: { userId: existingUser.id, gymId, planId, branchId: branchId || null, status: status || 'PENDING' } })
+        .catch((err) => {
+          // Added at the same moment by another request.
+          if (err?.code === 'P2002') return null;
+          throw err;
+        });
+      if (!memberDetails) return res.status(409).json({ error: 'Already a member of this gym', code: 'ALREADY_MEMBER' });
+      await notifyGymOwner({ gymId, type: 'INFO', title: 'Member added', message: `${existingUser.username} was added as a member.` });
+      const { memberProfiles: _rows, ...safeUser } = existingUser;
+      // They already have a password, so there is no activation link.
+      return res.status(201).json({ ...safeUser, memberDetails, activationLink: null });
     }
 
     // No universal default password: the member activates their own password
@@ -424,7 +459,10 @@ export const enrollMember = async (req: AuthRequest, res: Response) => {
     // Joining another gym adds a row; the user's memberships at other gyms stay as they are.
     const existing = await prisma.memberDetails.findUnique({ where: { userId_gymId: { userId, gymId } } });
 
-    if (existing?.status === 'ACTIVE') {
+    // Only a lapsed or still-pending row goes back to PENDING; an active, frozen
+    // or suspended one (or one with a running membership) stays as the gym set it.
+    const running = existing && (await prisma.membership.count({ where: { memberId: existing.id, status: 'ACTIVE' } }));
+    if (existing && (running || ['ACTIVE', 'FROZEN', 'SUSPENDED'].includes(existing.status))) {
       return res.status(409).json({ error: 'You are already a member of this gym', code: 'ALREADY_MEMBER' });
     }
 
@@ -533,7 +571,8 @@ export const updateMember = async (req: AuthRequest, res: Response) => {
 
 // Remove a member from a gym (their Gym Admin, or Super Admin). Cascades clean
 // up the member's fees, memberships, attendance and workout slips at that gym.
-// The account itself is deleted only when this was its last gym.
+// The account itself is deleted only when this was its last gym. A member with
+// fees or orders at this gym is only marked INACTIVE, so the books stay intact.
 export const deleteMember = async (req: AuthRequest, res: Response) => {
   try {
     const memberId = req.params.id as string;
@@ -545,8 +584,17 @@ export const deleteMember = async (req: AuthRequest, res: Response) => {
     if (!memberDetails) return res.status(404).json({ error: 'Member not found' });
     if (!(await canAccessGym(req.user, memberDetails.gymId))) return res.status(403).json({ error: 'Unauthorized' });
 
-    const otherGyms = await prisma.memberDetails.count({ where: { userId: memberDetails.userId, id: { not: memberId } } });
-    if (otherGyms > 0) {
+    const [fees, orders, otherGyms] = await Promise.all([
+      prisma.fee.count({ where: { memberId } }),
+      prisma.order.count({ where: { memberUserId: memberDetails.userId, gymId: memberDetails.gymId } }),
+      prisma.memberDetails.count({ where: { userId: memberDetails.userId, id: { not: memberId } } }),
+    ]);
+    if (fees + orders > 0) {
+      await prisma.$transaction([
+        prisma.booking.deleteMany({ where: { userId: memberDetails.userId, gymId: memberDetails.gymId } }),
+        prisma.memberDetails.update({ where: { id: memberId }, data: { status: 'INACTIVE' } }),
+      ]);
+    } else if (otherGyms > 0) {
       await prisma.$transaction([
         prisma.booking.deleteMany({ where: { userId: memberDetails.userId, gymId: memberDetails.gymId } }),
         prisma.memberDetails.delete({ where: { id: memberId } }),

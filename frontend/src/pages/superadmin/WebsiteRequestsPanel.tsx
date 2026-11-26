@@ -3,7 +3,7 @@ import { getAllWebsiteRequests, decideWebsiteRequest } from '../../api/websiteRe
 
 export default function WebsiteRequestsPanel() {
   const qc = useQueryClient();
-  const { data: requests = [], isLoading } = useQuery({ queryKey: ['website-requests', 'all'], queryFn: getAllWebsiteRequests });
+  const { data: requests = [], isLoading, isError, refetch } = useQuery({ queryKey: ['website-requests', 'all'], queryFn: getAllWebsiteRequests });
 
   const decide = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'approve' | 'reject' }) => decideWebsiteRequest(id, action),
@@ -17,6 +17,8 @@ export default function WebsiteRequestsPanel() {
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       {isLoading ? (
         <p className="mt-3 text-sm text-gray-400">Loading…</p>
+      ) : isError ? (
+        <p role="alert" className="mt-3 text-sm text-red-600">Could not load requests. <button type="button" className="underline" onClick={() => refetch()}>Try again</button></p>
       ) : requests.length === 0 ? (
         <p className="mt-3 text-sm text-gray-400">No requests yet.</p>
       ) : (
@@ -29,8 +31,8 @@ export default function WebsiteRequestsPanel() {
               </div>
               {r.status === 'PENDING' ? (
                 <div className="flex gap-2">
-                  <button onClick={() => decide.mutate({ id: r.id, action: 'approve' })} className="rounded-lg bg-green-600 px-3 py-1 font-bold text-white">Approve</button>
-                  <button onClick={() => decide.mutate({ id: r.id, action: 'reject' })} className="rounded-lg border border-[var(--color-border)] px-3 py-1 font-bold">Reject</button>
+                  <button disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, action: 'approve' })} className="rounded-lg bg-green-600 px-3 py-1 font-bold text-white disabled:opacity-50">Approve</button>
+                  <button disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, action: 'reject' })} className="rounded-lg border border-[var(--color-border)] px-3 py-1 font-bold disabled:opacity-50">Reject</button>
                 </div>
               ) : (
                 <span className="font-semibold">{r.status}</span>
