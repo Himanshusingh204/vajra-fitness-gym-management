@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { prisma } from '../utils/prisma';
+import { logger } from '../utils/logger';
 import { canAccessGym } from '../utils/tenant';
 import { getOrSetJSON, dropCached } from '../utils/cache';
 import { logAudit } from '../utils/audit';
@@ -140,7 +141,8 @@ export const listPublicGyms = async (req: Request, res: Response) => {
       return f.paged ? { items: slim.slice(start, start + f.limit), total: slim.length, page: f.page } : slim;
     });
     res.json(result);
-  } catch {
+  } catch (error) {
+    logger.errorWith('public gym list failed', error);
     res.status(500).json({ error: 'Failed to fetch gyms' });
   }
 };
@@ -152,7 +154,8 @@ export const listGymCities = async (_req: Request, res: Response) => {
       return rows.map((r) => r.city).filter(Boolean);
     });
     res.json(cities);
-  } catch {
+  } catch (error) {
+    logger.errorWith('public gym cities failed', error);
     res.status(500).json({ error: 'Failed to fetch cities' });
   }
 };
